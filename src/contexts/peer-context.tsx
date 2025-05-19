@@ -14,7 +14,7 @@ const NON_ADMIN_PEER_ID_KEY = 'camlicaKoyuNonAdminPeerId';
 interface PeerContextType {
   peer: PeerType | null;
   peerId: string | null;
-  adminFullPeerId: string | null;
+  adminFullPeerId: string | null; // The ID an admin *tries* to get, or a client *targets*
   connections: React.MutableRefObject<Map<string, DataConnection>>;
   initializePeer: () => void;
   connectToPeer: (targetPeerId: string) => DataConnection | undefined;
@@ -43,20 +43,21 @@ interface PeerProviderProps {
 
 export const PeerProvider = ({ children }: PeerProviderProps) => {
   const [Peer, setPeer] = useState<typeof PeerType | null>(null);
-  const [peerInstance, setPeerInstance] = useState<PeerType | null>(null);
-  const [peerId, setPeerId] = useState<string | null>(null); // This state will hold the active peer's ID
+  const peerInstanceRef = useRef<PeerType | null>(null); // Use ref to avoid stale closures in callbacks
+  const [peerId, setPeerId] = useState<string | null>(null);
   const { user, isAdmin } = useUser();
   const { toast } = useToast();
   const connections = useRef<Map<string, DataConnection>>(new Map());
   const dataHandler = useRef<((data: any, peerId: string) => void) | null>(null);
-  const [adminFullPeerId, setAdminFullPeerId] = useState<string | null>(null);
+  const [adminFullPeerId, setAdminFullPeerId] = useState<string | null>(null); // Admin's desired ID
 
-  // State for Media Calls
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [currentCall, setCurrentCall] = useState<MediaConnection | null>(null);
   const [isReceivingCall, setIsReceivingCall] = useState(false);
   const [isCallInProgress, setIsCallInProgress] = useState(false);
+  
+  const isInitializingRef = useRef(false); // Prevent multiple initializations
 
   useEffect(() => {
     import('peerjs').then(module => {
@@ -71,13 +72,12 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
         console.log(`Admin user detected. Determined adminFullPeerId: ${fullId}`);
         setAdminFullPeerId(fullId);
     } else if (user && !isAdmin) {
-        // For non-admin users, set a generic target admin ID they might try to connect to.
-        const defaultAdminTargetSuffix = 'default-admin-user'; // This could be configurable
+        const defaultAdminTargetSuffix = 'default-admin-user'; 
         const targetAdminId = `${ADMIN_PEER_ID_PREFIX}${defaultAdminTargetSuffix}`;
         console.log(`Non-admin user. Target adminFullPeerId for connection: ${targetAdminId}`);
-        setAdminFullPeerId(targetAdminId); 
+        setAdminFullPeerId(targetAdminId); // Non-admins target this ID
     } else {
-        setAdminFullPeerId(null); // No user, no admin ID.
+        setAdminFullPeerId(null); 
     }
   }, [user, isAdmin]);
 
@@ -95,12 +95,16 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
   }, [localStream, currentCall]);
 
   const connectToPeer = useCallback((targetPeerId: string): DataConnection | undefined => {
-    if (!peerInstance || !targetPeerId || peerInstance.disconnected) {
-      if(!peerInstance?.disconnected && peerInstance) toast({ title: 'Bağlantı Hatası', description: 'P2P altyapısı hazır değil.', variant: 'destructive' });
-      console.warn("connectToPeer: Peer instance not ready or targetPeerId missing. Peer disconnected:", peerInstance?.disconnected);
+    const currentPeer = peerInstanceRef.current;
+    if (!currentPeer || !targetPeerId || currentPeer.disconnected) {
+      if(currentPeer && !currentPeer.disconnected) {
+          // toast({ title: 'Bağlantı Hatası', description: 'P2P altyapısı hazır değil.', variant: 'destructive' });
+      }
+      console.warn("connectToPeer: Peer instance not ready or targetPeerId missing. Peer disconnected:", currentPeer?.disconnected);
       return undefined;
     }
     if (connections.current.has(targetPeerId) && connections.current.get(targetPeerId)?.open) {
+        console.log(`Already connected to ${targetPeerId}. Returning existing connection.`);
         return connections.current.get(targetPeerId);
     }
     if (targetPeerId === peerId) { 
@@ -109,7 +113,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
     }
 
     console.log(`Attempting to connect to data peer: ${targetPeerId}`);
-    const conn = peerInstance.connect(targetPeerId, { reliable: true });
+    const conn = currentPeer.connect(targetPeerId, { reliable: true });
     
     conn.on('open', () => {
       console.log(`Data connection established with ${conn.peer}`);
@@ -136,19 +140,20 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       connections.current.delete(conn.peer);
     });
     return conn;
-  }, [peerInstance, isAdmin, peerId, toast, dataHandler]);
+  }, [isAdmin, peerId, toast, dataHandler]);
 
 
   const initializePeer = useCallback(() => {
-    if (!Peer || peerInstance || !user) {
-        console.log("InitializePeer: Pre-conditions not met. PeerJS lib loaded?", !!Peer, "Peer instance exists?", !!peerInstance, "User exists?", !!user);
+    if (!Peer || peerInstanceRef.current || !user || isInitializingRef.current) {
+        console.log("InitializePeer: Pre-conditions not met or already initializing. PeerJS lib loaded?", !!Peer, "Peer instance exists?", !!peerInstanceRef.current, "User exists?", !!user, "Initializing?", isInitializingRef.current);
         return;
     }
-     // For admins, ensure adminFullPeerId is determined before initializing
+    
     if (isAdmin && !adminFullPeerId) {
       console.log("InitializePeer: Admin user, but adminFullPeerId not yet determined. Waiting...");
       return; 
     }
+    isInitializingRef.current = true;
 
     let peerIdToUse: string | undefined = undefined;
 
@@ -167,11 +172,13 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
     
     console.log(`InitializePeer: Creating new Peer instance with ID: ${peerIdToUse || 'auto-generated'}`);
     const newPeer = peerIdToUse ? new Peer(peerIdToUse) : new Peer();
+    peerInstanceRef.current = newPeer;
     
     newPeer.on('open', (currentId) => {
       setPeerId(currentId); 
       console.log('My peer ID is: ' + currentId);
       toast({ title: 'P2P Ağı Aktif', description: `Kimliğiniz: ${currentId.substring(0,12)}...` });
+      isInitializingRef.current = false;
 
       if (!isAdmin) {
         localStorage.setItem(NON_ADMIN_PEER_ID_KEY, currentId);
@@ -179,18 +186,18 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
           console.log(`Non-admin peer ${currentId} attempting to connect to admin: ${adminFullPeerId}`);
           connectToPeer(adminFullPeerId);
         }
-      } else { // User is admin
+      } else { 
         if (peerIdToUse && currentId !== peerIdToUse) {
-           console.warn(`Admin intended to use ${peerIdToUse} but got ${currentId}. The desired ID was likely taken or there was an issue.`);
+           console.warn(`Admin intended to use ${peerIdToUse} but got ${currentId}. The desired ID ${peerIdToUse} was likely taken or there was an issue. Current admin ID is ${currentId}.`);
            toast({ 
-            title: 'Yönetici Kimliği Sorunu!', 
+            title: 'Yönetici Kimliği Çakışması!', 
             description: `İstenen yönetici kimliği ("${peerIdToUse.substring(0,12)}...") kullanılamadı. Size "${currentId.substring(0,12)}..." atandı. Diğer kullanıcılar size bağlanamayabilir.`, 
             variant: 'destructive',
             duration: 15000 
           });
-           // Update adminFullPeerId to the actual ID assigned if it differs, so admin knows its real ID
-           // However, clients will still target the original name-based ID. This mismatch is problematic.
-           // The toast informs the admin. A more robust solution would involve a discovery service.
+           // Update adminFullPeerId to the actual ID assigned if it differs
+           // This is tricky because clients target the original name-based ID.
+           // setAdminFullPeerId(currentId); // This could cause loops if not handled carefully. For now, admin is just informed.
         }
       }
     });
@@ -230,19 +237,32 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
     newPeer.on('error', (err) => {
       console.error('PeerJS error:', err);
       toast({ title: 'P2P Ağ Hatası', description: `${err.type}: ${err.message}`, variant: 'destructive' });
+      isInitializingRef.current = false; // Allow re-initialization on error
       if (err.type === 'unavailable-id') {
         if (isAdmin && peerIdToUse === adminFullPeerId) {
-          // The 'open' event will fire with a new random ID. The toast in 'open' for admins covers this.
+           // 'open' event will fire with a new random ID. The toast in 'open' for admins covers this.
+           console.warn(`Admin's desired ID ${adminFullPeerId} is unavailable. PeerJS will assign a random ID.`);
         } else if (!isAdmin && peerIdToUse) {
           localStorage.removeItem(NON_ADMIN_PEER_ID_KEY); 
           toast({ title: 'P2P Kimlik Sorunu', description: 'Saklanan P2P kimliğiniz kullanılamadı, yeni bir kimlik oluşturulacak.', variant: 'destructive'});
-          // PeerJS will attempt to get a new ID. If newPeer instance needs to be recreated:
-          // setPeerInstance(null); // This would trigger re-init in the main useEffect
+          if (peerInstanceRef.current && !peerInstanceRef.current.destroyed) {
+            peerInstanceRef.current.destroy();
+          }
+          peerInstanceRef.current = null; // Force re-creation with new ID
+          setPeerId(null);
+          // Re-call initializePeer after a delay to allow PeerJS to recover or to avoid rapid loops
+          // setTimeout(() => initializePeer(), 1000); // Be careful with this
         }
       } else if (err.type === 'peer-unavailable' && adminFullPeerId && err.message.includes(adminFullPeerId) && !isAdmin) {
          console.warn(`Admin peer ${adminFullPeerId} is unavailable or does not exist. Client won't connect to admin.`);
          toast({ title: 'Yönetici Ulaşılamaz', description: `Yönetici (${adminFullPeerId.substring(0,12)}...) bulunamıyor. Duyurular alınamayabilir.`, variant: 'destructive', duration: 10000});
       }
+      // Potentially destroy and nullify peerInstanceRef.current here to allow re-init
+      if (peerInstanceRef.current && !peerInstanceRef.current.destroyed) {
+          peerInstanceRef.current.destroy();
+      }
+      peerInstanceRef.current = null;
+      setPeerId(null);
     });
 
     newPeer.on('disconnected', () => {
@@ -250,11 +270,11 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
         toast({ title: 'Sinyal Sunucusu Koptu', description: 'Yeniden bağlanmaya çalışılıyor...', variant: 'destructive'});
     });
 
-    setPeerInstance(newPeer);
-  }, [Peer, peerInstance, user, isAdmin, adminFullPeerId, toast, connectToPeer, setPeerId, dataHandler]);
+  }, [Peer, user, isAdmin, adminFullPeerId, toast, connectToPeer, setPeerId, dataHandler]);
 
   const broadcastData = useCallback((data: any) => {
-    if (!peerInstance || peerInstance.disconnected) {
+    const currentPeer = peerInstanceRef.current;
+    if (!currentPeer || currentPeer.disconnected) {
         toast({ title: 'Yayın Hatası', description: 'P2P altyapısı hazır değil.', variant: 'destructive' });
         return;
     }
@@ -274,7 +294,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
     } else {
         console.warn("No active and open connections to broadcast data to. Check connection status and map content.");
     }
-  }, [peerInstance, toast]);
+  }, [toast]);
 
   const sendDataToPeer = useCallback((targetPeerId: string, data: any) => {
     const conn = connections.current.get(targetPeerId);
@@ -282,10 +302,18 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       conn.send(data);
     } else {
        console.warn(`No open connection to ${targetPeerId} to send data. Attempting to connect.`);
-       connectToPeer(targetPeerId); // Attempt to connect, then data needs to be resent or queued.
-       toast({title: "Bağlantı Yok", description: `${targetPeerId.substring(0,12)}... ile bağlantı kuruluyor, veri daha sonra gönderilebilir.`, variant: "default"});
+       const newConn = connectToPeer(targetPeerId); // Attempt to connect
+       if (newConn) {
+         // Queue data or send on 'open' event of newConn
+         newConn.on('open', () => {
+            console.log(`Connection to ${targetPeerId} opened for queued send. Sending data.`);
+            newConn.send(data);
+         });
+       } else {
+        toast({title: "Bağlantı Yok", description: `${targetPeerId.substring(0,12)}... ile bağlantı kurulamadı. Veri gönderilemedi.`, variant: "destructive"});
+       }
     }
-  }, [connectToPeer]);
+  }, [connectToPeer, toast]);
 
   const registerDataHandler = useCallback((handler: (data: any, peerId: string) => void) => {
     console.log("PeerContext: Registering new data handler.");
@@ -293,21 +321,36 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
   }, []);
   
   const requestInitialAnnouncements = useCallback(() => {
-    // This function is mostly for explicit calls if needed, primary logic is in connectToPeer's 'open'
-    if (isAdmin || !adminFullPeerId || !peerInstance || peerInstance.disconnected) return;
-    const adminConn = connections.current.get(adminFullPeerId);
-    if (adminConn && adminConn.open) {
-        console.log("Requesting initial announcements from admin (explicit call):", adminFullPeerId);
-        adminConn.send({ type: 'REQUEST_INITIAL_ANNOUNCEMENTS' });
-    } else {
+    const currentPeer = peerInstanceRef.current;
+    if (!adminFullPeerId || !currentPeer || currentPeer.disconnected) return;
+    
+    // Try to connect to admin if not already connected
+    let adminConn = connections.current.get(adminFullPeerId);
+    if (!adminConn || !adminConn.open) {
         console.log("Not connected to admin for initial announcements request. Attempting connection to:", adminFullPeerId);
-        connectToPeer(adminFullPeerId);
+        adminConn = connectToPeer(adminFullPeerId);
     }
-  }, [isAdmin, adminFullPeerId, peerInstance, connectToPeer]);
+
+    if (adminConn) { // It might still be undefined if connectToPeer failed
+        if (adminConn.open) {
+            console.log("Requesting initial announcements from admin (explicit call):", adminFullPeerId);
+            adminConn.send({ type: 'REQUEST_INITIAL_ANNOUNCEMENTS' });
+        } else {
+            // If connection was just initiated, wait for it to open
+            adminConn.on('open', () => {
+                console.log("Connection to admin opened. Requesting initial announcements from admin:", adminFullPeerId);
+                adminConn!.send({ type: 'REQUEST_INITIAL_ANNOUNCEMENTS' });
+            });
+        }
+    } else {
+        console.warn("Could not establish or find connection to admin to request initial announcements.");
+    }
+  }, [adminFullPeerId, connectToPeer]);
 
   // Media Call Functions
   const startMediaCall = useCallback(async (targetPeerId: string) => {
-    if (!peerInstance || !user || peerInstance.disconnected) {
+    const currentPeer = peerInstanceRef.current;
+    if (!currentPeer || !user || currentPeer.disconnected) {
       toast({ title: 'Arama Hatası', description: 'P2P hazır değil veya kullanıcı yok.', variant: 'destructive' });
       return;
     }
@@ -320,7 +363,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       setLocalStream(stream);
       toast({ title: 'Arama Başlatılıyor', description: `${targetPeerId.substring(0,12)}... aranıyor.` });
       
-      const call = peerInstance.call(targetPeerId, stream);
+      const call = currentPeer.call(targetPeerId, stream);
       setCurrentCall(call);
       setIsCallInProgress(true);
 
@@ -341,7 +384,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       toast({ title: 'Arama Hatası', description: `Arama başlatılamadı: ${err.message}`, variant: 'destructive' });
       endMediaCallInternals();
     }
-  }, [peerInstance, user, toast, endMediaCallInternals, isCallInProgress]);
+  }, [user, toast, endMediaCallInternals, isCallInProgress]);
 
   const answerIncomingCall = useCallback(async () => {
     if (!currentCall) {
@@ -381,26 +424,24 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
 
   const rejectIncomingCall = useCallback(() => {
     if (currentCall && isReceivingCall) {
-      currentCall.close(); // This should trigger the 'close' event on the call object for both peers
+      currentCall.close(); 
       toast({ title: 'Arama Reddedildi', description: 'Gelen arama reddedildi.' });
     }
-    // Do not call endMediaCallInternals directly here if relying on 'close' event, to avoid double state update
-    setCurrentCall(null); // Clear the current call being handled
-    setIsReceivingCall(false); // No longer receiving this specific call
+    setCurrentCall(null); 
+    setIsReceivingCall(false); 
   }, [currentCall, isReceivingCall, toast]);
 
   const endMediaCall = useCallback(() => {
     if (currentCall) {
-      currentCall.close(); // This will trigger 'close' event which calls endMediaCallInternals
+      currentCall.close(); 
     } else {
-      // If there's no currentCall object but streams might exist (e.g. from a partially failed setup)
       endMediaCallInternals();
     }
     toast({ title: 'Arama', description: 'Arama sonlandırıldı.' });
   }, [currentCall, endMediaCallInternals, toast]);
 
-  useEffect(() => {
-    const peerToCleanup = peerInstance;
+   useEffect(() => {
+    const peerToCleanup = peerInstanceRef.current;
     return () => {
       if (peerToCleanup && !peerToCleanup.destroyed) {
         console.log("PeerProvider cleanup: Destroying peer instance:", peerToCleanup.id);
@@ -410,36 +451,44 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
         });
         connections.current.clear();
         peerToCleanup.destroy();
-        setPeerInstance(null); // Ensure peerInstance state is also cleared
-        setPeerId(null);       // Clear peerId state
+        peerInstanceRef.current = null; 
+        setPeerId(null);       
       }
     };
-  }, [peerInstance, endMediaCallInternals]);
+  }, [endMediaCallInternals]); // Only depends on endMediaCallInternals
 
    useEffect(() => {
-    if (Peer && user && !peerInstance) {
-      // For admins, ensure adminFullPeerId is determined before initializing
+    // This effect handles initializing the peer when conditions are met.
+    if (Peer && user && !peerInstanceRef.current && !isInitializingRef.current) {
       if (isAdmin && !adminFullPeerId) {
-        // adminFullPeerId is set by another useEffect. If it's not set yet, wait.
-        // This effect will re-run when adminFullPeerId changes.
         console.log("Peer init useEffect: Admin user, waiting for adminFullPeerId to be determined.");
         return; 
       }
-      console.log(`Peer init useEffect: Conditions met. Peer: ${!!Peer}, User: ${!!user}, PeerInstance: ${!!peerInstance}, IsAdmin: ${isAdmin}, AdminFullPeerId: ${adminFullPeerId}`);
+      console.log(`Peer init useEffect: Conditions met. Initializing peer. Peer Lib: ${!!Peer}, User: ${!!user}, PeerInstance: ${!!peerInstanceRef.current}, IsAdmin: ${isAdmin}, AdminFullPeerId: ${adminFullPeerId}`);
       initializePeer();
     }
     
-    if (!user && peerInstance && !peerInstance.destroyed) {
-        console.log("Peer init useEffect: User logged out, destroying peer instance:", peerInstance.id);
-        // Cleanup logic is handled by the peerInstance-dependent useEffect above.
-        // Setting peerInstance to null there will also ensure this condition doesn't re-trigger init.
+    // This effect handles destroying the peer when the user logs out.
+    if (!user && peerInstanceRef.current && !peerInstanceRef.current.destroyed) {
+        console.log("Peer init useEffect: User logged out, destroying peer instance:", peerInstanceRef.current.id);
+        // Cleanup is handled by the previous useEffect when peerInstanceRef.current changes or on unmount.
+        // Forcing destroy here ensures cleanup if the component doesn't unmount immediately.
+        const peerToDestroy = peerInstanceRef.current;
+        endMediaCallInternals();
+        connections.current.forEach(conn => {
+            if(conn.open) conn.close();
+        });
+        connections.current.clear();
+        peerToDestroy.destroy();
+        peerInstanceRef.current = null;
+        setPeerId(null);
     }
-  }, [Peer, user, peerInstance, initializePeer, isAdmin, adminFullPeerId]); // Added isAdmin and adminFullPeerId
+  }, [Peer, user, initializePeer, isAdmin, adminFullPeerId, endMediaCallInternals]);
 
 
   return (
     <PeerContext.Provider value={{ 
-        peer: peerInstance, 
+        peer: peerInstanceRef.current, 
         peerId, 
         adminFullPeerId,
         connections, 
@@ -472,3 +521,4 @@ export const usePeer = (): PeerContextType => {
   }
   return context;
 };
+

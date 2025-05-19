@@ -4,10 +4,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA } from '@/lib/constants';
 import Image from 'next/image';
-import { BarChart, LineChart, PieChart } from 'lucide-react';
+import { BarChart, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'; // Renamed to avoid conflict
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 // Updated Recharts import
-import { Bar, Line, Pie, Cell, ResponsiveContainer, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { Bar, Line, Pie, Cell, CartesianGrid, XAxis, YAxis, LineChart, PieChart } from 'recharts'; // Ensured LineChart and PieChart are imported
 
 const chartConfigPopulation = {
   population: {
@@ -68,54 +68,51 @@ export default function AboutPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><LineChart className="mr-2 h-6 w-6 text-primary" />Nüfus Gelişimi</CardTitle>
+          <CardTitle className="flex items-center"><LineChartIcon className="mr-2 h-6 w-6 text-primary" />Nüfus Gelişimi</CardTitle>
           <CardDescription>Yıllara göre köyümüzün nüfus değişimi.</CardDescription>
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfigPopulation} className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={POPULATION_DATA.datasets[0].data.map((val, index) => ({ year: POPULATION_DATA.labels[index], population: val }))} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Line type="monotone" dataKey="population" stroke={chartConfigPopulation.population.color} strokeWidth={2} dot={{ r: 4, fill: chartConfigPopulation.population.color }} activeDot={{r: 6}} name="Nüfus" />
-                 {/* Updated to use imported components directly */}
-                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                 <XAxis dataKey="year" tickLine={false} axisLine={false} tickMargin={8} />
-                 <YAxis tickLine={false} axisLine={false} tickMargin={8} domain={['dataMin - 50', 'dataMax + 50']} />
-              </LineChart>
-            </ResponsiveContainer>
+            {/* Removed redundant ResponsiveContainer */}
+            <LineChart data={POPULATION_DATA.datasets[0].data.map((val, index) => ({ year: POPULATION_DATA.labels[index], population: val }))} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Line type="monotone" dataKey="population" stroke={chartConfigPopulation.population.color} strokeWidth={2} dot={{ r: 4, fill: chartConfigPopulation.population.color }} activeDot={{r: 6}} name="Nüfus" />
+               <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+               <XAxis dataKey="year" tickLine={false} axisLine={false} tickMargin={8} />
+               <YAxis tickLine={false} axisLine={false} tickMargin={8} domain={['dataMin - 50', 'dataMax + 50']} />
+            </LineChart>
           </ChartContainer>
         </CardContent>
       </Card>
       
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center"><PieChart className="mr-2 h-6 w-6 text-primary" />Ekonomik Yapı</CardTitle>
+          <CardTitle className="flex items-center"><PieChartIcon className="mr-2 h-6 w-6 text-primary" />Ekonomik Yapı</CardTitle>
           <CardDescription>Köyümüzdeki temel geçim kaynaklarının dağılımı.</CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
            <ChartContainer config={chartConfigEconomy} className="h-[350px] w-full max-w-md">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
-                <Pie data={economyDataForChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
-                    const RADIAN = Math.PI / 180;
-                    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                    return (
-                      <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs font-medium">
-                        {`${economyDataForChart[index].name} (${(percent * 100).toFixed(0)}%)`}
-                      </text>
-                    );
-                  }}>
-                  {economyDataForChart.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <ChartLegend content={<ChartLegendContent nameKey="name"/>} />
-              </PieChart>
-            </ResponsiveContainer>
+             {/* Removed redundant ResponsiveContainer */}
+            <PieChart>
+              <ChartTooltip content={<ChartTooltipContent nameKey="name" />} />
+              <Pie data={economyDataForChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+                  const RADIAN = Math.PI / 180;
+                  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                  return (
+                    <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs font-medium">
+                      {`${economyDataForChart[index].name} (${(percent * 100).toFixed(0)}%)`}
+                    </text>
+                  );
+                }}>
+                {economyDataForChart.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Pie>
+              <ChartLegend content={<ChartLegendContent nameKey="name"/>} />
+            </PieChart>
           </ChartContainer>
         </CardContent>
       </Card>

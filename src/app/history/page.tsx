@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TIMELINE_EVENTS, VILLAGE_NAME } from '@/lib/constants';
+import { TIMELINE_EVENTS, VILLAGE_NAME, GALLERY_IMAGES } from '@/lib/constants'; // Added GALLERY_IMAGES
 import Image from 'next/image';
 import { ScrollText } from 'lucide-react';
 
@@ -21,26 +21,26 @@ export default function HistoryPage() {
             <div className="md:col-span-1 space-y-4">
               <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md">
                 <Image 
-                  src="https://placehold.co/600x450.png" 
-                  alt="Tarihi Çam Ağacı Hasan Çamı" 
+                  src={GALLERY_IMAGES[0].src} 
+                  alt={GALLERY_IMAGES[0].alt} 
                   layout="fill" 
                   objectFit="cover" 
-                  data-ai-hint="old tree historical" 
+                  data-ai-hint="mosque historic" 
                 />
                 <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/60 text-white text-sm text-center">
-                  Hasan Çamı - 1000 Yıllık Tarih
+                  Hasan Çamı - 1000 Yıllık Tarih (Temsili: Köy Camii)
                 </div>
               </div>
               <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md">
                 <Image 
-                  src="https://placehold.co/600x450.png" 
-                  alt="Eski Köy Evlerinden Bir Görünüm" 
+                  src={GALLERY_IMAGES[4].src} 
+                  alt={GALLERY_IMAGES[4].alt}
                   layout="fill" 
                   objectFit="cover" 
-                  data-ai-hint="old village house" 
+                  data-ai-hint="traditional building" 
                 />
                  <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/60 text-white text-sm text-center">
-                  Geleneksel Köy Mimarisi
+                  Geleneksel Köy Mimarisi (Temsili: Çay Konağı)
                 </div>
               </div>
             </div>
@@ -81,3 +81,4 @@ export default function HistoryPage() {
     </div>
   );
 }
+

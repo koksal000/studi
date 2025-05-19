@@ -2,12 +2,12 @@
 "use client"; // Added to make this a Client Component
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA } from '@/lib/constants';
+import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA, GALLERY_IMAGES } from '@/lib/constants'; // Added GALLERY_IMAGES
 import Image from 'next/image';
-import { BarChart, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'; // Renamed to avoid conflict
+import { BarChart as BarChartIconLucide, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'; // Renamed BarChart to avoid conflict
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 // Updated Recharts import
-import { Bar, Line, Pie, Cell, CartesianGrid, XAxis, YAxis, LineChart, PieChart } from 'recharts'; // Ensured LineChart and PieChart are imported
+import { Bar, Line, Pie, Cell, CartesianGrid, XAxis, YAxis, LineChart, PieChart, BarChart } from 'recharts'; // Ensured LineChart, PieChart and BarChart are imported
 
 const chartConfigPopulation = {
   population: {
@@ -60,7 +60,7 @@ export default function AboutPage() {
                 </ul>
             </div>
             <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                 <Image src="https://placehold.co/600x400.png" alt="Köy Haritası Alanı" layout="fill" objectFit="cover" data-ai-hint="village map" />
+                 <Image src={GALLERY_IMAGES[1].src} alt={GALLERY_IMAGES[1].alt} layout="fill" objectFit="cover" data-ai-hint="satellite aerial" />
             </div>
            </div>
         </CardContent>
@@ -119,7 +119,7 @@ export default function AboutPage() {
 
       <Card>
         <CardHeader>
-            <CardTitle className="flex items-center"><BarChart className="mr-2 h-6 w-6 text-primary" /> Detaylı Ekonomi Bilgileri</CardTitle>
+            <CardTitle className="flex items-center"><BarChartIconLucide className="mr-2 h-6 w-6 text-primary" /> Detaylı Ekonomi Bilgileri</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
             <p className="text-foreground/90">
@@ -127,11 +127,11 @@ export default function AboutPage() {
             </p>
              <div className="grid md:grid-cols-2 gap-6 mt-4">
                 <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                    <Image src="https://placehold.co/600x400.png" alt="Tarım Alanları" layout="fill" objectFit="cover" data-ai-hint="agriculture fields" />
+                    <Image src={GALLERY_IMAGES[7].src} alt={GALLERY_IMAGES[7].alt} layout="fill" objectFit="cover" data-ai-hint="village nature" />
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Tarım Faaliyetleri</div>
                 </div>
                 <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                    <Image src="https://placehold.co/600x400.png" alt="Hayvancılık" layout="fill" objectFit="cover" data-ai-hint="livestock farming" />
+                    <Image src={GALLERY_IMAGES[6].src} alt={GALLERY_IMAGES[6].alt} layout="fill" objectFit="cover" data-ai-hint="village road" />
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Hayvancılık Faaliyetleri</div>
                 </div>
             </div>
@@ -141,3 +141,4 @@ export default function AboutPage() {
     </div>
   );
 }
+

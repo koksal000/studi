@@ -1,10 +1,13 @@
 
+"use client"; // Added to make this a Client Component
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA } from '@/lib/constants';
 import Image from 'next/image';
 import { BarChart, LineChart, PieChart } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
-import { Bar, Line, Pie, Cell, ResponsiveContainer } from 'recharts';
+// Updated Recharts import
+import { Bar, Line, Pie, Cell, ResponsiveContainer, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 const chartConfigPopulation = {
   population: {
@@ -75,9 +78,10 @@ export default function AboutPage() {
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Line type="monotone" dataKey="population" stroke={chartConfigPopulation.population.color} strokeWidth={2} dot={{ r: 4, fill: chartConfigPopulation.population.color }} activeDot={{r: 6}} name="Nüfus" />
-                 <RechartsPrimitive.CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                 <RechartsPrimitive.XAxis dataKey="year" tickLine={false} axisLine={false} tickMargin={8} />
-                 <RechartsPrimitive.YAxis tickLine={false} axisLine={false} tickMargin={8} domain={['dataMin - 50', 'dataMax + 50']} />
+                 {/* Updated to use imported components directly */}
+                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                 <XAxis dataKey="year" tickLine={false} axisLine={false} tickMargin={8} />
+                 <YAxis tickLine={false} axisLine={false} tickMargin={8} domain={['dataMin - 50', 'dataMax + 50']} />
               </LineChart>
             </ResponsiveContainer>
           </ChartContainer>

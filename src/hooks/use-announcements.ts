@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -50,23 +51,41 @@ export function useAnnouncements() {
       const updatedAnnouncements = [announcement, ...prev];
       // Sort by date descending (though prepending already does this if list was sorted)
       updatedAnnouncements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncements));
+      // localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncements)); // Removed as per user request
       return updatedAnnouncements;
     });
-    return announcement;
+    // It's intended that the caller will handle broadcasting this announcement via PeerJS.
+    // The persistence will happen when the announcement is received back (or from others) via PeerJS
+    // and explicitly saved to localStorage.
+    return announcement; 
   }, [user]);
 
   const deleteAnnouncement = useCallback((id: string) => {
     setAnnouncements(prev => {
       const updatedAnnouncements = prev.filter(ann => ann.id !== id);
-      localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncements));
+      // localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncements)); // Removed as per user request
       return updatedAnnouncements;
     });
+    // It's intended that the caller will handle broadcasting this deletion event via PeerJS.
+    // The persistence will happen when the deletion confirmation is received back (or from others) via PeerJS
+    // and localStorage is updated accordingly.
   }, []);
   
   const getAnnouncementById = useCallback((id: string) => {
     return announcements.find(ann => ann.id === id);
   }, [announcements]);
 
-  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById };
+  // Placeholder for a function you might call when PeerJS delivers announcements
+  // This function WOULD be responsible for saving to localStorage.
+  const syncAnnouncementsFromPeer = useCallback((peerAnnouncements: Announcement[]) => {
+    // Logic to merge peerAnnouncements with existing ones and update state
+    // For example, a simple replacement:
+    const sortedAnnouncements = [...peerAnnouncements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setAnnouncements(sortedAnnouncements);
+    localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(sortedAnnouncements));
+    console.log("Announcements synced from peer and saved to localStorage.");
+  }, []);
+
+
+  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, syncAnnouncementsFromPeer };
 }

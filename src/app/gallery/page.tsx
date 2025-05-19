@@ -51,12 +51,10 @@ export default function GalleryPage() {
       {selectedImage && (
         <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
           <DialogContent className="max-w-3xl p-2 sm:p-4">
-            <DialogHeader className="pr-8 sm:pr-10"> {/* Add padding for close button */}
+            {/* DialogContent already provides a close button in the top right.
+                The explicit DialogClose here was causing a duplicate X. */}
+            <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">{selectedImage.caption}</DialogTitle>
-              <DialogClose className="absolute right-3 top-3 sm:right-4 sm:top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Kapat</span>
-              </DialogClose>
             </DialogHeader>
             <div className="mt-2 aspect-[16/10] w-full relative rounded-md overflow-hidden bg-muted">
               <Image src={selectedImage.src} alt={selectedImage.alt} layout="fill" objectFit="contain" data-ai-hint={selectedImage.hint}/>

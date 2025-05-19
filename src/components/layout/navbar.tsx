@@ -97,20 +97,19 @@ export function Navbar() {
               <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-background p-0">
                 <div className="flex flex-col h-full">
                   <SheetHeader className="p-4 border-b">
+                    {/* SheetContent already provides a close X button.
+                        The explicit SheetClose Button here was causing a duplicate.
+                        The SheetTitle is important for accessibility.
+                    */}
                     <div className="flex items-center justify-between">
                       <Link href="/" className="flex items-center space-x-2" onClick={() => setIsSheetOpen(false)}>
                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 text-primary">
                         <path d="M12 2L1 9l3 11h16l3-11L12 2zm0 2.36L17.64 9H6.36L12 4.36zM4.58 10h14.84l-2.4 8H6.98l-2.4-8z"/>
                         <path d="M10 11h4v6h-4z"/>
                       </svg>
-                      <SheetTitle className="p-0 text-lg font-bold">{VILLAGE_NAME}</SheetTitle>
+                      <SheetTitle className="p-0 text-lg font-bold">{VILLAGE_NAME} Menüsü</SheetTitle>
                       </Link>
-                      <SheetClose asChild>
-                        <Button variant="ghost" size="icon">
-                          <X className="h-6 w-6" />
-                          <span className="sr-only">Menüyü Kapat</span>
-                        </Button>
-                      </SheetClose>
+                      {/* The SheetPrimitive.Close is now handled by SheetContent itself */}
                     </div>
                   </SheetHeader>
                   <nav className="flex-grow flex flex-col space-y-2 p-4">

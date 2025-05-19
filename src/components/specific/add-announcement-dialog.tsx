@@ -263,19 +263,19 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
               <p className="text-sm text-muted-foreground">Medya işleniyor...</p>
             </div>
           )}
-
-
-        </DialogFooter>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isProcessing}>
-            İptal
-          </Button>
-          <Button type="submit" disabled={isProcessing || (!title.trim() || !content.trim())}>
-            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Yayınla
-          </Button>
-        </DialogFooter>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isProcessing}>
+              İptal
+            </Button>
+            <Button type="submit" disabled={isProcessing || (!title.trim() || !content.trim())}>
+              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Yayınla
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
 }
+
+    

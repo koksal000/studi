@@ -36,9 +36,8 @@ export default function GalleryPage() {
                 key={index}
                 className="gallery-item"
                 onClick={() => setSelectedImage(image)}
-                data-ai-hint={image.hint}
               >
-                <Image src={image.src} alt={image.alt} layout="fill" objectFit="cover" />
+                <Image src={image.src} alt={image.alt} layout="fill" objectFit="cover" data-ai-hint={image.hint} />
                 <div className="gallery-caption">
                   <h4 className="font-semibold text-sm truncate">{image.caption}</h4>
                 </div>
@@ -51,8 +50,7 @@ export default function GalleryPage() {
       {selectedImage && (
         <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
           <DialogContent className="max-w-3xl p-2 sm:p-4">
-            {/* DialogContent already provides a close button in the top right.
-                The explicit DialogClose here was causing a duplicate X. */}
+            {/* DialogContent already provides a close button in the top right. */}
             <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">{selectedImage.caption}</DialogTitle>
             </DialogHeader>

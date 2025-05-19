@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
-import { usePeer, ADMIN_PEER_ID_PREFIX } from '@/contexts/peer-context'; // Import usePeer
+import { usePeer, ADMIN_PEER_ID_PREFIX } from '@/contexts/peer-context';
+import { useSettings } from '@/contexts/settings-context'; // Added import for useSettings
 
 export interface Announcement {
   id: string;
@@ -21,7 +22,8 @@ const ANNOUNCEMENTS_KEY = 'camlicaKoyuAnnouncements';
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const { user, isAdmin } = useUser();
-  const peerContext = usePeer(); // Get peer context
+  const peerContext = usePeer();
+  const { notificationsEnabled: siteNotificationsPreference } = useSettings(); // Get notification preference
 
   // Load initial announcements from localStorage
   useEffect(() => {
@@ -38,19 +40,40 @@ export function useAnnouncements() {
     }
   }, []);
   
-  // Effect to register data handler with PeerContext and request initial announcements
   useEffect(() => {
-    if (peerContext && peerContext.registerDataHandler) {
+    if (peerContext && peerContext.registerDataHandler && typeof window !== 'undefined' && window.Notification) {
       peerContext.registerDataHandler((data: any, fromPeerId: string) => {
         console.log("useAnnouncements received data from peer:", data, "from:", fromPeerId);
         if (data.type === 'NEW_ANNOUNCEMENT') {
-          // Avoid adding if it already exists (e.g., admin's own broadcast)
+          const newAnnouncement = data.payload as Announcement;
           setAnnouncements(prev => {
-            if (prev.find(ann => ann.id === data.payload.id)) return prev;
-            const newAnnouncements = [data.payload, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            if (prev.find(ann => ann.id === newAnnouncement.id)) return prev;
+            const newAnnouncements = [newAnnouncement, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(newAnnouncements));
             return newAnnouncements;
           });
+
+          // Show notification if enabled and permission granted
+          if (siteNotificationsPreference && Notification.permission === 'granted') {
+            const notificationBody = newAnnouncement.content.length > 120 
+              ? newAnnouncement.content.substring(0, 120) + "..." 
+              : newAnnouncement.content;
+            
+            const notification = new Notification(newAnnouncement.title, {
+              body: notificationBody,
+              tag: newAnnouncement.id, // Use ID as tag to prevent multiple notifications for the same announcement if re-broadcasted
+            });
+             // Optional: Handle click to focus window/tab and navigate
+            notification.onclick = () => {
+              window.focus();
+              // You might want to navigate to the announcements page or the specific announcement
+              // For simplicity, this is commented out, but you can use Next.js router here
+              // import { useRouter } from 'next/navigation'; (at top)
+              // const router = useRouter(); (at top of hook, careful with hook rules)
+              // router.push('/announcements'); 
+            };
+          }
+
         } else if (data.type === 'DELETE_ANNOUNCEMENT') {
           setAnnouncements(prev => {
             const updatedAnnouncements = prev.filter(ann => ann.id !== data.payload.id);
@@ -58,12 +81,10 @@ export function useAnnouncements() {
             return updatedAnnouncements;
           });
         } else if (data.type === 'REQUEST_INITIAL_ANNOUNCEMENTS' && isAdmin && user) {
-           // Admin receives a request and sends all current announcements back
            console.log(`Admin ${peerContext.peerId} received request for initial announcements from ${fromPeerId}`);
            const currentAnnouncements = JSON.parse(localStorage.getItem(ANNOUNCEMENTS_KEY) || '[]');
            peerContext.sendDataToPeer(fromPeerId, { type: 'INITIAL_ANNOUNCEMENTS', payload: currentAnnouncements });
         } else if (data.type === 'INITIAL_ANNOUNCEMENTS') {
-           // Client receives the full list of announcements
            console.log(`Client ${peerContext.peerId} received initial announcements from ${fromPeerId}`);
            const receivedAnnouncements: Announcement[] = data.payload;
            receivedAnnouncements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -72,20 +93,7 @@ export function useAnnouncements() {
         }
       });
     }
-
-    // If not admin and peer is initialized, request initial announcements
-    // This check is now primarily handled within PeerProvider upon connection to admin.
-    // However, an explicit call here can be a fallback if needed or if connection logic changes.
-    if (peerContext && peerContext.peerId && !isAdmin && announcements.length === 0) {
-        // Check if already connected to an admin, if not, PeerProvider's connectToPeer will try to connect.
-        // The request for initial announcements is now triggered within connectToPeer in PeerProvider
-        // when a non-admin successfully connects to an admin.
-        // So, an explicit call to peerContext.requestInitialAnnouncements() here might be redundant
-        // if PeerProvider handles it. However, it can serve as a fallback.
-        // Let's rely on PeerProvider's connection logic for the initial request.
-    }
-
-  }, [peerContext, user, isAdmin, announcements.length]); // Added announcements.length to dependencies for initial request logic
+  }, [peerContext, user, isAdmin, announcements.length, siteNotificationsPreference]);
 
   const addAnnouncement = useCallback((newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
     if (!user) return; 
@@ -97,14 +105,12 @@ export function useAnnouncements() {
       author: `${user.name} ${user.surname}`,
     };
 
-    // Update local state and localStorage immediately
     setAnnouncements(prev => {
       const updatedAnnouncements = [announcement, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncements));
       return updatedAnnouncements;
     });
 
-    // Broadcast to peers if admin
     if (isAdmin && peerContext && peerContext.broadcastData) {
       console.log("Admin broadcasting new announcement:", announcement);
       peerContext.broadcastData({ type: 'NEW_ANNOUNCEMENT', payload: announcement });
@@ -113,14 +119,12 @@ export function useAnnouncements() {
   }, [user, isAdmin, peerContext]);
 
   const deleteAnnouncement = useCallback((id: string) => {
-    // Update local state and localStorage immediately
     setAnnouncements(prev => {
       const updatedAnnouncements = prev.filter(ann => ann.id !== id);
       localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncements));
       return updatedAnnouncements;
     });
 
-    // Broadcast to peers if admin
     if (isAdmin && peerContext && peerContext.broadcastData) {
       console.log("Admin broadcasting delete announcement:", id);
       peerContext.broadcastData({ type: 'DELETE_ANNOUNCEMENT', payload: { id } });
@@ -131,7 +135,6 @@ export function useAnnouncements() {
     return announcements.find(ann => ann.id === id);
   }, [announcements]);
 
-  // This function is now conceptually replaced by the data handler registered with PeerContext.
   const syncAnnouncementsFromPeer = useCallback((peerAnnouncements: Announcement[]) => {
     const sortedAnnouncements = [...peerAnnouncements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setAnnouncements(sortedAnnouncements);

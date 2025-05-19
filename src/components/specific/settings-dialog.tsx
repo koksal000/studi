@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useSettings } from '@/contexts/settings-context';
@@ -9,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useToast } from '@/hooks/use-toast';
 import { Moon, Sun, Laptop } from 'lucide-react';
-import { VILLAGE_NAME } from '@/lib/constants'; // Added import
+import { VILLAGE_NAME } from '@/lib/constants';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -17,19 +18,54 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
-  const { notificationsEnabled, toggleNotifications, currentTheme, setAppTheme } = useSettings();
+  const { notificationsEnabled, setNotificationsPreference, currentTheme, setAppTheme } = useSettings();
   const { user, logout } = useUser();
   const { toast } = useToast();
 
   const handleSaveSettings = () => {
-    // Theme is saved by setAppTheme via next-themes
-    // Notifications are saved by toggleNotifications
+    // Theme and notification preferences are saved as they are changed.
+    // This button mainly serves to close the dialog now.
     toast({
       title: "Ayarlar Kaydedildi",
-      description: "Tema ve bildirim ayarlarınız güncellendi.",
+      description: "Tercihleriniz güncellendi.",
     });
     onOpenChange(false);
   };
+
+  const handleNotificationSwitchChange = async (checked: boolean) => {
+    if (typeof window !== 'undefined' && !window.Notification) {
+      toast({
+        title: "Desteklenmiyor",
+        description: "Tarayıcınız bildirimleri desteklemiyor.",
+        variant: "destructive",
+      });
+      setNotificationsPreference(false);
+      return;
+    }
+
+    if (checked) { // User wants to enable notifications
+      if (Notification.permission === 'granted') {
+        setNotificationsPreference(true);
+        toast({ title: "Bildirimler Aktif", description: "Yeni duyurular için bildirim alacaksınız." });
+      } else if (Notification.permission === 'denied') {
+        toast({ title: "İzin Gerekli", description: "Bildirim almak için lütfen tarayıcı ayarlarınızdan bu siteye bildirim izni verin. Sayfayı yeniledikten sonra tekrar deneyebilirsiniz.", variant: 'destructive', duration: 7000 });
+        setNotificationsPreference(false); // Ensure preference is false if permission denied
+      } else { // 'default' permission
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          setNotificationsPreference(true);
+          toast({ title: "Bildirimler Aktif", description: "Yeni duyurular için bildirim alacaksınız." });
+        } else {
+          setNotificationsPreference(false);
+          toast({ title: "İzin Reddedildi", description: "Bildirim izni verilmedi.", variant: 'destructive' });
+        }
+      }
+    } else { // User wants to disable notifications
+      setNotificationsPreference(false);
+      toast({ title: "Bildirimler Kapatıldı", description: "Artık yeni duyurular için bildirim almayacaksınız." });
+    }
+  };
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -69,16 +105,16 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
           <div className="space-y-3">
             <Label className="text-base font-medium">Bildirim Ayarları</Label>
             <div className="flex items-center justify-between rounded-lg border p-4">
-              <Label htmlFor="notificationsEnabled" className="flex flex-col space-y-1">
+              <Label htmlFor="notificationsEnabledSwitch" className="flex flex-col space-y-1">
                 <span>Duyuru Bildirimleri</span>
                 <span className="font-normal leading-snug text-muted-foreground">
                   Yeni duyurular için bildirim al.
                 </span>
               </Label>
               <Switch
-                id="notificationsEnabled"
+                id="notificationsEnabledSwitch"
                 checked={notificationsEnabled}
-                onCheckedChange={toggleNotifications}
+                onCheckedChange={handleNotificationSwitchChange}
               />
             </div>
           </div>
@@ -101,7 +137,7 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Kapat</Button>
-          <Button onClick={handleSaveSettings}>Ayarları Kaydet</Button>
+          <Button onClick={handleSaveSettings}>Değişiklikleri Kaydet</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

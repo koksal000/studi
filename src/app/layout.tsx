@@ -8,6 +8,7 @@ import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { SettingsProvider } from '@/contexts/settings-context';
+import { PeerProvider } from '@/contexts/peer-context'; // Added PeerProvider
 
 export const metadata: Metadata = {
   title: 'KöyümDomaniç - Çamlıca Köyü Portalı',
@@ -25,12 +26,14 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <UserProvider>
             <SettingsProvider>
-              <Navbar />
-              <main className="flex-grow container mx-auto px-4 py-8">
-                {children}
-              </main>
-              <Footer />
-              <Toaster />
+              <PeerProvider> {/* Added PeerProvider Wrapper */}
+                <Navbar />
+                <main className="flex-grow container mx-auto px-4 py-8">
+                  {children}
+                </main>
+                <Footer />
+                <Toaster />
+              </PeerProvider>
             </SettingsProvider>
           </UserProvider>
         </ThemeProvider>

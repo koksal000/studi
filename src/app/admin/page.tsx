@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion } from 'lucide-react'; // Added MailQuestion
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -25,19 +25,20 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useAnnouncements, type Announcement } from '@/hooks/use-announcements'; // useAnnouncements ve Announcement import edildi
-import { AnnouncementCard } from '@/components/specific/announcement-card'; // AnnouncementCard import edildi
+import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
+import { AnnouncementCard } from '@/components/specific/announcement-card';
+import { UserRequestsDialog } from '@/components/specific/user-requests-dialog'; // Added
 
 export default function AdminPage() {
   const { user } = useUser();
   const router = useRouter();
   const { toast } = useToast();
   const { galleryImages, addGalleryImage, deleteGalleryImage, isLoading: galleryLoading } = useGallery();
-  const { announcements, isLoading: announcementsLoading } = useAnnouncements(); // announcements ve announcementsLoading eklendi
+  const { announcements, isLoading: announcementsLoading } = useAnnouncements();
 
   const [isAddAnnouncementDialogOpen, setIsAddAnnouncementDialogOpen] = useState(false);
+  const [isUserRequestsDialogOpen, setIsUserRequestsDialogOpen] = useState(false); // Added
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [newImageCaption, setNewImageCaption] = useState('');
   const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
@@ -149,6 +150,9 @@ export default function AdminPage() {
               <p className="text-muted-foreground">{user.name} {user.surname}</p>
             </div>
           </div>
+           <Button onClick={() => setIsUserRequestsDialogOpen(true)} variant="outline" className="w-full sm:w-auto">
+            <MailQuestion className="mr-2 h-5 w-5" /> Kullanıcı İsteklerini Görüntüle
+          </Button>
         </CardContent>
       </Card>
 
@@ -163,24 +167,22 @@ export default function AdminPage() {
           <CardDescription>Yeni duyurular ekleyin veya mevcut duyuruları yönetin.</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Duyuru Ekleme Dialogu */}
           <AddAnnouncementDialog 
             isOpen={isAddAnnouncementDialogOpen} 
             onOpenChange={setIsAddAnnouncementDialogOpen} 
           />
           
-          {/* Mevcut Duyuruları Yönetme Bölümü */}
           <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4 mt-6 flex items-center">
             <ListChecks className="mr-2 h-5 w-5" /> Mevcut Duyurular
           </h3>
-          {announcementsLoading && <p className="text-muted-foreground">Duyurular yükleniyor...</p>}
+          {announcementsLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Duyurular yükleniyor...</div>}
           {!announcementsLoading && announcements.length === 0 && (
             <p className="text-muted-foreground">Henüz yayınlanmış bir duyuru bulunmamaktadır.</p>
           )}
           {!announcementsLoading && announcements.length > 0 && (
             <div className="space-y-4">
               {announcements.map((ann) => (
-                <AnnouncementCard key={ann.id} announcement={ann} allowDelete={true} /> // allowDelete={true} eklendi
+                <AnnouncementCard key={ann.id} announcement={ann} allowDelete={true} />
               ))}
             </div>
           )}
@@ -234,7 +236,7 @@ export default function AdminPage() {
           </form>
 
           <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4">Mevcut Galeri Resimleri</h3>
-          {galleryLoading && <p className="text-muted-foreground">Galeri resimleri yükleniyor...</p>}
+          {galleryLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Galeri resimleri yükleniyor...</div>}
           {!galleryLoading && galleryImages.length === 0 && (
             <p className="text-muted-foreground">Galeride henüz resim bulunmamaktadır.</p>
           )}
@@ -300,6 +302,10 @@ export default function AdminPage() {
           performImageDelete();
           setIsDeleteImageAdminPasswordDialogOpen(false);
         }}
+      />
+      <UserRequestsDialog 
+        isOpen={isUserRequestsDialogOpen}
+        onOpenChange={setIsUserRequestsDialogOpen}
       />
     </div>
   );

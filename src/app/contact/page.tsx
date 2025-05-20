@@ -23,16 +23,36 @@ export default function ContactPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1500));
     
-    console.log("Form Data:", formData); // Log data for now
-    toast({
-      title: "Mesajınız Gönderildi!",
-      description: "En kısa sürede sizinle iletişime geçeceğiz.",
-    });
-    setFormData({ name: '', email: '', subject: '', message: '' }); // Reset form
-    setIsSubmitting(false);
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Mesaj gönderilirken bir hata oluştu.' }));
+        throw new Error(errorData.message);
+      }
+
+      toast({
+        title: "Mesajınız Gönderildi!",
+        description: "En kısa sürede sizinle iletişime geçeceğiz.",
+      });
+      setFormData({ name: '', email: '', subject: '', message: '' }); // Reset form
+    } catch (error: any) {
+      console.error("Form Submission Error:", error);
+      toast({
+        title: "Gönderim Başarısız",
+        description: error.message || "Mesajınız gönderilirken bir sorun oluştu. Lütfen tekrar deneyin.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

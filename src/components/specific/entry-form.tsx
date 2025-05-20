@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, type FormEvent } from 'react';
@@ -11,7 +12,7 @@ import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
-  const { login, showEntryForm, setShowEntryForm } = useUser();
+  const { login, showEntryForm } = useUser(); // Removed setShowEntryForm as it's not used here
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -25,44 +26,64 @@ export function EntryForm() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
-      <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-primary">{VILLAGE_NAME}</CardTitle>
-          <CardDescription className="text-muted-foreground">{DISTRICT_NAME}'in Merkez Köyü</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="userName">Adınız:</Label>
-              <Input
-                id="userName"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="bg-input"
-                placeholder="Adınızı girin"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="userSurname">Soyadınız:</Label>
-              <Input
-                id="userSurname"
-                type="text"
-                value={surname}
-                onChange={(e) => setSurname(e.target.value)}
-                required
-                className="bg-input"
-                placeholder="Soyadınızı girin"
-              />
-            </div>
-            <Button type="submit" className="w-full text-lg py-3">
-              Giriş Yap
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="fixed inset-0 z-[100] overflow-hidden">
+      <video
+        autoPlay
+        loop
+        muted={false} // User requested "sesli" (audible). Browser policies might mute it or prevent autoplay with sound.
+        playsInline // Important for iOS to play inline
+        className="absolute top-0 left-0 w-full h-full object-cover" // Video as background
+        src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" // Placeholder video URL
+        // Example of a village/nature themed video if available:
+        // src="https://cdn.pixabay.com/video/2024/01/09/195304-905800538_large.mp4" 
+        // Ensure the video source is a direct link to a video file (e.g., .mp4)
+      >
+        Tarayıcınız video etiketini desteklemiyor.
+      </video>
+
+      {/* Overlay to dim the video and ensure text on card is readable */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+
+      {/* Centering container for the Card, must be on top of video and overlay */}
+      <div className="relative z-10 flex items-center justify-center h-full p-4">
+        <Card className="w-full max-w-md shadow-2xl bg-card"> {/* Ensure card has its own background for readability */}
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold text-primary">{VILLAGE_NAME}</CardTitle>
+            <CardDescription className="text-muted-foreground">{DISTRICT_NAME}'in Merkez Köyü</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="userName" className="text-card-foreground">Adınız:</Label>
+                <Input
+                  id="userName"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="bg-input text-foreground"
+                  placeholder="Adınızı girin"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="userSurname" className="text-card-foreground">Soyadınız:</Label>
+                <Input
+                  id="userSurname"
+                  type="text"
+                  value={surname}
+                  onChange={(e) => setSurname(e.target.value)}
+                  required
+                  className="bg-input text-foreground"
+                  placeholder="Soyadınızı girin"
+                />
+              </div>
+              <Button type="submit" className="w-full text-lg py-3">
+                Giriş Yap
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

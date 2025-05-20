@@ -25,6 +25,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';

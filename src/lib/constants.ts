@@ -67,6 +67,15 @@ export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
   { id: "seed_8", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipM6C8We9b9VDCeYH4lWC0n-jOCxQXSFYDawGFsS?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
   { id: "seed_9", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipMBRchJ-_Q6DdSSyYHvW7qOGeWmbbEAsoV9qwaj?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
   { id: "seed_10",src: "https://i.ibb.co/NnYV58Gg/1739026216056.jpg", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "village market" },
+  { id: "seed_11", src: "https://i.ibb.co/s9mGgssQ/1739026216106.jpg", alt: "1739026216106", caption: "Köy Manzarası 1", hint: "village landscape" },
+  { id: "seed_12", src: "https://i.ibb.co/XhVTv1f/1739026216113.jpg", alt: "1739026216113", caption: "Köy Manzarası 2", hint: "village view" },
+  { id: "seed_13", src: "https://i.ibb.co/5xCg3hcC/1739026216091.jpg", alt: "1739026216091", caption: "Köy Manzarası 3", hint: "village scene" },
+  { id: "seed_14", src: "https://i.ibb.co/7xdY3gcL/1739026216097.jpg", alt: "1739026216097", caption: "Köy Manzarası 4", hint: "nature photo" },
+  { id: "seed_15", src: "https://i.ibb.co/Y5Dt0Rg/1739027099716.jpg", alt: "1739027099716", caption: "Köy Manzarası 5", hint: "outdoor scene" },
+  { id: "seed_16", src: "https://i.ibb.co/1JwKQkQN/1739026216083.jpg", alt: "1739026216083", caption: "Köy Yaşamından", hint: "village life" },
+  { id: "seed_17", src: "https://i.ibb.co/N6ZvLqsJ/1739026216071.jpg", alt: "1739026216071", caption: "Detay Görünüm", hint: "village detail" },
+  { id: "seed_18", src: "https://i.ibb.co/SD8rnMj3/Whats-App-G-rsel-2025-02-08-saat-16-20-29-6ff8c8bd.jpg", alt: "WhatsApp Görseli", caption: "Köyden Bir Kare", hint: "snapshot village" },
+  { id: "seed_19", src: "https://i.ibb.co/PsmMVdCN/1739026216077.jpg", alt: "1739026216077", caption: "Manzara Detayı", hint: "scenery detail" },
 ];
 
 
@@ -84,3 +93,5 @@ export const NAVIGATION_LINKS = [
 
 export const ADMIN_PANEL_PATH = "/admin";
 export const DEFAULT_CONTACT_PEER_ID = "camlica-village-default-contact-peer";
+
+    

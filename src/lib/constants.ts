@@ -1,7 +1,12 @@
+
 export const ADMIN_PASSWORD = "dck.2025"; // As per prototype
 
 export const VILLAGE_NAME = "Çamlıca Köyü";
 export const DISTRICT_NAME = "Domaniç";
+
+// This ID can be used by peers to try and find an initial contact point in the network.
+// Any peer can choose to initialize itself with this ID.
+export const DEFAULT_CONTACT_PEER_ID = "camlica-village-default-contact-peer";
 
 export const CONTACT_INFO = {
   email: "domaniccamlicakoyu@gmail.com",

@@ -2,7 +2,8 @@
 'use server';
 
 /**
- * @fileOverview Fetches and summarizes current weather conditions for Domaniç using Open-Meteo API.
+ * @fileOverview Fetches and summarizes current weather conditions for Domaniç using Open-Meteo API,
+ * including hourly and daily forecasts.
  *
  * - summarizeWeather - A function that handles the weather summarization process.
  * - WeatherSummaryInput - The input type for the summarizeWeather function.
@@ -17,23 +18,63 @@ const WeatherSummaryInputSchema = z.object({
 });
 export type WeatherSummaryInput = z.infer<typeof WeatherSummaryInputSchema>;
 
+// Schema for the data fetched from Open-Meteo, to be passed to the prompt
+const OpenMeteoApiDataSchema = z.object({
+  location: z.string().describe('The target location, e.g., Domaniç'),
+  current: z.object({
+    temperature: z.number().describe('Current temperature in Celsius'),
+    humidity: z.number().describe('Current relative humidity in percent'),
+    windspeed: z.number().describe('Current wind speed in km/h'),
+    weathercode: z.number().describe('Current WMO weather interpretation code'),
+  }),
+  hourly: z.object({
+    time: z.array(z.string()).describe('Array of ISO8601 timestamps for hourly forecast'),
+    temperature_2m: z.array(z.number()).describe('Array of hourly temperatures at 2m in Celsius'),
+    precipitation_probability: z.array(z.number()).describe('Array of hourly precipitation probabilities in percent'),
+    weathercode: z.array(z.number()).describe('Array of hourly WMO weather codes'),
+    windspeed_10m: z.array(z.number()).describe('Array of hourly wind speeds at 10m in km/h'),
+  }).optional().describe("Hourly forecast data from Open-Meteo for the next 48 hours."),
+  daily: z.object({
+    time: z.array(z.string()).describe('Array of ISO8601 dates for daily forecast'),
+    weathercode: z.array(z.number()).describe('Array of daily WMO weather codes'),
+    temperature_2m_max: z.array(z.number()).describe('Array of daily maximum temperatures at 2m in Celsius'),
+    temperature_2m_min: z.array(z.number()).describe('Array of daily minimum temperatures at 2m in Celsius'),
+    precipitation_sum: z.array(z.number()).describe('Array of daily precipitation sum in mm'),
+  }).optional().describe("Daily forecast data from Open-Meteo for the next 7 days."),
+});
+export type OpenMeteoApiData = z.infer<typeof OpenMeteoApiDataSchema>;
+
+
+const HourlyForecastItemSchema = z.object({
+  time: z.string().describe("Formatted time for the forecast (e.g., '14:00')"),
+  temperature: z.string().describe("Formatted temperature (e.g., '15°C')"),
+  precipitationProbability: z.string().describe("Formatted precipitation probability (e.g., '30%')"),
+  conditions: z.string().describe("Human-readable weather conditions in Turkish (e.g., 'Parçalı Bulutlu')"),
+  windSpeed: z.string().describe("Formatted wind speed (e.g., '10 km/h')"),
+  weatherCode: z.number().describe("Original WMO weather code for icon mapping"),
+});
+
+const DailyForecastItemSchema = z.object({
+  date: z.string().describe("Formatted date for the forecast (e.g., 'Sal, 25 Tem')"),
+  maxTemperature: z.string().describe("Formatted maximum temperature (e.g., '22°C')"),
+  minTemperature: z.string().describe("Formatted minimum temperature (e.g., '12°C')"),
+  precipitationSum: z.string().describe("Formatted precipitation sum (e.g., '5 mm')"),
+  conditions: z.string().describe("Human-readable weather conditions in Turkish (e.g., 'Sağanak Yağmur')"),
+  weatherCode: z.number().describe("Original WMO weather code for icon mapping"),
+});
+
 const WeatherSummaryOutputSchema = z.object({
-  summary: z.string().describe('A concise summary of the current weather conditions.'),
-  temperature: z.string().describe('The current temperature in Celsius, formatted with °C.'),
-  humidity: z.string().describe('The current humidity percentage, formatted with %.'),
-  windSpeed: z.string().describe('The current wind speed in km/h, formatted with km/h.'),
-  conditions: z.string().describe('Overall weather conditions (e.g., Sunny, Partly Cloudy, Rainy).'),
+  summary: z.string().describe('A concise summary of the current weather conditions in Turkish.'),
+  temperature: z.string().describe('The current temperature in Celsius, formatted with °C (e.g., "22.5°C").'),
+  humidity: z.string().describe('The current humidity percentage, formatted with % (e.g., "60%").'),
+  windSpeed: z.string().describe('The current wind speed in km/h, formatted with km/h (e.g., "15.3 km/h").'),
+  conditions: z.string().describe('Overall current weather conditions in Turkish (e.g., "Güneşli", "Parçalı Bulutlu", "Yağmurlu").'),
+  currentWeatherCode: z.number().describe("Original WMO weather code for current conditions for icon mapping"),
+  hourlyForecast: z.array(HourlyForecastItemSchema).optional().describe("Array of hourly forecast items for the first 12 available hours. Format time in 'HH:mm'. Temperature with °C. Precipitation probability with '%'. Wind speed with 'km/h'. Translate conditions to Turkish."),
+  dailyForecast: z.array(DailyForecastItemSchema).optional().describe("Array of daily forecast items for the next 7 days. Format date as 'KısaGünAdı, Gün AyAdıKısaltılmış' (e.g., 'Sal, 25 Tem') in Turkish. Temperatures with °C. Precipitation sum with 'mm'. Translate conditions to Turkish."),
 });
 export type WeatherSummaryOutput = z.infer<typeof WeatherSummaryOutputSchema>;
 
-// Schema for the data fetched from Open-Meteo, to be passed to the prompt
-const OpenMeteoDataSchema = z.object({
-  api_temperature: z.number().describe('Temperature in Celsius from Open-Meteo'),
-  api_humidity: z.number().describe('Relative humidity in percent from Open-Meteo'),
-  api_windspeed: z.number().describe('Wind speed in km/h from Open-Meteo'),
-  api_weathercode: z.number().describe('WMO weather interpretation code from Open-Meteo'),
-  location: z.string().describe('The target location, e.g., Domaniç'),
-});
 
 export async function summarizeWeather(input: WeatherSummaryInput): Promise<WeatherSummaryOutput> {
   return summarizeWeatherFlow(input);
@@ -41,50 +82,93 @@ export async function summarizeWeather(input: WeatherSummaryInput): Promise<Weat
 
 const formatOpenMeteoDataPrompt = ai.definePrompt({
   name: 'formatOpenMeteoDataPrompt',
-  input: {schema: OpenMeteoDataSchema},
+  input: {schema: OpenMeteoApiDataSchema},
   output: {schema: WeatherSummaryOutputSchema},
   prompt: `You are a weather report formatter. Based on the following real-time data for {{{location}}}:
-Raw Temperature: {{api_temperature}}°C
-Raw Humidity: {{api_humidity}}%
-Raw Wind Speed: {{api_windspeed}} km/h
-Raw Weather Code: {{api_weathercode}}
+Current Weather Data:
+  Raw Temperature: {{current.temperature}}°C
+  Raw Humidity: {{current.humidity}}%
+  Raw Wind Speed: {{current.windspeed}} km/h
+  Raw Weather Code: {{current.weathercode}}
 
-Use the WMO Weather Interpretation Codes to determine the 'conditions' string:
-0: Clear sky
-1: Mainly clear
-2: Partly cloudy
-3: Overcast
-45: Fog
-48: Depositing rime fog
-51: Light drizzle
-53: Moderate drizzle
-55: Dense drizzle
-56: Light freezing drizzle
-57: Dense freezing drizzle
-61: Slight rain
-63: Moderate rain
-65: Heavy rain
-66: Light freezing rain
-67: Heavy freezing rain
-71: Slight snow fall
-73: Moderate snow fall
-75: Heavy snow fall
-77: Snow grains
-80: Slight rain showers
-81: Moderate rain showers
-82: Violent rain showers
-85: Slight snow showers
-86: Heavy snow showers
-95: Thunderstorm (slight or moderate)
-96: Thunderstorm with slight hail
-99: Thunderstorm with heavy hail
+{{#if hourly}}
+Hourly Forecast Data (process first 12 entries if available):
+  Times: {{#each hourly.time as |t|}}{{t}}, {{/each}}
+  Temperatures: {{#each hourly.temperature_2m as |t|}}{{t}}°C, {{/each}}
+  Precipitation Probabilities: {{#each hourly.precipitation_probability as |p|}}{{p}}%, {{/each}}
+  Weather Codes: {{#each hourly.weathercode as |wc|}}{{wc}}, {{/each}}
+  Wind Speeds: {{#each hourly.windspeed_10m as |ws|}}{{ws}} km/h, {{/each}}
+{{/if}}
 
-Generate a weather report strictly conforming to the output schema.
-- The 'temperature' field in the output must be the raw temperature value formatted as a string with '°C' appended (e.g., "22.5°C").
-- The 'humidity' field in the output must be the raw humidity value formatted as a string with '%' appended (e.g., "60%").
-- The 'windSpeed' field in the output must be the raw wind speed value formatted as a string with 'km/h' appended (e.g., "15.3 km/h").
-- The 'conditions' field must be a human-readable string derived from the weather code (e.g., "Partly cloudy", "Moderate rain").
-- The 'summary' field must be a concise, human-readable sentence describing the overall weather, incorporating the conditions and temperature. Example: "Partly cloudy with a temperature of 22.5°C."
+{{#if daily}}
+Daily Forecast Data (for all available days, up to 7):
+  Dates: {{#each daily.time as |d|}}{{d}}, {{/each}}
+  Max Temperatures: {{#each daily.temperature_2m_max as |tmax|}}{{tmax}}°C, {{/each}}
+  Min Temperatures: {{#each daily.temperature_2m_min as |tmin|}}{{tmin}}°C, {{/each}}
+  Precipitation Sums: {{#each daily.precipitation_sum as |psum|}}{{psum}}mm, {{/each}}
+  Weather Codes: {{#each daily.weathercode as |dwc|}}{{dwc}}, {{/each}}
+{{/if}}
+
+Use the WMO Weather Interpretation Codes (Turkish translations provided) to determine the 'conditions' string:
+0: Açık
+1: Genellikle Açık
+2: Parçalı Bulutlu
+3: Çok Bulutlu/Kapalı
+45: Sisli
+48: Kırağı Sisi
+51: Hafif Çiseleme
+53: Orta Yoğunlukta Çiseleme
+55: Yoğun Çiseleme
+56: Hafif Donan Çiseleme
+57: Yoğun Donan Çiseleme
+61: Hafif Yağmur
+63: Orta Yağmur
+65: Şiddetli Yağmur
+66: Hafif Donan Yağmur
+67: Şiddetli Donan Yağmur
+71: Hafif Kar Yağışı
+73: Orta Yoğunlukta Kar Yağışı
+75: Yoğun Kar Yağışı
+77: Kar Taneleri
+80: Hafif Sağanak Yağmur
+81: Orta Sağanak Yağmur
+82: Şiddetli Sağanak Yağmur
+85: Hafif Kar Sağanağı
+86: Yoğun Kar Sağanağı
+95: Gök Gürültülü Fırtına (hafif veya orta)
+96: Hafif Dolu ile Gök Gürültülü Fırtına
+99: Şiddetli Dolu ile Gök Gürültülü Fırtına
+
+Generate a weather report in TURKISH, strictly conforming to the output schema.
+
+For CURRENT weather:
+- 'temperature': Raw temperature value formatted as a string with '°C' (e.g., "22.5°C").
+- 'humidity': Raw humidity value formatted as a string with '%' (e.g., "60%").
+- 'windSpeed': Raw wind speed value formatted as a string with 'km/h' (e.g., "15.3 km/h").
+- 'conditions': Human-readable Turkish string derived from the current weather code.
+- 'currentWeatherCode': The raw WMO weather code for current conditions.
+- 'summary': Concise, human-readable Turkish sentence describing the overall current weather, incorporating conditions and temperature. Example: "Parçalı bulutlu ve sıcaklık 22.5°C."
+
+For 'hourlyForecast' array (process the first 12 entries from the provided hourly data arrays, if available):
+  For each item:
+  - 'time': Format the ISO time string from 'hourly.time[i]' to 'HH:mm' (e.g., '14:00').
+  - 'temperature': Format 'hourly.temperature_2m[i]' as a string with '°C'.
+  - 'precipitationProbability': Format 'hourly.precipitation_probability[i]' as a string with '%'.
+  - 'conditions': Convert 'hourly.weathercode[i]' to a concise Turkish weather description using the WMO code list.
+  - 'windSpeed': Format 'hourly.windspeed_10m[i]' as a string with ' km/h'.
+  - 'weatherCode': The raw WMO code 'hourly.weathercode[i]'.
+
+For 'dailyForecast' array (for the next 7 days from the provided daily data arrays, if available):
+  For each item:
+  - 'date': Format the ISO date string from 'daily.time[i]' to 'KısaGünAdı, Gün AyAdıKısaltılmış' (e.g., 'Sal, 25 Tem') in Turkish. For example, 2024-07-25 should be 'Per, 25 Tem'.
+  - 'maxTemperature': Format 'daily.temperature_2m_max[i]' as a string with '°C'.
+  - 'minTemperature': Format 'daily.temperature_2m_min[i]' as a string with '°C'.
+  - 'precipitationSum': Format 'daily.precipitation_sum[i]' as a string with ' mm'. If 0, use "Yağış yok".
+  - 'conditions': Convert 'daily.weathercode[i]' to a concise Turkish weather description using the WMO code list.
+  - 'weatherCode': The raw WMO code 'daily.weathercode[i]'.
+
+If hourly or daily forecast data is not available in the input, return empty or undefined arrays for 'hourlyForecast' and 'dailyForecast' respectively in the output.
+Provide all text in Turkish.
 `,
 });
 
@@ -96,51 +180,71 @@ const summarizeWeatherFlow = ai.defineFlow(
   },
   async (flowInput) => {
     if (flowInput.location.toLowerCase() !== 'domaniç') {
-      // Or handle other locations if geocoding is implemented in the future
-      throw new Error('Weather data is currently only available for Domaniç.');
+      throw new Error('Hava durumu verileri şu anda sadece Domaniç için mevcuttur.');
     }
 
     const lat = 39.80; // Domaniç, Kütahya
     const lon = 29.60;
-    // Request current temperature, humidity, weather code, and wind speed
-    const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relativehumidity_2m,weathercode,windspeed_10m&timezone=Europe/Istanbul`;
+    const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relativehumidity_2m,weathercode,windspeed_10m&hourly=temperature_2m,precipitation_probability,weathercode,windspeed_10m&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Europe/Istanbul&forecast_days=7&forecast_hours=48&windspeed_unit=kmh&precipitation_unit=mm`;
 
-    let weatherData;
+    let apiResponseData;
     try {
-      const response = await fetch(apiUrl, { cache: 'no-store' }); // Disable caching for fresh data
+      const response = await fetch(apiUrl, { cache: 'no-store' });
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error("Open-Meteo API Error:", response.status, errorBody);
-        throw new Error(`Failed to fetch weather data from Open-Meteo: ${response.status} ${response.statusText}`);
+        console.error("Open-Meteo API Hatası:", response.status, errorBody);
+        throw new Error(`Open-Meteo API'sinden hava durumu verileri alınamadı: ${response.status} ${response.statusText}`);
       }
-      weatherData = await response.json();
+      apiResponseData = await response.json();
     } catch (error) {
-      console.error("Error fetching or parsing Open-Meteo data:", error);
-      throw new Error("Could not retrieve weather data. Please try again later.");
+      console.error("Open-Meteo verileri alınırken veya işlenirken hata:", error);
+      throw new Error("Hava durumu verileri alınamadı. Lütfen daha sonra tekrar deneyin.");
     }
     
 
-    if (!weatherData.current || 
-        typeof weatherData.current.temperature_2m !== 'number' ||
-        typeof weatherData.current.relativehumidity_2m !== 'number' ||
-        typeof weatherData.current.windspeed_10m !== 'number' ||
-        typeof weatherData.current.weathercode !== 'number') {
-      console.error("Open-Meteo response missing expected current weather data:", weatherData);
-      throw new Error("Received incomplete weather data from Open-Meteo.");
+    if (!apiResponseData.current || 
+        typeof apiResponseData.current.temperature_2m !== 'number' ||
+        typeof apiResponseData.current.relativehumidity_2m !== 'number' ||
+        typeof apiResponseData.current.windspeed_10m !== 'number' ||
+        typeof apiResponseData.current.weathercode !== 'number') {
+      console.error("Open-Meteo yanıtında beklenen güncel hava durumu verileri eksik:", apiResponseData);
+      throw new Error("Open-Meteo'dan eksik güncel hava durumu verileri alındı.");
     }
 
-    const promptInputData: z.infer<typeof OpenMeteoDataSchema> = {
-      api_temperature: weatherData.current.temperature_2m,
-      api_humidity: weatherData.current.relativehumidity_2m,
-      api_windspeed: weatherData.current.windspeed_10m,
-      api_weathercode: weatherData.current.weathercode,
+    // Check for hourly and daily data integrity if present
+    const hasHourly = apiResponseData.hourly && apiResponseData.hourly.time && Array.isArray(apiResponseData.hourly.time);
+    const hasDaily = apiResponseData.daily && apiResponseData.daily.time && Array.isArray(apiResponseData.daily.time);
+
+    const promptInputData: OpenMeteoApiData = {
       location: flowInput.location,
+      current: {
+        temperature: apiResponseData.current.temperature_2m,
+        humidity: apiResponseData.current.relativehumidity_2m,
+        windspeed: apiResponseData.current.windspeed_10m,
+        weathercode: apiResponseData.current.weathercode,
+      },
+      hourly: hasHourly ? {
+        time: apiResponseData.hourly.time,
+        temperature_2m: apiResponseData.hourly.temperature_2m,
+        precipitation_probability: apiResponseData.hourly.precipitation_probability,
+        weathercode: apiResponseData.hourly.weathercode,
+        windspeed_10m: apiResponseData.hourly.windspeed_10m,
+      } : undefined,
+      daily: hasDaily ? {
+        time: apiResponseData.daily.time,
+        weathercode: apiResponseData.daily.weathercode,
+        temperature_2m_max: apiResponseData.daily.temperature_2m_max,
+        temperature_2m_min: apiResponseData.daily.temperature_2m_min,
+        precipitation_sum: apiResponseData.daily.precipitation_sum,
+      } : undefined,
     };
 
     const {output} = await formatOpenMeteoDataPrompt(promptInputData);
     if (!output) {
-        throw new Error("Weather summarization prompt did not return an output.");
+        throw new Error("Hava durumu özetleme prompt'u bir çıktı döndürmedi.");
     }
-    return output;
+    // Ensure current weather code is passed through
+    return { ...output, currentWeatherCode: apiResponseData.current.weathercode };
   }
 );
+

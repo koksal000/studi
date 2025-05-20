@@ -58,7 +58,7 @@ export const TIMELINE_EVENTS = [
 // The live gallery will be managed via the admin panel and API.
 // Google Photos links are typically viewer links, not direct image URLs, and may not work correctly with next/image.
 export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
-  { id: "seed_1", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipMNo2g60OZYtWRU-VBiVWEGa3vRM8XzMDwVyis5?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Camii", caption: "Çamlıca Köyü Camii", hint: "mosque historic" },
+  { id: "seed_1", src: "https://static.daktilo.com/sites/1410/uploads/2024/07/16/amlica-ilgenel3-1721118756.webp", alt: "Çamlıca Köyü Camii", caption: "Çamlıca Köyü Camii", hint: "mosque historic" },
   { id: "seed_2", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipPJ5hgB1tuDKK6UVsHRnYE6e-EcRqBmvqWdHUjC?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Uydu Görüntüsü", caption: "Çamlıca Uydu Görüntüsü", hint: "village satellite" },
   { id: "seed_3", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipMpReHJDZoNV40QBH3wIRU0A04hI6_eUXPW3l9-?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Tarım Kredi Kooperatifi", caption: "Çamlıca Tarım Kredi Kooperatifi", hint: "village cooperative" },
   { id: "seed_4", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipOnUoEFOL0XlaxosMIsY98w9SoGt1hA6AUiQiLt?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Ortaokulu", caption: "Çamlıca Köyü Ortaokulu", hint: "village school" },

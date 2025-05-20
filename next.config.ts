@@ -46,6 +46,12 @@ const nextConfig: NextConfig = {
         hostname: 'photos.google.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'static.daktilo.com',
+        port: '',
+        pathname: '/**',
       }
     ],
   },

@@ -52,6 +52,12 @@ const nextConfig: NextConfig = {
         hostname: 'static.daktilo.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ibb.co',
+        port: '',
+        pathname: '/**',
       }
     ],
   },

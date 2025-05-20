@@ -56,7 +56,6 @@ export const TIMELINE_EVENTS = [
 
 // This STATIC_GALLERY_IMAGES_FOR_SEEDING can be used for initial seeding of the dynamic gallery if it's empty on server start.
 // The live gallery will be managed via the admin panel and API.
-// Google Photos links are typically viewer links, not direct image URLs, and may not work correctly with next/image.
 export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
   { id: "seed_1", src: "https://static.daktilo.com/sites/1410/uploads/2024/07/16/amlica-ilgenel3-1721118756.webp", alt: "Çamlıca Köyü Camii", caption: "Çamlıca Köyü Camii", hint: "mosque historic" },
   { id: "seed_2", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipPJ5hgB1tuDKK6UVsHRnYE6e-EcRqBmvqWdHUjC?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Uydu Görüntüsü", caption: "Çamlıca Uydu Görüntüsü", hint: "village satellite" },
@@ -67,7 +66,7 @@ export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
   { id: "seed_7", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipPl4TGCXT6xGyGBbz6SMnBOnu2Mpm8_nsb2wHCj?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Girişi", caption: "Çamlıca Köyü Girişi", hint: "village entrance" },
   { id: "seed_8", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipM6C8We9b9VDCeYH4lWC0n-jOCxQXSFYDawGFsS?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
   { id: "seed_9", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipMBRchJ-_Q6DdSSyYHvW7qOGeWmbbEAsoV9qwaj?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
-  { id: "seed_10",src: "https://placehold.co/600x400.png", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "village market" },
+  { id: "seed_10",src: "https://i.ibb.co/NnYV58Gg/1739026216056.jpg", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "village market" },
 ];
 
 
@@ -85,4 +84,3 @@ export const NAVIGATION_LINKS = [
 
 export const ADMIN_PANEL_PATH = "/admin";
 export const DEFAULT_CONTACT_PEER_ID = "camlica-village-default-contact-peer";
-

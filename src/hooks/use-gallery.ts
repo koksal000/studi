@@ -17,15 +17,14 @@ export interface GalleryImage {
 export type NewGalleryImagePayload = Omit<GalleryImage, 'id'> & { imageDataUri: string };
 
 
-const GALLERY_KEY = 'camlicaKoyuGallery_api'; 
+const GALLERY_KEY = 'camlicaKoyuGallery_api';
 
 export function useGallery() {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { user } = useUser(); // User might be needed for future admin-only actions
+  const { user } = useUser();
   const { toast } = useToast();
 
-  // Fetch initial gallery images from API
   useEffect(() => {
     const fetchInitialGallery = async () => {
       setIsLoading(true);
@@ -36,7 +35,7 @@ export function useGallery() {
         }
         const data: GalleryImage[] = await response.json();
         setGalleryImages(data);
-        localStorage.setItem(GALLERY_KEY, JSON.stringify(data)); // Cache locally
+        localStorage.setItem(GALLERY_KEY, JSON.stringify(data));
       } catch (error) {
         console.error("Failed to fetch initial gallery images:", error);
         toast({
@@ -57,8 +56,7 @@ export function useGallery() {
 
     fetchInitialGallery();
   }, [toast]);
-  
-  // Connect to SSE stream for real-time updates
+
   useEffect(() => {
     const eventSource = new EventSource('/api/gallery/stream');
 
@@ -73,23 +71,23 @@ export function useGallery() {
     };
 
     eventSource.onerror = (error) => {
-      console.error('Gallery SSE Error:', error);
-      // toast({
-      //   title: "Galeri Bağlantı Sorunu",
-      //   description: "Galeri güncellemeleriyle bağlantı kesildi.",
-      //   variant: "destructive"
-      // });
+      console.error('SSE connection error for gallery. EventSource readyState:', eventSource.readyState, 'Event:', error);
+      toast({
+        title: "Galeri Bağlantı Sorunu",
+        description: "Galeri güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.",
+        variant: "destructive"
+      });
     };
 
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [toast]); // Added toast to dependency array
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
-    if (!user) { // Basic check, server should ideally do more robust auth for POST
+    if (!user) {
       toast({ title: "Giriş Gerekli", description: "Resim eklemek için giriş yapmalısınız.", variant: "destructive" });
-      return; 
+      return;
     }
 
     try {
@@ -109,21 +107,19 @@ export function useGallery() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Resim eklenemedi');
       }
-      // SSE will update the state.
-      // toast({ title: "Resim Gönderildi", description: "Resminiz başarıyla gönderildi ve yakında galeride görünecektir." });
     } catch (error: any) {
       console.error("Failed to add gallery image:", error);
       toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
-      throw error; // Re-throw to allow form to handle its state
+      throw error;
     }
   }, [user, toast]);
 
   const deleteGalleryImage = useCallback(async (id: string) => {
-     if (!user) { 
+     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Resim silmek için giriş yapmalısınız.", variant: "destructive" });
-      return; 
+      return;
     }
-    
+
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
         method: 'DELETE',
@@ -133,14 +129,12 @@ export function useGallery() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Resim silinemedi');
       }
-      // SSE will update the state.
-      // toast({ title: "Resim Silindi", description: "Resim başarıyla silindi ve yakında listeden kaldırılacaktır." });
     } catch (error: any) {
       console.error("Failed to delete gallery image:", error);
       toast({ title: "Resim Silinemedi", description: error.message || "Resim silinirken bir sorun oluştu.", variant: "destructive" });
-      throw error; // Re-throw
+      throw error;
     }
   }, [user, toast]);
-  
+
   return { galleryImages, addGalleryImage, deleteGalleryImage, isLoading };
 }

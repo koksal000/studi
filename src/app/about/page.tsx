@@ -2,7 +2,7 @@
 "use client"; // Added to make this a Client Component
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA, GALLERY_IMAGES } from '@/lib/constants'; // Added GALLERY_IMAGES
+import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants'; // Changed GALLERY_IMAGES to STATIC_GALLERY_IMAGES_FOR_SEEDING
 import Image from 'next/image';
 import { BarChart as BarChartIconLucide, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'; // Renamed BarChart to avoid conflict
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
@@ -60,7 +60,7 @@ export default function AboutPage() {
                 </ul>
             </div>
             <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                 <Image src={GALLERY_IMAGES[1].src} alt={GALLERY_IMAGES[1].alt} layout="fill" objectFit="cover" data-ai-hint="satellite aerial" />
+                 <Image src={STATIC_GALLERY_IMAGES_FOR_SEEDING[1].src} alt={STATIC_GALLERY_IMAGES_FOR_SEEDING[1].alt} layout="fill" objectFit="cover" data-ai-hint={STATIC_GALLERY_IMAGES_FOR_SEEDING[1].hint || "satellite aerial"} />
             </div>
            </div>
         </CardContent>
@@ -127,11 +127,11 @@ export default function AboutPage() {
             </p>
              <div className="grid md:grid-cols-2 gap-6 mt-4">
                 <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                    <Image src={GALLERY_IMAGES[7].src} alt={GALLERY_IMAGES[7].alt} layout="fill" objectFit="cover" data-ai-hint="village nature" />
+                    <Image src={STATIC_GALLERY_IMAGES_FOR_SEEDING[7].src} alt={STATIC_GALLERY_IMAGES_FOR_SEEDING[7].alt} layout="fill" objectFit="cover" data-ai-hint={STATIC_GALLERY_IMAGES_FOR_SEEDING[7].hint || "village nature"} />
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Tarım Faaliyetleri</div>
                 </div>
                 <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                    <Image src={GALLERY_IMAGES[6].src} alt={GALLERY_IMAGES[6].alt} layout="fill" objectFit="cover" data-ai-hint="village road" />
+                    <Image src={STATIC_GALLERY_IMAGES_FOR_SEEDING[6].src} alt={STATIC_GALLERY_IMAGES_FOR_SEEDING[6].alt} layout="fill" objectFit="cover" data-ai-hint={STATIC_GALLERY_IMAGES_FOR_SEEDING[6].hint || "village road"} />
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Hayvancılık Faaliyetleri</div>
                 </div>
             </div>

@@ -28,7 +28,7 @@ export default function HistoryPage() {
                   data-ai-hint={STATIC_GALLERY_IMAGES_FOR_SEEDING[0].hint || "mosque historic"}
                 />
                 <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/60 text-white text-sm text-center">
-                  {STATIC_GALLERY_IMAGES_FOR_SEEDING[0].caption} (Tarihi Çamlıca Camii)
+                  {STATIC_GALLERY_IMAGES_FOR_SEEDING[0].caption}
                 </div>
               </div>
               <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-md">
@@ -40,7 +40,7 @@ export default function HistoryPage() {
                   data-ai-hint={STATIC_GALLERY_IMAGES_FOR_SEEDING[4].hint || "traditional building"}
                 />
                  <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/60 text-white text-sm text-center">
-                  {STATIC_GALLERY_IMAGES_FOR_SEEDING[4].caption} (Geleneksel Köy Mimarisi)
+                  {STATIC_GALLERY_IMAGES_FOR_SEEDING[4].caption}
                 </div>
               </div>
             </div>

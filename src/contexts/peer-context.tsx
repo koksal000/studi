@@ -6,9 +6,9 @@ import type { DataConnection, MediaConnection } from 'peerjs';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useUser } from './user-context';
 import { useToast } from '@/hooks/use-toast';
-import { DEFAULT_CONTACT_PEER_ID } from '@/lib/constants'; // Import default contact peer ID
+import { DEFAULT_CONTACT_PEER_ID } from '@/lib/constants'; 
 
-const MY_PEER_ID_KEY = 'KOYUMDOMANIC_PEER_ID'; // Generic key for storing any user's peer ID
+const MY_PEER_ID_KEY = 'KOYUMDOMANIC_PEER_ID'; 
 
 interface PeerContextType {
   peer: PeerType | null;
@@ -16,10 +16,10 @@ interface PeerContextType {
   connections: React.MutableRefObject<Map<string, DataConnection>>;
   initializePeer: () => void;
   connectToPeer: (targetPeerId: string, isInitialContactAttempt?: boolean) => DataConnection | undefined;
-  broadcastData: (data: any, excludePeerId?: string) => void; // Added excludePeerId
+  broadcastData: (data: any, excludePeerId?: string) => void; 
   sendDataToPeer: (targetPeerId: string, data: any) => void;
   registerDataHandler: (handler: (data: any, peerId: string) => void) => void;
-  requestInitialAnnouncements: (targetPeerId: string) => void; // Target specific peer
+  requestInitialAnnouncements: (targetPeerId: string) => void; 
 
   // Media Call related properties and functions
   startMediaCall: (targetPeerId: string) => Promise<void>;
@@ -70,7 +70,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
     }
     setRemoteStream(null);
     if (currentCall) {
-      currentCall.close(); // Ensure call is closed on PeerJS side
+      currentCall.close(); 
       setCurrentCall(null);
     }
     setIsReceivingCall(false);
@@ -100,8 +100,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       toast({ title: 'Bağlantı Başarılı', description: `${conn.peer.substring(0,12)}... ile veri bağlantısı kuruldu.` });
       connections.current.set(conn.peer, conn);
       
-      // Request initial announcements from any peer upon successful connection
-      console.log(`Requesting initial announcements from newly connected peer: ${conn.peer}`);
+      console.log(`Requesting initial announcements from newly connected peer (on open): ${conn.peer}`);
       if (conn.open) conn.send({ type: 'REQUEST_INITIAL_ANNOUNCEMENTS' });
 
     });
@@ -116,9 +115,14 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       connections.current.delete(targetPeerId); 
     });
     conn.on('error', (err) => {
-      console.error(`Data connection error with target ${targetPeerId} (conn.peer could be ${conn.peer}):`, err);
-       if (isInitialContactAttempt && targetPeerId === DEFAULT_CONTACT_PEER_ID) {
-        toast({ title: 'İlk Kontak Kurulamadı', description: `Varsayılan kontak noktası (${targetPeerId.substring(0,12)}...) ile bağlantı kurulamadı. Hata: ${err.message}`, variant: 'destructive', duration: 8000 });
+      console.error(`Data connection error with target ${targetPeerId} (conn.peer could be ${conn.peer || 'N/A'}):`, err);
+      if (isInitialContactAttempt && targetPeerId === DEFAULT_CONTACT_PEER_ID) {
+        toast({ 
+          title: 'İlk Kontak Kurulamadı', 
+          description: `Varsayılan kontak noktasına (${targetPeerId.substring(0,12)}...) bağlanılamadı. Bu peer çevrimiçi değilse veya ağ sorunları varsa, güncel duyurular alınamayabilir. Hata: ${err.message}`, 
+          variant: 'destructive', 
+          duration: 10000 
+        });
       } else {
         toast({ title: 'Veri Bağlantı Hatası', description: `${targetPeerId.substring(0,12)}... ile hata: ${err.message}`, variant: 'destructive' });
       }
@@ -130,11 +134,12 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
 
 
   const initializePeer = useCallback(() => {
-    if (!PeerModule || !user || isInitializingRef.current || (peerInstanceRef.current && !peerInstanceRef.current.destroyed) ) {
-        console.log("InitializePeer: Pre-conditions not met, already initializing, or peer already exists and not destroyed. PeerJS lib loaded?", !!PeerModule, "User exists?", !!user, "Initializing flag?", isInitializingRef.current, "Peer instance exists and not destroyed?", !!(peerInstanceRef.current && !peerInstanceRef.current.destroyed));
-        if (peerInstanceRef.current && !peerInstanceRef.current.destroyed) {
-            console.log("InitializePeer: Peer instance details - ID:", peerInstanceRef.current.id, "Connected:", peerInstanceRef.current.connected);
-        }
+    if (!PeerModule || !user || isInitializingRef.current ) {
+        console.log("InitializePeer: Pre-conditions not met or already initializing. PeerJS lib loaded?", !!PeerModule, "User exists?", !!user, "Initializing flag?", isInitializingRef.current);
+        return;
+    }
+    if (peerInstanceRef.current && !peerInstanceRef.current.destroyed) {
+        console.log("InitializePeer: Peer instance already exists and is not destroyed. ID:", peerInstanceRef.current.id, "Connected:", peerInstanceRef.current.connected);
         return;
     }
     
@@ -151,13 +156,11 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
     
     console.log(`InitializePeer: Creating new Peer instance with ID: ${peerIdToUse || 'auto-generated'}`);
     
-    // If an old, destroyed peer instance exists in the ref, or if there's an ID mismatch, clear it.
     if(peerInstanceRef.current && (peerInstanceRef.current.destroyed || (peerIdToUse && peerInstanceRef.current.id !== peerIdToUse))){
-        console.warn("InitializePeer: Destroying existing peer instance before creating a new one. Old ID:", peerInstanceRef.current.id);
+        console.warn("InitializePeer: Destroying existing (likely old/mismatched) peer instance before creating a new one. Old ID:", peerInstanceRef.current.id);
         peerInstanceRef.current.destroy();
-        peerInstanceRef.current = null; // Clear the ref
+        peerInstanceRef.current = null; 
     }
-
 
     const newPeer = peerIdToUse ? new PeerModule(peerIdToUse) : new PeerModule();
     peerInstanceRef.current = newPeer;
@@ -169,7 +172,6 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       
       localStorage.setItem(MY_PEER_ID_KEY, currentId);
 
-      // Attempt to connect to a default contact peer if not this peer
       if (currentId !== DEFAULT_CONTACT_PEER_ID) {
           console.log(`Peer ${currentId} attempting to connect to default contact peer: ${DEFAULT_CONTACT_PEER_ID}`);
           connectToPeer(DEFAULT_CONTACT_PEER_ID, true);
@@ -182,7 +184,6 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
       connections.current.set(incomingConn.peer, incomingConn);
       toast({ title: 'Yeni Veri Bağlantısı', description: `${incomingConn.peer.substring(0,12)}... bağlandı.` });
 
-      // Request initial announcements from the new incomer immediately
       const handleOpenAndRequest = () => {
         console.log(`Connection from ${incomingConn.peer} opened, requesting initial announcements.`);
         if (incomingConn.open) {
@@ -232,27 +233,27 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
         if (peerIdToUse) { 
           console.warn(`Stored peer ID ${peerIdToUse} is unavailable. Removing it.`);
           localStorage.removeItem(MY_PEER_ID_KEY); 
-          toast({ title: 'P2P Kimlik Sorunu', description: 'Saklanan P2P kimliğiniz kullanılamadı, yeni bir kimlik oluşturulacak.', variant: 'destructive'});
+          toast({ title: 'P2P Kimlik Sorunu', description: `Saklanan P2P kimliğiniz (${peerIdToUse.substring(0,12)}...) kullanılamadı. Yeni bir kimlik denenecek.`, variant: 'destructive', duration: 8000});
+        } else {
+          toast({ title: 'P2P Kimlik Sorunu', description: 'Otomatik atanan P2P kimliği kullanılamadı. Sayfayı yenilemeyi deneyin.', variant: 'destructive', duration: 8000});
         }
         if (peerInstanceRef.current && !peerInstanceRef.current.destroyed) {
             peerInstanceRef.current.destroy();
         }
         peerInstanceRef.current = null; 
         setPeerId(null);
-        isInitializingRef.current = false; // Reset the flag to allow re-initialization
-        // No need to re-call initializePeer here, useEffect will handle it due to peerId change or user change.
+        isInitializingRef.current = false; 
       } else if (err.type === 'peer-unavailable' && DEFAULT_CONTACT_PEER_ID && err.message.includes(DEFAULT_CONTACT_PEER_ID)) {
          showGenericToast = false;
          console.warn(`Default contact peer ${DEFAULT_CONTACT_PEER_ID} is unavailable or does not exist.`);
-         // Toast for this is already handled in connectToPeer
       } else if (err.type === 'network') {
         showGenericToast = false;
         console.error('PeerJS network error.', err);
-        toast({ title: 'P2P Ağ Hatası', description: 'Ağ bağlantı sorunu.', variant: 'destructive', duration: 8000});
+        toast({ title: 'P2P Ağ Hatası', description: 'Ağ bağlantı sorunu. İnternet bağlantınızı kontrol edin.', variant: 'destructive', duration: 8000});
       } else if (err.type === 'server-error') {
          showGenericToast = false;
          console.error('PeerJS server error.', err);
-         toast({ title: 'Sinyal Sunucu Hatası', description: 'Sinyal sunucusunda bir sorun var.', variant: 'destructive', duration: 8000});
+         toast({ title: 'Sinyal Sunucu Hatası', description: 'Sinyal sunucusunda bir sorun var. Lütfen daha sonra tekrar deneyin.', variant: 'destructive', duration: 8000});
       }
       
       if (showGenericToast) {
@@ -266,8 +267,6 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
           setPeerId(null); 
       }
 
-      // For most errors, allow re-initialization attempts.
-      // For 'unavailable-id', it's already handled.
       if (err.type !== 'unavailable-id') {
         isInitializingRef.current = false;
       }
@@ -275,19 +274,19 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
 
     newPeer.on('disconnected', () => {
         console.log('Peer disconnected from signaling server. PeerJS will attempt to reconnect automatically.');
-        // toast({ title: 'Sinyal Sunucusu Koptu', description: 'Yeniden bağlanmaya çalışılıyor...', variant: "destructive" });
+        // Removed toast for this event to reduce noise as PeerJS handles reconnection.
     });
 
     newPeer.on('close', () => {
         console.log('Peer connection closed (destroyed).');
-        if(peerInstanceRef.current && peerInstanceRef.current.id === newPeer.id) { // Check if it's the same instance
-            peerInstanceRef.current = null; // Clear the ref for this specific instance
-            setPeerId(null); // Reset peerId if this instance was providing it
+        if(peerInstanceRef.current && peerInstanceRef.current.id === newPeer.id) { 
+            peerInstanceRef.current = null; 
+            setPeerId(null); 
         }
         isInitializingRef.current = false;
     });
 
-  }, [PeerModule, user, toast, connectToPeer, dataHandler, peerId]); // Added peerId to deps
+  }, [PeerModule, user, toast, connectToPeer, dataHandler]); 
 
   const broadcastData = useCallback((data: any, excludePeerId?: string) => {
     const currentPeer = peerInstanceRef.current;
@@ -315,7 +314,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
 
     if (sentCount > 0) {
         console.log(`Broadcasted data to ${sentCount} peers.`);
-    } else if (connections.current.size > 0 && Array.from(connections.current.keys()).some(key => key !== excludePeerId)) { // Check if there were potential recipients
+    } else if (connections.current.size > 0 && Array.from(connections.current.keys()).some(key => key !== excludePeerId)) { 
         console.warn("No *open* connections to broadcast data to (excluding self/excluded), though some connections exist or all were excluded.");
     } else if (connections.current.size === 0){
         console.warn("No connections in map to broadcast data to.");
@@ -472,8 +471,7 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
     if (currentCall) {
       currentCall.close(); 
     }
-    // endMediaCallInternals will be called by the 'close' event of the call
-    if(!currentCall) { // If no current call, ensure cleanup
+    if(!currentCall) { 
       endMediaCallInternals();
     }
     toast({ title: 'Arama', description: 'Arama sonlandırıldı.' });
@@ -495,25 +493,23 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
   }, [endMediaCallInternals]); 
 
    useEffect(() => {
-    // Initialize PeerJS instance when the module is loaded and user is available
     if (PeerModule && user && !peerInstanceRef.current && !isInitializingRef.current) {
       console.log(`Peer init useEffect: Conditions met. Initializing peer. Peer Lib: ${!!PeerModule}, User: ${!!user}, PeerInstanceRef: ${!!peerInstanceRef.current}, Initializing: ${isInitializingRef.current}`);
       initializePeer();
     }
     
-    // Cleanup PeerJS instance when user logs out
     if (!user && peerInstanceRef.current && !peerInstanceRef.current.destroyed) {
         console.log("Peer init useEffect: User logged out, destroying peer instance:", peerInstanceRef.current.id);
         const peerToDestroy = peerInstanceRef.current;
-        endMediaCallInternals(); // Clean up any active calls
-        connections.current.forEach(conn => { // Close all data connections
+        endMediaCallInternals(); 
+        connections.current.forEach(conn => { 
             if(conn.open) conn.close();
         });
         connections.current.clear();
         peerToDestroy.destroy();
-        peerInstanceRef.current = null; // Clear the ref
-        setPeerId(null); // Reset peerId state
-        isInitializingRef.current = false; // Reset initializing flag
+        peerInstanceRef.current = null; 
+        setPeerId(null); 
+        isInitializingRef.current = false; 
     }
   }, [PeerModule, user, initializePeer, endMediaCallInternals]); 
 
@@ -528,7 +524,6 @@ export const PeerProvider = ({ children }: PeerProviderProps) => {
         sendDataToPeer,
         registerDataHandler,
         requestInitialAnnouncements,
-        // Media call values
         startMediaCall,
         answerIncomingCall,
         rejectIncomingCall,
@@ -551,3 +546,4 @@ export const usePeer = (): PeerContextType => {
   }
   return context;
 };
+

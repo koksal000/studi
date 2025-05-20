@@ -1,3 +1,4 @@
+
 // src/app/api/announcements/stream/route.ts
 import { NextResponse } from 'next/server';
 import type { Announcement } from '@/hooks/use-announcements';
@@ -22,20 +23,50 @@ export async function GET() {
         } catch (e) {
             console.error("Error enqueuing data to SSE stream:", e);
             // Potentially close the connection if there's an issue with the controller
-            try { controller.close(); } catch (_) {}
+            try { 
+              if (controller.desiredSize !== null) { // Check if not already closed/errored
+                controller.close(); 
+              }
+            } catch (_) {}
             announcementEmitter.off('update', sendUpdate); // Clean up listener
         }
       };
 
       // Send the current list of announcements immediately on connection
       // Fetching from the main API route to get the current state
-      fetch(new URL('/api/announcements', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002'))
-        .then(res => res.json())
+      // Ensure NEXT_PUBLIC_APP_URL is set in your .env for production/Vercel
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
+      let initialFetchFailed = false;
+
+      fetch(new URL('/api/announcements', appUrl))
+        .then(res => {
+            if (!res.ok) {
+                const errorMsg = `Failed to fetch initial announcements from ${res.url}: ${res.status} ${res.statusText}`;
+                console.error("SSE Announcements Stream Init Error:", errorMsg);
+                throw new Error(errorMsg); // This will be caught by the .catch block
+            }
+            return res.json();
+        })
         .then((initialAnnouncements: Announcement[]) => {
             if (initialAnnouncements && Array.isArray(initialAnnouncements)) {
                  sendUpdate(initialAnnouncements);
+            } else if (!initialAnnouncements) {
+                 sendUpdate([]); // Send empty array if response is valid but nullish
             }
-        }).catch(e => console.error("SSE: Error fetching initial announcements:", e));
+        }).catch(e => {
+            console.error("SSE Announcements: Error during initial announcements fetch or processing:", e.message);
+            initialFetchFailed = true;
+            // Explicitly signal an error to the client's EventSource
+            try {
+              if (controller.desiredSize !== null) { // Check if not already closed/errored
+                controller.error(new Error("Failed to initialize announcements stream: Could not fetch initial data."));
+              }
+            } catch (closeError) {
+              console.error("SSE Announcements: Error trying to signal controller error after fetch failure:", closeError);
+            }
+            // No need to call controller.close() here as controller.error() does that.
+            announcementEmitter.off('update', sendUpdate); // Clean up listener if fetch failed
+        });
 
 
       announcementEmitter.on('update', sendUpdate);
@@ -44,7 +75,7 @@ export async function GET() {
       // Note: `req.on('close', ...)` is not available in Next.js App Router Edge/Node.js runtimes directly.
       // The ReadableStream's `cancel` method is the standard way to handle client disconnections.
       return function cancel() {
-        console.log("SSE client disconnected. Removing listener.");
+        console.log("SSE announcements client disconnected. Removing listener.");
         announcementEmitter.off('update', sendUpdate);
       };
     },
@@ -63,3 +94,4 @@ export async function GET() {
     },
   });
 }
+

@@ -103,19 +103,43 @@ export function useAnnouncements() {
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error for announcements. EventSource readyState:', eventSource.readyState, 'Event:', error);
-      toast({
-        title: "Bağlantı Sorunu",
-        description: "Duyuru güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.",
-        variant: "destructive"
-      });
+    eventSource.onerror = (errorEvent: Event) => { // Explicitly type errorEvent as Event
+      const readyState = (errorEvent.target as EventSource)?.readyState;
+      let eventType = errorEvent.type || 'unknown';
+      
+      console.error(
+        'SSE connection error for announcements. EventSource readyState:', readyState,
+        'Event Type:', eventType,
+        'Raw Event Object:', errorEvent // Log the full object for inspection
+      );
+
+      if (readyState === EventSource.CLOSED) {
+        toast({
+          title: "Bağlantı Kesildi",
+          description: "Duyuru güncellemeleriyle bağlantı sonlandı. Sayfayı yenilemek gerekebilir.",
+          variant: "destructive"
+        });
+      } else if (readyState === EventSource.CONNECTING) {
+        // This state might be seen if error occurs during initial connection attempt,
+        // or during reconnection attempts. The browser handles retries.
+        toast({
+          title: "Bağlantı Sorunu",
+          description: "Duyuru güncellemeleriyle bağlantı kurulamıyor. Otomatik olarak yeniden deneniyor.",
+          variant: "destructive"
+        });
+      } else { // EventSource.OPEN or other states
+         toast({
+          title: "Bağlantı Hatası",
+          description: "Duyuru güncellemelerinde bir hata oluştu. Yeniden deneniyor.",
+          variant: "destructive"
+        });
+      }
     };
 
     return () => {
       eventSource.close();
     };
-  }, [siteNotificationsPreference, toast, announcements]);
+  }, [siteNotificationsPreference, toast, announcements]); // announcements dependency is for comparing new items for notifications
 
   const addAnnouncement = useCallback(async (newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
     if (!user) {
@@ -139,7 +163,8 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru eklenemedi');
       }
-      toast({ title: "Duyuru Gönderildi", description: "Duyurunuz başarıyla gönderildi ve yakında görünecektir." });
+      // Toast for success is not strictly needed as SSE will update the list
+      // toast({ title: "Duyuru Gönderildi", description: "Duyurunuz başarıyla gönderildi ve yakında görünecektir." });
     } catch (error: any) {
       console.error("Failed to add announcement:", error);
       toast({ title: "Duyuru Eklenemedi", description: error.message || "Duyuru eklenirken bir sorun oluştu.", variant: "destructive" });
@@ -161,7 +186,8 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru silinemedi');
       }
-      toast({ title: "Duyuru Silindi", description: "Duyuru başarıyla silindi ve yakında listeden kaldırılacaktır." });
+      // Toast for success is not strictly needed as SSE will update the list
+      // toast({ title: "Duyuru Silindi", description: "Duyuru başarıyla silindi ve yakında listeden kaldırılacaktır." });
     } catch (error: any) {
       console.error("Failed to delete announcement:", error);
       toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silinirken bir sorun oluştu.", variant: "destructive" });
@@ -174,3 +200,4 @@ export function useAnnouncements() {
 
   return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById };
 }
+

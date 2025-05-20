@@ -118,14 +118,14 @@ export function WeatherCard() {
 
       {weather && (
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="max-w-3xl w-[90vw] h-[80vh] flex flex-col p-0">
-            <DialogHeader className="p-4 sm:p-6 border-b">
+          <DialogContent className="max-w-3xl w-[90vw] max-h-[85vh] flex flex-col p-0">
+            <DialogHeader className="p-4 sm:p-6 border-b flex-shrink-0">
               <DialogTitle className="text-xl sm:text-2xl">Domaniç Detaylı Hava Tahmini</DialogTitle>
               <DialogDescription>
                 Saatlik ve günlük tahminler. Son güncelleme: {lastUpdated?.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}
               </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-grow overflow-y-auto">
+            <ScrollArea className="flex-grow overflow-y-auto min-h-0"> {/* Added min-h-0 */}
               <div className="space-y-6 p-4 sm:p-6">
                 {/* Hourly Forecast Section */}
                 {weather.hourlyForecast && weather.hourlyForecast.length > 0 && (
@@ -133,7 +133,7 @@ export function WeatherCard() {
                     <h3 className="text-lg font-semibold mb-3 text-primary flex items-center">
                       <Clock className="mr-2 h-5 w-5" /> Saatlik Tahmin (İlk 12 Saat)
                     </h3>
-                    <div className="overflow-x-auto py-2 touch-pan-x"> {/* Added touch-pan-x */}
+                    <div className="overflow-x-auto py-2 touch-pan-x">
                       <div className="flex space-x-3 w-max">
                         {weather.hourlyForecast.map((hour, index) => (
                           <Card key={index} className="min-w-[120px] flex-shrink-0 shadow">

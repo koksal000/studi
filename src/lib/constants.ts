@@ -4,8 +4,6 @@ export const ADMIN_PASSWORD = "dck.2025"; // As per prototype
 export const VILLAGE_NAME = "Çamlıca Köyü";
 export const DISTRICT_NAME = "Domaniç";
 
-// DEFAULT_CONTACT_PEER_ID removed as PeerJS is no longer used.
-
 export const CONTACT_INFO = {
   email: "domaniccamlicakoyu@gmail.com",
   address: "Çamlıca Köyü, Domaniç, Kütahya",
@@ -80,3 +78,5 @@ export const NAVIGATION_LINKS = [
   { href: "/ai-assistant", label: "Yapay Zeka", pageId: "ai" },
   { href: "/contact", label: "İletişim", pageId: "contact" },
 ];
+
+export const ADMIN_PANEL_PATH = "/admin";

@@ -127,12 +127,24 @@ export default function AboutPage() {
             </p>
              <div className="grid md:grid-cols-2 gap-6 mt-4">
                 <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                    <Image src={STATIC_GALLERY_IMAGES_FOR_SEEDING[7].src} alt={STATIC_GALLERY_IMAGES_FOR_SEEDING[7].alt} layout="fill" objectFit="cover" data-ai-hint={STATIC_GALLERY_IMAGES_FOR_SEEDING[7].hint || "village nature"} />
-                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Tarım Faaliyetleri</div>
+                    <Image 
+                        src="https://i.ibb.co/kgQ49804/Picsart-25-05-20-21-33-20-500.jpg" 
+                        alt="Çamlıca Köyü Tarım Faaliyetleri (Temsili Görsel)" 
+                        layout="fill" 
+                        objectFit="cover" 
+                        data-ai-hint="agriculture field" 
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Tarım Faaliyetleri (Temsili Görsel)</div>
                 </div>
                 <div className="relative aspect-video rounded-lg overflow-hidden shadow-md">
-                    <Image src={STATIC_GALLERY_IMAGES_FOR_SEEDING[6].src} alt={STATIC_GALLERY_IMAGES_FOR_SEEDING[6].alt} layout="fill" objectFit="cover" data-ai-hint={STATIC_GALLERY_IMAGES_FOR_SEEDING[6].hint || "village road"} />
-                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Hayvancılık Faaliyetleri</div>
+                    <Image 
+                        src="https://i.ibb.co/nsT80T3H/Picsart-25-05-20-21-34-33-814.jpg" 
+                        alt="Çamlıca Köyü Hayvancılık Faaliyetleri (Temsili Görsel)" 
+                        layout="fill" 
+                        objectFit="cover" 
+                        data-ai-hint="livestock animals"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/50 text-white text-sm text-center">Hayvancılık Faaliyetleri (Temsili Görsel)</div>
                 </div>
             </div>
         </CardContent>

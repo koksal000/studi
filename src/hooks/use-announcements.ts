@@ -14,13 +14,13 @@ export interface Announcement {
   mediaType?: string | null;
   date: string;
   author: string;
-  authorId?: string; // PeerJS ID of the original author
+  authorId?: string; 
 }
 
 export type NewAnnouncementPayload = Omit<Announcement, 'id' | 'date'>;
 
 
-const ANNOUNCEMENTS_KEY = 'camlicaKoyuAnnouncements_api';
+const ANNOUNCEMENTS_KEY = 'camlicaKoyuAnnouncements_api_cache';
 
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -76,7 +76,7 @@ export function useAnnouncements() {
             for (const ann of sortedServerAnnouncements) {
                 if (!currentIds.has(ann.id)) {
                     latestNewAnnouncementForNotification = ann;
-                    break;
+                    break; 
                 }
             }
         }
@@ -93,9 +93,11 @@ export function useAnnouncements() {
           const notification = new Notification(latestNewAnnouncementForNotification.title, {
             body: notificationBody,
             tag: latestNewAnnouncementForNotification.id,
+            // icon: '/village-icon.png' // Opsiyonel: public klasöründe bir ikon
           });
           notification.onclick = () => {
-            window.focus();
+            window.open('https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/', '_blank');
+            window.focus(); // Mevcut sekmeye odaklanmaya çalışır
           };
         }
       } catch (error) {
@@ -103,14 +105,14 @@ export function useAnnouncements() {
       }
     };
 
-    eventSource.onerror = (errorEvent: Event) => { // Explicitly type errorEvent as Event
+    eventSource.onerror = (errorEvent: Event) => {
       const readyState = (errorEvent.target as EventSource)?.readyState;
       let eventType = errorEvent.type || 'unknown';
       
       console.error(
         'SSE connection error for announcements. EventSource readyState:', readyState,
         'Event Type:', eventType,
-        'Raw Event Object:', errorEvent // Log the full object for inspection
+        'Raw Event Object:', errorEvent 
       );
 
       if (readyState === EventSource.CLOSED) {
@@ -119,15 +121,7 @@ export function useAnnouncements() {
           description: "Duyuru güncellemeleriyle bağlantı sonlandı. Sayfayı yenilemek gerekebilir.",
           variant: "destructive"
         });
-      } else if (readyState === EventSource.CONNECTING) {
-        // This state might be seen if error occurs during initial connection attempt,
-        // or during reconnection attempts. The browser handles retries.
-        toast({
-          title: "Bağlantı Sorunu",
-          description: "Duyuru güncellemeleriyle bağlantı kurulamıyor. Otomatik olarak yeniden deneniyor.",
-          variant: "destructive"
-        });
-      } else { // EventSource.OPEN or other states
+      } else { 
          toast({
           title: "Bağlantı Hatası",
           description: "Duyuru güncellemelerinde bir hata oluştu. Yeniden deneniyor.",
@@ -139,7 +133,7 @@ export function useAnnouncements() {
     return () => {
       eventSource.close();
     };
-  }, [siteNotificationsPreference, toast, announcements]); // announcements dependency is for comparing new items for notifications
+  }, [siteNotificationsPreference, toast, announcements]);
 
   const addAnnouncement = useCallback(async (newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
     if (!user) {
@@ -163,8 +157,6 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru eklenemedi');
       }
-      // Toast for success is not strictly needed as SSE will update the list
-      // toast({ title: "Duyuru Gönderildi", description: "Duyurunuz başarıyla gönderildi ve yakında görünecektir." });
     } catch (error: any) {
       console.error("Failed to add announcement:", error);
       toast({ title: "Duyuru Eklenemedi", description: error.message || "Duyuru eklenirken bir sorun oluştu.", variant: "destructive" });
@@ -186,8 +178,6 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru silinemedi');
       }
-      // Toast for success is not strictly needed as SSE will update the list
-      // toast({ title: "Duyuru Silindi", description: "Duyuru başarıyla silindi ve yakında listeden kaldırılacaktır." });
     } catch (error: any) {
       console.error("Failed to delete announcement:", error);
       toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silinirken bir sorun oluştu.", variant: "destructive" });
@@ -198,6 +188,5 @@ export function useAnnouncements() {
     return announcements.find(ann => ann.id === id);
   }, [announcements]);
 
-  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById };
+  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading: !announcements.length && typeof window !== 'undefined' }; // Added basic isLoading
 }
-

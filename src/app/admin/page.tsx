@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent, useRef } from 'react';
+import { useState, type ChangeEvent, type FormEvent, useRef, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion } from 'lucide-react'; // Added MailQuestion
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users } from 'lucide-react'; // Added MailQuestion, Users
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -29,7 +29,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
-import { UserRequestsDialog } from '@/components/specific/user-requests-dialog'; // Added
+import { UserRequestsDialog } from '@/components/specific/user-requests-dialog';
+import type { ContactMessage } from '@/app/api/contact/route'; // Import ContactMessage type
 
 export default function AdminPage() {
   const { user } = useUser();
@@ -39,7 +40,7 @@ export default function AdminPage() {
   const { announcements, isLoading: announcementsLoading } = useAnnouncements();
 
   const [isAddAnnouncementDialogOpen, setIsAddAnnouncementDialogOpen] = useState(false);
-  const [isUserRequestsDialogOpen, setIsUserRequestsDialogOpen] = useState(false); // Added
+  const [isUserRequestsDialogOpen, setIsUserRequestsDialogOpen] = useState(false);
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [newImageCaption, setNewImageCaption] = useState('');
   const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
@@ -48,7 +49,36 @@ export default function AdminPage() {
   const [isDeleteImageAdminPasswordDialogOpen, setIsDeleteImageAdminPasswordDialogOpen] = useState(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
 
+  const [uniqueContactCount, setUniqueContactCount] = useState<number | null>(null);
+  const [isContactCountLoading, setIsContactCountLoading] = useState(true);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchUniqueContacts = async () => {
+      setIsContactCountLoading(true);
+      try {
+        const response = await fetch('/api/contact');
+        if (!response.ok) {
+          throw new Error('İletişim mesajları alınamadı');
+        }
+        const messages: ContactMessage[] = await response.json();
+        const uniqueEmails = new Set(messages.map(msg => msg.email.toLowerCase()));
+        setUniqueContactCount(uniqueEmails.size);
+      } catch (error) {
+        console.error("Error fetching unique contacts:", error);
+        toast({ title: "Hata", description: "İletişim istatistikleri alınamadı.", variant: "destructive" });
+        setUniqueContactCount(0); // Fallback to 0 on error
+      } finally {
+        setIsContactCountLoading(false);
+      }
+    };
+
+    if (user) { // Only fetch if admin is logged in
+      fetchUniqueContacts();
+    }
+  }, [user, toast]);
+
 
   if (!user) {
     return (
@@ -144,12 +174,35 @@ export default function AdminPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center space-x-3 p-4 border rounded-lg bg-secondary/10">
-            <UserCircle className="h-8 w-8 text-primary" />
-            <div>
-              <p className="font-semibold">Giriş Yapan Kullanıcı:</p>
-              <p className="text-muted-foreground">{user.name} {user.surname}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex items-center space-x-3 p-4 border rounded-lg bg-secondary/10">
+              <UserCircle className="h-8 w-8 text-primary" />
+              <div>
+                <p className="font-semibold">Giriş Yapan Kullanıcı:</p>
+                <p className="text-muted-foreground">{user.name} {user.surname}</p>
+              </div>
             </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium flex items-center">
+                  <Users className="mr-2 h-5 w-5 text-primary" /> İletişim İstatistikleri
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isContactCountLoading ? (
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Yükleniyor...
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold">
+                    {uniqueContactCount !== null ? uniqueContactCount : 'N/A'}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  İletişim formuyla ulaşan benzersiz kişi sayısı.
+                </p>
+              </CardContent>
+            </Card>
           </div>
            <Button onClick={() => setIsUserRequestsDialogOpen(true)} variant="outline" className="w-full sm:w-auto">
             <MailQuestion className="mr-2 h-5 w-5" /> Kullanıcı İsteklerini Görüntüle
@@ -311,3 +364,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+    

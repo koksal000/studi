@@ -25,10 +25,10 @@ export function Navbar() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      // For now, a simple alert. A dedicated search page or results modal would be better.
-      // This could be enhanced to navigate to a search results page: router.push(`/search?q=${searchTerm}`);
-      alert(`Arama özelliği henüz tam olarak aktif değil. Aranan: ${searchTerm}`);
-      setSearchTerm('');
+      router.push(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+      // Arama çubuğunu temizleyebiliriz veya arama sayfasında terimin görünmesi için bırakabiliriz.
+      // Şimdilik temizleyelim, arama sayfası zaten terimi URL'den alacak.
+      // setSearchTerm(''); 
     }
   };
   
@@ -97,10 +97,6 @@ export function Navbar() {
               <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-background p-0">
                 <div className="flex flex-col h-full">
                   <SheetHeader className="p-4 border-b">
-                    {/* SheetContent already provides a close X button.
-                        The explicit SheetClose Button here was causing a duplicate.
-                        The SheetTitle is important for accessibility.
-                    */}
                     <div className="flex items-center justify-between">
                       <Link href="/" className="flex items-center space-x-2" onClick={() => setIsSheetOpen(false)}>
                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 text-primary">
@@ -109,7 +105,6 @@ export function Navbar() {
                       </svg>
                       <SheetTitle className="p-0 text-lg font-bold">{VILLAGE_NAME} Menüsü</SheetTitle>
                       </Link>
-                      {/* The SheetPrimitive.Close is now handled by SheetContent itself */}
                     </div>
                   </SheetHeader>
                   <nav className="flex-grow flex flex-col space-y-2 p-4">

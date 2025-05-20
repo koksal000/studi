@@ -12,7 +12,7 @@ import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
-  const { login, showEntryForm } = useUser(); // Removed setShowEntryForm as it's not used here
+  const { login, showEntryForm } = useUser();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -33,10 +33,7 @@ export function EntryForm() {
         muted={false} // User requested "sesli" (audible). Browser policies might mute it or prevent autoplay with sound.
         playsInline // Important for iOS to play inline
         className="absolute top-0 left-0 w-full h-full object-cover" // Video as background
-        src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" // Placeholder video URL
-        // Example of a village/nature themed video if available:
-        // src="https://cdn.pixabay.com/video/2024/01/09/195304-905800538_large.mp4" 
-        // Ensure the video source is a direct link to a video file (e.g., .mp4)
+        src="https://files.catbox.moe/na9jph.mp4" // Updated video URL
       >
         Tarayıcınız video etiketini desteklemiyor.
       </video>

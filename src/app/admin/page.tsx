@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
-import { VILLAGE_NAME, STATIC_GALLERY_IMAGES_FOR_SEEDING, ADMIN_PASSWORD } from '@/lib/constants';
+import { VILLAGE_NAME, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2 } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -27,12 +27,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useAnnouncements, type Announcement } from '@/hooks/use-announcements'; // useAnnouncements ve Announcement import edildi
+import { AnnouncementCard } from '@/components/specific/announcement-card'; // AnnouncementCard import edildi
 
 export default function AdminPage() {
   const { user } = useUser();
   const router = useRouter();
   const { toast } = useToast();
   const { galleryImages, addGalleryImage, deleteGalleryImage, isLoading: galleryLoading } = useGallery();
+  const { announcements, isLoading: announcementsLoading } = useAnnouncements(); // announcements ve announcementsLoading eklendi
 
   const [isAddAnnouncementDialogOpen, setIsAddAnnouncementDialogOpen] = useState(false);
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
@@ -87,15 +90,15 @@ export default function AdminPage() {
         const payload: NewGalleryImagePayload = {
           imageDataUri,
           caption: newImageCaption.trim(),
-          alt: newImageCaption.trim(), // Default alt to caption
-          hint: "custom upload", // Generic hint for uploaded images
+          alt: newImageCaption.trim(),
+          hint: "custom upload",
         };
         await addGalleryImage(payload);
         toast({ title: "Resim Eklendi", description: "Yeni resim galeriye başarıyla eklendi." });
         setNewImageFile(null);
         setNewImageCaption('');
         setNewImagePreview(null);
-        if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+        if(fileInputRef.current) fileInputRef.current.value = "";
       };
       reader.onerror = () => {
          toast({ title: "Dosya Okuma Hatası", description: "Resim dosyası okunurken bir hata oluştu.", variant: "destructive" });
@@ -157,21 +160,32 @@ export default function AdminPage() {
               <PlusCircle className="mr-2 h-5 w-5" /> Yeni Duyuru Ekle
             </Button>
           </CardTitle>
-          <CardDescription>Mevcut duyuruları görüntüleyin veya yeni duyurular ekleyin.</CardDescription>
+          <CardDescription>Yeni duyurular ekleyin veya mevcut duyuruları yönetin.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">
-            Yeni duyuru eklemek için yukarıdaki "Yeni Duyuru Ekle" butonunu kullanın. 
-            Mevcut duyuruları silmek veya düzenlemek için <Link href="/announcements" className="text-primary hover:underline">Duyurular sayfasına</Link> gidin.
-            (Silme işlemi için şifre doğrulaması gereklidir).
-          </p>
+          {/* Duyuru Ekleme Dialogu */}
+          <AddAnnouncementDialog 
+            isOpen={isAddAnnouncementDialogOpen} 
+            onOpenChange={setIsAddAnnouncementDialogOpen} 
+          />
+          
+          {/* Mevcut Duyuruları Yönetme Bölümü */}
+          <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4 mt-6 flex items-center">
+            <ListChecks className="mr-2 h-5 w-5" /> Mevcut Duyurular
+          </h3>
+          {announcementsLoading && <p className="text-muted-foreground">Duyurular yükleniyor...</p>}
+          {!announcementsLoading && announcements.length === 0 && (
+            <p className="text-muted-foreground">Henüz yayınlanmış bir duyuru bulunmamaktadır.</p>
+          )}
+          {!announcementsLoading && announcements.length > 0 && (
+            <div className="space-y-4">
+              {announcements.map((ann) => (
+                <AnnouncementCard key={ann.id} announcement={ann} allowDelete={true} /> // allowDelete={true} eklendi
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      <AddAnnouncementDialog 
-        isOpen={isAddAnnouncementDialogOpen} 
-        onOpenChange={setIsAddAnnouncementDialogOpen} 
-      />
 
       <Card>
         <CardHeader>

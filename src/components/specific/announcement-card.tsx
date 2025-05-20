@@ -20,21 +20,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog'; // Import AdminPasswordDialog
-import { useState } from 'react'; // Import useState
+import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
+import { useState } from 'react';
 
 interface AnnouncementCardProps {
   announcement: Announcement;
-  isCompact?: boolean; // For home page recent announcements
+  isCompact?: boolean;
+  allowDelete?: boolean; // Yeni prop eklendi
 }
 
-export function AnnouncementCard({ announcement, isCompact = false }: AnnouncementCardProps) {
-  const { user } = useUser(); // Removed isAdmin as we will always ask for password
+export function AnnouncementCard({ announcement, isCompact = false, allowDelete = false }: AnnouncementCardProps) {
+  const { user } = useUser();
   const { deleteAnnouncement: removeAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   const [isAdminPasswordDialogOpen, setIsAdminPasswordDialogOpen] = useState(false);
 
-  // Delete button is visible if a user is logged in. Password dialog handles actual authorization.
   const canAttemptDelete = !!user;
 
   const performDelete = () => {
@@ -118,7 +118,8 @@ export function AnnouncementCard({ announcement, isCompact = false }: Announceme
           </p>
         </CardContent>
         <CardFooter className="flex justify-end items-center">
-          {canAttemptDelete && !isCompact && (
+          {/* Silme butonu için allowDelete prop'u kontrolü eklendi */}
+          {canAttemptDelete && !isCompact && allowDelete && (
              <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
@@ -135,7 +136,7 @@ export function AnnouncementCard({ announcement, isCompact = false }: Announceme
                 <AlertDialogFooter>
                   <AlertDialogCancel>İptal</AlertDialogCancel>
                   <AlertDialogAction 
-                    onClick={() => setIsAdminPasswordDialogOpen(true)} // Open password dialog on confirm
+                    onClick={() => setIsAdminPasswordDialogOpen(true)}
                     className="bg-destructive hover:bg-destructive/90"
                   >
                     Evet, Silmeyi Onayla
@@ -152,7 +153,7 @@ export function AnnouncementCard({ announcement, isCompact = false }: Announceme
         onOpenChange={setIsAdminPasswordDialogOpen}
         onVerified={() => {
           performDelete();
-          setIsAdminPasswordDialogOpen(false); // Close password dialog after verification and action
+          setIsAdminPasswordDialogOpen(false);
         }}
       />
     </>

@@ -1,28 +1,51 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, type ChangeEvent, type FormEvent, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
-import { GALLERY_IMAGES, VILLAGE_NAME } from '@/lib/constants';
+import { VILLAGE_NAME, STATIC_GALLERY_IMAGES_FOR_SEEDING, ADMIN_PASSWORD } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
+import { useToast } from '@/hooks/use-toast';
+import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function AdminPage() {
-  const { user, isAdmin } = useUser(); // isAdmin might not be reliably set across sessions without more complex state management
+  const { user } = useUser();
   const router = useRouter();
-  const [isAddAnnouncementDialogOpen, setIsAddAnnouncementDialogOpen] = useState(false);
+  const { toast } = useToast();
+  const { galleryImages, addGalleryImage, deleteGalleryImage, isLoading: galleryLoading } = useGallery();
 
-  // Basic check: If there's no user, redirect. More robust protection would be needed for production.
-  // Ideally, this page should be protected by a server-side check or a more persistent admin flag.
-  // The AdminPasswordDialog before reaching this page is the primary gate.
+  const [isAddAnnouncementDialogOpen, setIsAddAnnouncementDialogOpen] = useState(false);
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [newImageCaption, setNewImageCaption] = useState('');
+  const [newImagePreview, setNewImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  const [isDeleteImageAdminPasswordDialogOpen, setIsDeleteImageAdminPasswordDialogOpen] = useState(false);
+  const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   if (!user) {
-    // router.replace('/'); // Redirect to home if no user.
-    // For now, to avoid redirect loops during development if user context is slow, we show a message.
     return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] content-page">
             <ShieldCheck className="h-16 w-16 text-destructive mb-4" />
@@ -34,6 +57,74 @@ export default function AdminPage() {
         </div>
     );
   }
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setNewImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setNewImageFile(null);
+      setNewImagePreview(null);
+    }
+  };
+
+  const handleAddImageSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!newImageFile || !newImageCaption.trim()) {
+      toast({ title: "Eksik Bilgi", description: "Lütfen bir resim seçin ve başlık girin.", variant: "destructive" });
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const imageDataUri = reader.result as string;
+        const payload: NewGalleryImagePayload = {
+          imageDataUri,
+          caption: newImageCaption.trim(),
+          alt: newImageCaption.trim(), // Default alt to caption
+          hint: "custom upload", // Generic hint for uploaded images
+        };
+        await addGalleryImage(payload);
+        toast({ title: "Resim Eklendi", description: "Yeni resim galeriye başarıyla eklendi." });
+        setNewImageFile(null);
+        setNewImageCaption('');
+        setNewImagePreview(null);
+        if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+      };
+      reader.onerror = () => {
+         toast({ title: "Dosya Okuma Hatası", description: "Resim dosyası okunurken bir hata oluştu.", variant: "destructive" });
+      }
+      reader.readAsDataURL(newImageFile);
+    } catch (error) {
+      console.error("Error adding image:", error);
+      toast({ title: "Resim Eklenemedi", description: "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  const openDeleteConfirmation = (image: GalleryImage) => {
+    setImageToDelete(image);
+    setIsDeleteImageAdminPasswordDialogOpen(true);
+  };
+
+  const performImageDelete = async () => {
+    if (!imageToDelete) return;
+    try {
+      await deleteGalleryImage(imageToDelete.id);
+      toast({ title: "Resim Silindi", description: `"${imageToDelete.caption}" başlıklı resim galeriden silindi.` });
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      toast({ title: "Resim Silinemedi", description: "Resim silinirken bir sorun oluştu.", variant: "destructive" });
+    }
+    setImageToDelete(null);
+  };
 
 
   return (
@@ -74,7 +165,6 @@ export default function AdminPage() {
             Mevcut duyuruları silmek veya düzenlemek için <Link href="/announcements" className="text-primary hover:underline">Duyurular sayfasına</Link> gidin.
             (Silme işlemi için şifre doğrulaması gereklidir).
           </p>
-          {/* Future: List announcements here with edit/delete options */}
         </CardContent>
       </Card>
 
@@ -87,45 +177,116 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-6 w-6 text-primary" /> Galeri Yönetimi</CardTitle>
           <CardDescription>
-            Sitede gösterilen galeri resimleri ve başlıkları. 
-            Bu resimleri ve başlıkları değiştirmek için kaynak kodundaki `/src/lib/constants.ts` dosyasını düzenlemeniz gerekmektedir.
+            Sitede gösterilen galeri resimlerini yönetin. Yüklenen resimler sunucu yeniden başladığında kaybolabilir.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {GALLERY_IMAGES.length > 0 ? (
+          <form onSubmit={handleAddImageSubmit} className="mb-8 p-6 border rounded-lg shadow-sm space-y-4">
+            <h3 className="text-lg font-semibold text-primary border-b pb-2">Yeni Resim Yükle</h3>
+            <div className="space-y-1">
+              <Label htmlFor="imageFile">Resim Dosyası Seçin (Max 1MB önerilir)</Label>
+              <Input 
+                id="imageFile" 
+                type="file" 
+                accept="image/*" 
+                onChange={handleFileChange} 
+                ref={fileInputRef}
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                disabled={isUploading} 
+              />
+            </div>
+            {newImagePreview && (
+              <div className="mt-2">
+                <Label>Önizleme:</Label>
+                <Image src={newImagePreview} alt="Yüklenecek resim önizlemesi" width={200} height={150} className="rounded-md border object-contain max-h-[150px]" />
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="imageCaption">Resim Başlığı</Label>
+              <Input 
+                id="imageCaption" 
+                type="text" 
+                placeholder="Resim için kısa bir başlık" 
+                value={newImageCaption}
+                onChange={(e) => setNewImageCaption(e.target.value)}
+                required 
+                disabled={isUploading}
+              />
+            </div>
+            <Button type="submit" disabled={isUploading || !newImageFile || !newImageCaption.trim()}>
+              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              Galeriye Ekle
+            </Button>
+          </form>
+
+          <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4">Mevcut Galeri Resimleri</h3>
+          {galleryLoading && <p className="text-muted-foreground">Galeri resimleri yükleniyor...</p>}
+          {!galleryLoading && galleryImages.length === 0 && (
+            <p className="text-muted-foreground">Galeride henüz resim bulunmamaktadır.</p>
+          )}
+          {!galleryLoading && galleryImages.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {GALLERY_IMAGES.map((image, index) => (
-                <div key={index} className="border rounded-lg overflow-hidden shadow">
-                  <div className="relative aspect-video bg-muted">
-                    <Image src={image.src} alt={image.alt} layout="fill" objectFit="cover" data-ai-hint={image.hint} />
-                  </div>
-                  <div className="p-3">
+              {galleryImages.map((image) => (
+                <Card key={image.id} className="overflow-hidden shadow group">
+                  <CardContent className="p-0">
+                    <div className="relative aspect-video bg-muted">
+                      <Image src={image.src} alt={image.alt} layout="fill" objectFit="cover" data-ai-hint={image.hint} />
+                       <div className="absolute top-2 right-2">
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8">
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                <AlertDialogCancel>İptal</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={() => openDeleteConfirmation(image)}
+                                    className="bg-destructive hover:bg-destructive/90"
+                                >
+                                    Evet, Sil
+                                </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                       </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="p-3 bg-background/80">
                     <h4 className="font-semibold text-sm truncate" title={image.caption}>{image.caption}</h4>
-                    <p className="text-xs text-muted-foreground truncate" title={image.alt}>Alt Metin: {image.alt}</p>
-                    <p className="text-xs text-muted-foreground truncate" title={image.hint}>AI İpucu: {image.hint}</p>
-                  </div>
-                </div>
+                  </CardFooter>
+                </Card>
               ))}
             </div>
-          ) : (
-            <p className="text-muted-foreground">Galeride gösterilecek resim bulunmamaktadır.</p>
           )}
            <div className="mt-6 text-sm text-center p-4 border-t">
-                <p className="text-muted-foreground">
-                Galeri resimlerini, başlıklarını veya diğer sabit verileri (iletişim bilgileri, tarihçe olayları vb.) değiştirmek için geliştiricinizle iletişime geçin veya projenin kaynak kodundaki 
-                <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">src/lib/constants.ts</code> dosyasını doğrudan düzenleyin.
-                </p>
-                <Button variant="outline" size="sm" asChild className="mt-3">
-                    <a href="https://github.com/firebase/firebase-genkit-samples/blob/main/studio/intro/src/lib/constants.ts" target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="mr-2 h-4 w-4" /> constants.ts Dosyasını GitHub'da Gör
-                    </a>
-                </Button>
+              <p className="text-muted-foreground">
+                Bu panelden yüklenen resimler, sunucu (Vercel ortamında fonksiyon örneği) yeniden başladığında kaybolacaktır. Kalıcı resimler için <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">src/lib/constants.ts</code> dosyasındaki <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">STATIC_GALLERY_IMAGES_FOR_SEEDING</code> listesini düzenleyebilirsiniz. Bu liste, sunucu başladığında dinamik galeriyi tohumlamak için kullanılır.
+              </p>
+              <Button variant="outline" size="sm" asChild className="mt-3">
+                  <a href="https://github.com/firebase/firebase-genkit-samples/blob/main/studio/intro/src/lib/constants.ts" target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 h-4 w-4" /> constants.ts Dosyasını GitHub'da Gör
+                  </a>
+              </Button>
             </div>
         </CardContent>
       </Card>
       
-      {/* Add more admin functionalities here as needed */}
-
+      <AdminPasswordDialog
+        isOpen={isDeleteImageAdminPasswordDialogOpen}
+        onOpenChange={setIsDeleteImageAdminPasswordDialogOpen}
+        onVerified={() => {
+          performImageDelete();
+          setIsDeleteImageAdminPasswordDialogOpen(false);
+        }}
+      />
     </div>
   );
 }

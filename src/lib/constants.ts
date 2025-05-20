@@ -54,18 +54,21 @@ export const TIMELINE_EVENTS = [
   { year: "2024", description: "425 kişilik nüfusa ulaşılması ve Domaniç'in merkez köyü olması." },
 ];
 
-export const GALLERY_IMAGES = [
-  { src: "https://lh5.googleusercontent.com/9mLtcSKAg2v__8tdl5TJ_RYWmzl35iI0DeNavhiDbSLyVLSOZb2eHiYJn4DhBmekrTpstCZKBqAhMxdFWOIvQvY=w1280", alt: "Çamlıca Köyü Camii", caption: "Çamlıca Köyü Camii", hint: "village mosque" },
-  { src: "https://lh6.googleusercontent.com/cHhjZzfhp25nD564Jz4_ZQ7HVHVbQGq8GlQbME4ygZLlof2ET8deHidzOZccs10pSVRRdxF73Ok35XwqApCFx88=w1280", alt: "Çamlıca Uydu Görüntüsü", caption: "Çamlıca Uydu Görüntüsü", hint: "satellite view" },
-  { src: "https://lh5.googleusercontent.com/KSyTSeKp5F9uin-4x5VsAy1AWjAb4ETorMFqqdaiBbjfEGvpuzQYCACT9X17_5IyhOT7Rs9yij3-S7szFbvrJL4=w1280", alt: "Çamlıca Tarım Kredi Kooperatifi", caption: "Çamlıca Tarım Kredi Kooperatifi", hint: "agricultural cooperative" },
-  { src: "https://lh6.googleusercontent.com/FbFW1DyPgWj7w-Ax1UxDoALx1uhsh-VrnfJsA2deylAOmTIwkdNEsssZWP0ywSSw7Dk3B9XLLW7o0IukYY5rwWo=w1280", alt: "Çamlıca Köyü Ortaokulu", caption: "Çamlıca Köyü Ortaokulu", hint: "village school" },
-  { src: "https://lh5.googleusercontent.com/c5HfqgdyjH3dozKw3OQsZd5XyI1nbztMShkIuwHFpwYx6UiuSa0kvi1l67C_zOAboHnnJejAARi96O920xQI16E=w1280", alt: "Çamlıca Köyü Çay Konağı", caption: "Çamlıca Köyü Çay Konağı", hint: "tea house" },
-  { src: "https://lh4.googleusercontent.com/v9CXbxlXjmL3NlLC8eGuPhD_xHw0lbXZGz54NTtUDsnl1r2KqN6HglTr8s2rBhXPcCsGM8aWpujTgAPXnFCQUK4=w1280", alt: "Çamlıca Köyü Mezarlığı Girişi", caption: "Çamlıca Köyü Mezarlığı Girişi", hint: "cemetery entrance" },
-  { src: "https://lh3.googleusercontent.com/qSOmnI5FgGl6AnwFT4TBCXSRWyLubcbpreC-_nt_X1PVRAybdor-EG4t-iW-pcGQ1i6LBO42QT1FPeaxk3T_YAk=w1280", alt: "Çamlıca Köyü Girişi", caption: "Çamlıca Köyü Girişi", hint: "village entrance" },
-  { src: "https://lh4.googleusercontent.com/V7D88bX6meWcgXf4Wt3YqEbxjQda61IXmVCARvsbu_uOIp6oyLdgDaLGUu-GSUF4rcNpIhtIVZ_ifBsZNF0_4fo=w1280", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
-  { src: "https://lh4.googleusercontent.com/2cNSoPBbFrMFCUqQFWIJa9zD4Iuln5TSBCChFVHeA2uVLpjhtbxg3MBZtPyqnkUgGqEGwg02DeHutdYt3b02gVc=w1280", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
-  { src: "https://lh3.googleusercontent.com/imNe6-krsmsVvCwSa3cy3uv12bBXtRTtO-Fd0XVXg-f_3ZdTr5rlslpylgHB2HNifCi3ClJdD-ZkvxGA3oHEV1g=w1280", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "local market" },
+// This GALLERY_IMAGES can be used for initial seeding of the dynamic gallery if it's empty on server start.
+// The live gallery will be managed via the admin panel and API.
+export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
+  { id: "seed_1", src: "https://lh5.googleusercontent.com/9mLtcSKAg2v__8tdl5TJ_RYWmzl35iI0DeNavhiDbSLyVLSOZb2eHiYJn4DhBmekrTpstCZKBqAhMxdFWOIvQvY=w1280", alt: "Çamlıca Köyü Camii", caption: "Çamlıca Köyü Camii", hint: "village mosque" },
+  { id: "seed_2", src: "https://lh6.googleusercontent.com/cHhjZzfhp25nD564Jz4_ZQ7HVHVbQGq8GlQbME4ygZLlof2ET8deHidzOZccs10pSVRRdxF73Ok35XwqApCFx88=w1280", alt: "Çamlıca Uydu Görüntüsü", caption: "Çamlıca Uydu Görüntüsü", hint: "satellite view" },
+  { id: "seed_3", src: "https://lh5.googleusercontent.com/KSyTSeKp5F9uin-4x5VsAy1AWjAb4ETorMFqqdaiBbjfEGvpuzQYCACT9X17_5IyhOT7Rs9yij3-S7szFbvrJL4=w1280", alt: "Çamlıca Tarım Kredi Kooperatifi", caption: "Çamlıca Tarım Kredi Kooperatifi", hint: "agricultural cooperative" },
+  { id: "seed_4", src: "https://lh6.googleusercontent.com/FbFW1DyPgWj7w-Ax1UxDoALx1uhsh-VrnfJsA2deylAOmTIwkdNEsssZWP0ywSSw7Dk3B9XLLW7o0IukYY5rwWo=w1280", alt: "Çamlıca Köyü Ortaokulu", caption: "Çamlıca Köyü Ortaokulu", hint: "village school" },
+  { id: "seed_5", src: "https://lh5.googleusercontent.com/c5HfqgdyjH3dozKw3OQsZd5XyI1nbztMShkIuwHFpwYx6UiuSa0kvi1l67C_zOAboHnnJejAARi96O920xQI16E=w1280", alt: "Çamlıca Köyü Çay Konağı", caption: "Çamlıca Köyü Çay Konağı", hint: "tea house" },
+  { id: "seed_6", src: "https://lh4.googleusercontent.com/v9CXbxlXjmL3NlLC8eGuPhD_xHw0lbXZGz54NTtUDsnl1r2KqN6HglTr8s2rBhXPcCsGM8aWpujTgAPXnFCQUK4=w1280", alt: "Çamlıca Köyü Mezarlığı Girişi", caption: "Çamlıca Köyü Mezarlığı Girişi", hint: "cemetery entrance" },
+  { id: "seed_7", src: "https://lh3.googleusercontent.com/qSOmnI5FgGl6AnwFT4TBCXSRWyLubcbpreC-_nt_X1PVRAybdor-EG4t-iW-pcGQ1i6LBO42QT1FPeaxk3T_YAk=w1280", alt: "Çamlıca Köyü Girişi", caption: "Çamlıca Köyü Girişi", hint: "village entrance" },
+  { id: "seed_8", src: "https://lh4.googleusercontent.com/V7D88bX6meWcgXf4Wt3YqEbxjQda61IXmVCARvsbu_uOIp6oyLdgDaLGUu-GSUF4rcNpIhtIVZ_ifBsZNF0_4fo=w1280", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
+  { id: "seed_9", src: "https://lh4.googleusercontent.com/2cNSoPBbFrMFCUqQFWIJa9zD4Iuln5TSBCChFVHeA2uVLpjhtbxg3MBZtPyqnkUgGqEGwg02DeHutdYt3b02gVc=w1280", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
+  { id: "seed_10",src: "https://lh3.googleusercontent.com/imNe6-krsmsVvCwSa3cy3uv12bBXtRTtO-Fd0XVXg-f_3ZdTr5rlslpylgHB2HNifCi3ClJdD-ZkvxGA3oHEV1g=w1280", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "local market" },
 ];
+
 
 export const GOOGLE_MAPS_EMBED_URL = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d12289.676071227615!2d29.530861694955267!3d39.7903376789198!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14cf3b31772cd39f%3A0x34c10fbd2fe372a9!2s%C3%87aml%C4%B1ca%2C%2043580%20Domani%C3%A7%2FK%C3%BCtahya!5e0!3m2!1str!2str!4v1744723761582!5m2!1str!2str";
 
@@ -80,3 +83,4 @@ export const NAVIGATION_LINKS = [
 ];
 
 export const ADMIN_PANEL_PATH = "/admin";
+export const DEFAULT_CONTACT_PEER_ID = "camlica-village-default-contact-peer";

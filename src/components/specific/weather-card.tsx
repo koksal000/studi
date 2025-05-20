@@ -125,34 +125,30 @@ export function WeatherCard() {
                 Saatlik ve günlük tahminler. Son güncelleme: {lastUpdated?.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}
               </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-grow overflow-y-auto"> {/* ScrollArea's default padding removed here if content handles it */}
-              <div className="space-y-6 p-4 sm:p-6"> {/* Added padding here for overall content */}
+            <ScrollArea className="flex-grow overflow-y-auto">
+              <div className="space-y-6 p-4 sm:p-6">
                 {/* Hourly Forecast Section */}
                 {weather.hourlyForecast && weather.hourlyForecast.length > 0 && (
                   <section>
                     <h3 className="text-lg font-semibold mb-3 text-primary flex items-center">
                       <Clock className="mr-2 h-5 w-5" /> Saatlik Tahmin (İlk 12 Saat)
                     </h3>
-                    {/* Wrapper for negative margins to achieve full-width effect relative to ScrollArea's padding */}
-                    <div className="-mx-4 sm:-mx-6"> 
-                      {/* Actual scroll container with compensating padding */}
-                      <div className="overflow-x-auto pb-2 px-4 sm:px-6">
-                        <div className="flex space-x-3">
-                          {weather.hourlyForecast.map((hour, index) => (
-                            <Card key={index} className="min-w-[120px] flex-shrink-0 shadow">
-                              <CardHeader className="p-3 text-center">
-                                <CardTitle className="text-base">{hour.time}</CardTitle>
-                              </CardHeader>
-                              <CardContent className="p-3 text-center space-y-1">
-                                {getWeatherIcon(hour.weatherCode, "h-8 w-8 mx-auto mb-1")}
-                                <p className="text-xs capitalize">{hour.conditions}</p>
-                                <p className="font-semibold text-sm">{hour.temperature}</p>
-                                <p className="text-xs text-muted-foreground">Yağış: {hour.precipitationProbability}</p>
-                                <p className="text-xs text-muted-foreground">Rüzgar: {hour.windSpeed.split(' ')[0]} km/s</p>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
+                    <div className="overflow-x-auto py-2"> {/* Simplified scroll container */}
+                      <div className="flex space-x-3 w-max"> {/* Added w-max here */}
+                        {weather.hourlyForecast.map((hour, index) => (
+                          <Card key={index} className="min-w-[120px] flex-shrink-0 shadow">
+                            <CardHeader className="p-3 text-center">
+                              <CardTitle className="text-base">{hour.time}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-3 text-center space-y-1">
+                              {getWeatherIcon(hour.weatherCode, "h-8 w-8 mx-auto mb-1")}
+                              <p className="text-xs capitalize">{hour.conditions}</p>
+                              <p className="font-semibold text-sm">{hour.temperature}</p>
+                              <p className="text-xs text-muted-foreground">Yağış: {hour.precipitationProbability}</p>
+                              <p className="text-xs text-muted-foreground">Rüzgar: {hour.windSpeed.split(' ')[0]} km/s</p>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
                     </div>
                   </section>
@@ -200,4 +196,3 @@ export function WeatherCard() {
     </>
   );
 }
-

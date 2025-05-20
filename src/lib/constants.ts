@@ -58,24 +58,15 @@ export const TIMELINE_EVENTS = [
 // The live gallery will be managed via the admin panel and API.
 export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
   { id: "seed_1", src: "https://static.daktilo.com/sites/1410/uploads/2024/07/16/amlica-ilgenel3-1721118756.webp", alt: "Çamlıca Köyü Camii", caption: "Çamlıca Köyü Camii", hint: "mosque historic" },
-  { id: "seed_2", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipPJ5hgB1tuDKK6UVsHRnYE6e-EcRqBmvqWdHUjC?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Uydu Görüntüsü", caption: "Çamlıca Uydu Görüntüsü", hint: "village satellite" },
-  { id: "seed_3", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipMpReHJDZoNV40QBH3wIRU0A04hI6_eUXPW3l9-?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Tarım Kredi Kooperatifi", caption: "Çamlıca Tarım Kredi Kooperatifi", hint: "village cooperative" },
-  { id: "seed_4", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipOnUoEFOL0XlaxosMIsY98w9SoGt1hA6AUiQiLt?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Ortaokulu", caption: "Çamlıca Köyü Ortaokulu", hint: "village school" },
-  { id: "seed_5", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipOVsghavZsDDUxyNlS58N-jd5FuNFZLlZQh9dP7?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Çay Konağı", caption: "Çamlıca Köyü Çay Konağı", hint: "tea house" },
-  { id: "seed_6", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipPufZCSlDU--R70I4ecOeOisZEPgnxfhrM-idsg?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Mezarlığı Girişi", caption: "Çamlıca Köyü Mezarlığı Girişi", hint: "cemetery entrance" },
-  { id: "seed_7", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipPl4TGCXT6xGyGBbz6SMnBOnu2Mpm8_nsb2wHCj?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Girişi", caption: "Çamlıca Köyü Girişi", hint: "village entrance" },
-  { id: "seed_8", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipM6C8We9b9VDCeYH4lWC0n-jOCxQXSFYDawGFsS?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
-  { id: "seed_9", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipMBRchJ-_Q6DdSSyYHvW7qOGeWmbbEAsoV9qwaj?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
+  { id: "seed_2", src: "https://i.ibb.co/s9mGgssQ/1739026216106.jpg", alt: "Çamlıca Uydu Görüntüsü", caption: "Çamlıca Uydu Görüntüsü", hint: "village satellite" },
+  { id: "seed_3", src: "https://i.ibb.co/XhVTv1f/1739026216113.jpg", alt: "Çamlıca Tarım Kredi Kooperatifi", caption: "Çamlıca Tarım Kredi Kooperatifi", hint: "village cooperative" },
+  { id: "seed_4", src: "https://i.ibb.co/5xCg3hcC/1739026216091.jpg", alt: "Çamlıca Köyü Ortaokulu", caption: "Çamlıca Köyü Ortaokulu", hint: "village school" },
+  { id: "seed_5", src: "https://i.ibb.co/7xdY3gcL/1739026216097.jpg", alt: "Çamlıca Köyü Çay Konağı", caption: "Çamlıca Köyü Çay Konağı", hint: "tea house" },
+  { id: "seed_6", src: "https://i.ibb.co/Y5Dt0Rg/1739027099716.jpg", alt: "Çamlıca Köyü Mezarlığı Girişi", caption: "Çamlıca Köyü Mezarlığı Girişi", hint: "cemetery entrance" },
+  { id: "seed_7", src: "https://i.ibb.co/1JwKQkQN/1739026216083.jpg", alt: "Çamlıca Köyü Girişi", caption: "Çamlıca Köyü Girişi", hint: "village entrance" },
+  { id: "seed_8", src: "https://i.ibb.co/N6ZvLqsJ/1739026216071.jpg", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
+  { id: "seed_9", src: "https://i.ibb.co/SD8rnMj3/Whats-App-G-rsel-2025-02-08-saat-16-20-29-6ff8c8bd.jpg", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
   { id: "seed_10",src: "https://i.ibb.co/NnYV58Gg/1739026216056.jpg", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "village market" },
-  { id: "seed_11", src: "https://i.ibb.co/s9mGgssQ/1739026216106.jpg", alt: "1739026216106", caption: "Köy Manzarası 1", hint: "village landscape" },
-  { id: "seed_12", src: "https://i.ibb.co/XhVTv1f/1739026216113.jpg", alt: "1739026216113", caption: "Köy Manzarası 2", hint: "village view" },
-  { id: "seed_13", src: "https://i.ibb.co/5xCg3hcC/1739026216091.jpg", alt: "1739026216091", caption: "Köy Manzarası 3", hint: "village scene" },
-  { id: "seed_14", src: "https://i.ibb.co/7xdY3gcL/1739026216097.jpg", alt: "1739026216097", caption: "Köy Manzarası 4", hint: "nature photo" },
-  { id: "seed_15", src: "https://i.ibb.co/Y5Dt0Rg/1739027099716.jpg", alt: "1739027099716", caption: "Köy Manzarası 5", hint: "outdoor scene" },
-  { id: "seed_16", src: "https://i.ibb.co/1JwKQkQN/1739026216083.jpg", alt: "1739026216083", caption: "Köy Yaşamından", hint: "village life" },
-  { id: "seed_17", src: "https://i.ibb.co/N6ZvLqsJ/1739026216071.jpg", alt: "1739026216071", caption: "Detay Görünüm", hint: "village detail" },
-  { id: "seed_18", src: "https://i.ibb.co/SD8rnMj3/Whats-App-G-rsel-2025-02-08-saat-16-20-29-6ff8c8bd.jpg", alt: "WhatsApp Görseli", caption: "Köyden Bir Kare", hint: "snapshot village" },
-  { id: "seed_19", src: "https://i.ibb.co/PsmMVdCN/1739026216077.jpg", alt: "1739026216077", caption: "Manzara Detayı", hint: "scenery detail" },
 ];
 
 

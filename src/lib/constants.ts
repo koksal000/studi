@@ -67,7 +67,7 @@ export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
   { id: "seed_7", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipPl4TGCXT6xGyGBbz6SMnBOnu2Mpm8_nsb2wHCj?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Girişi", caption: "Çamlıca Köyü Girişi", hint: "village entrance" },
   { id: "seed_8", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipM6C8We9b9VDCeYH4lWC0n-jOCxQXSFYDawGFsS?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
   { id: "seed_9", src: "https://photos.google.com/share/AF1QipMkyiC-BHAXOLcBMZ8Sdl9w0lcB9DowF_WONj56wqNpODiRzR3QpMzC8cL8erU66g/photo/AF1QipMBRchJ-_Q6DdSSyYHvW7qOGeWmbbEAsoV9qwaj?key=REFVSmdwTEFtUDlLamd1Mm1Ob01VdlUxb2ttREpR", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
-  { id: "seed_10",src: "https://photos.google.com/share/AF1QipPPhbZP3c9IvoIBf4TDhje3wwUkKq_5CT048tjqWBWqsZiG4sysN-u7DK84J9f_cw/photo/AF1QipPRqlDEcg0Cki7lrRLcE07cTrgRM5sBHC5YBwxO?key=Y3g4LXRtcW5zY0w5LVJXOXA1aTRvUFkwc0VtSU1n", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "village market" },
+  { id: "seed_10",src: "https://placehold.co/600x400.png", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "village market" },
 ];
 
 
@@ -85,3 +85,4 @@ export const NAVIGATION_LINKS = [
 
 export const ADMIN_PANEL_PATH = "/admin";
 export const DEFAULT_CONTACT_PEER_ID = "camlica-village-default-contact-peer";
+

@@ -133,8 +133,8 @@ export function WeatherCard() {
                     <h3 className="text-lg font-semibold mb-3 text-primary flex items-center">
                       <Clock className="mr-2 h-5 w-5" /> Saatlik Tahmin (İlk 12 Saat)
                     </h3>
-                    <div className="overflow-x-auto py-2"> {/* Simplified scroll container */}
-                      <div className="flex space-x-3 w-max"> {/* Added w-max here */}
+                    <div className="overflow-x-auto py-2 touch-pan-x"> {/* Added touch-pan-x */}
+                      <div className="flex space-x-3 w-max">
                         {weather.hourlyForecast.map((hour, index) => (
                           <Card key={index} className="min-w-[120px] flex-shrink-0 shadow">
                             <CardHeader className="p-3 text-center">
@@ -196,3 +196,4 @@ export function WeatherCard() {
     </>
   );
 }
+

@@ -54,19 +54,22 @@ export const TIMELINE_EVENTS = [
   { year: "2024", description: "425 kişilik nüfusa ulaşılması ve Domaniç'in merkez köyü olması." },
 ];
 
-// This GALLERY_IMAGES can be used for initial seeding of the dynamic gallery if it's empty on server start.
+// This STATIC_GALLERY_IMAGES_FOR_SEEDING can be used for initial seeding of the dynamic gallery if it's empty on server start.
 // The live gallery will be managed via the admin panel and API.
+// IMPORTANT: Google Drive links like /view?usp=drivesdk are PREVIEW links, not direct image links.
+// They may not work correctly with next/image. Ensure files are publicly shared ("Anyone with the link can view")
+// and ideally, use direct image URLs if possible.
 export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
-  { id: "seed_1", src: "https://lh5.googleusercontent.com/9mLtcSKAg2v__8tdl5TJ_RYWmzl35iI0DeNavhiDbSLyVLSOZb2eHiYJn4DhBmekrTpstCZKBqAhMxdFWOIvQvY=w1280", alt: "Çamlıca Köyü Camii", caption: "Çamlıca Köyü Camii", hint: "village mosque" },
-  { id: "seed_2", src: "https://lh6.googleusercontent.com/cHhjZzfhp25nD564Jz4_ZQ7HVHVbQGq8GlQbME4ygZLlof2ET8deHidzOZccs10pSVRRdxF73Ok35XwqApCFx88=w1280", alt: "Çamlıca Uydu Görüntüsü", caption: "Çamlıca Uydu Görüntüsü", hint: "satellite view" },
-  { id: "seed_3", src: "https://lh5.googleusercontent.com/KSyTSeKp5F9uin-4x5VsAy1AWjAb4ETorMFqqdaiBbjfEGvpuzQYCACT9X17_5IyhOT7Rs9yij3-S7szFbvrJL4=w1280", alt: "Çamlıca Tarım Kredi Kooperatifi", caption: "Çamlıca Tarım Kredi Kooperatifi", hint: "agricultural cooperative" },
-  { id: "seed_4", src: "https://lh6.googleusercontent.com/FbFW1DyPgWj7w-Ax1UxDoALx1uhsh-VrnfJsA2deylAOmTIwkdNEsssZWP0ywSSw7Dk3B9XLLW7o0IukYY5rwWo=w1280", alt: "Çamlıca Köyü Ortaokulu", caption: "Çamlıca Köyü Ortaokulu", hint: "village school" },
-  { id: "seed_5", src: "https://lh5.googleusercontent.com/c5HfqgdyjH3dozKw3OQsZd5XyI1nbztMShkIuwHFpwYx6UiuSa0kvi1l67C_zOAboHnnJejAARi96O920xQI16E=w1280", alt: "Çamlıca Köyü Çay Konağı", caption: "Çamlıca Köyü Çay Konağı", hint: "tea house" },
-  { id: "seed_6", src: "https://lh4.googleusercontent.com/v9CXbxlXjmL3NlLC8eGuPhD_xHw0lbXZGz54NTtUDsnl1r2KqN6HglTr8s2rBhXPcCsGM8aWpujTgAPXnFCQUK4=w1280", alt: "Çamlıca Köyü Mezarlığı Girişi", caption: "Çamlıca Köyü Mezarlığı Girişi", hint: "cemetery entrance" },
-  { id: "seed_7", src: "https://lh3.googleusercontent.com/qSOmnI5FgGl6AnwFT4TBCXSRWyLubcbpreC-_nt_X1PVRAybdor-EG4t-iW-pcGQ1i6LBO42QT1FPeaxk3T_YAk=w1280", alt: "Çamlıca Köyü Girişi", caption: "Çamlıca Köyü Girişi", hint: "village entrance" },
-  { id: "seed_8", src: "https://lh4.googleusercontent.com/V7D88bX6meWcgXf4Wt3YqEbxjQda61IXmVCARvsbu_uOIp6oyLdgDaLGUu-GSUF4rcNpIhtIVZ_ifBsZNF0_4fo=w1280", alt: "Çamlıca Köyü Göleti", caption: "Çamlıca Köyü Göleti", hint: "village pond" },
-  { id: "seed_9", src: "https://lh4.googleusercontent.com/2cNSoPBbFrMFCUqQFWIJa9zD4Iuln5TSBCChFVHeA2uVLpjhtbxg3MBZtPyqnkUgGqEGwg02DeHutdYt3b02gVc=w1280", alt: "Çamlıca Köyü Girişi 2", caption: "Çamlıca Köyü Girişi 2", hint: "village entrance" },
-  { id: "seed_10",src: "https://lh3.googleusercontent.com/imNe6-krsmsVvCwSa3cy3uv12bBXtRTtO-Fd0XVXg-f_3ZdTr5rlslpylgHB2HNifCi3ClJdD-ZkvxGA3oHEV1g=w1280", alt: "Yaşar Gıda Market", caption: "Yaşar Gıda Market", hint: "local market" },
+  { id: "seed_1", src: "https://drive.google.com/file/d/1Ojojg63aIqyxCB5y0pI4Szyw_vywnyjH/view?usp=drivesdk", alt: "Galeri Resmi 1", caption: "Çamlıca Köyü Manzarası 1", hint: "village scenery" },
+  { id: "seed_2", src: "https://drive.google.com/file/d/1OTQz9II0Zk2pWF177hHEaw6CwYOh-jpu/view?usp=drivesdk", alt: "Galeri Resmi 2", caption: "Köyden Bir Kare", hint: "village life" },
+  { id: "seed_3", src: "https://drive.google.com/file/d/1OPNvpkMPmIOq_OcJF8HyORffKleOr4JS/view?usp=drivesdk", alt: "Galeri Resmi 3", caption: "Doğal Güzellikler", hint: "nature beauty" },
+  { id: "seed_4", src: "https://drive.google.com/file/d/1ORqUKW1Lfnwif4orQGEkNXWAB4hZgDm7/view?usp=drivesdk", alt: "Galeri Resmi 4", caption: "Tarihi Dokular", hint: "historic texture" },
+  { id: "seed_5", src: "https://drive.google.com/file/d/1O6wVftV8cWFpboCCsjnczcye_souYzjp/view?usp=drivesdk", alt: "Galeri Resmi 5", caption: "Köy Meydanı", hint: "village square" },
+  { id: "seed_6", src: "https://drive.google.com/file/d/1OLE205kapWiEed2HTK8dleO3krjy6-iZ/view?usp=drivesdk", alt: "Galeri Resmi 6", caption: "Yeşil Alanlar", hint: "green areas" },
+  { id: "seed_7", src: "https://drive.google.com/file/d/1O_wpjc0yUuU04uQpgmiz1fClpmrnzJ62/view?usp=drivesdk", alt: "Galeri Resmi 7", caption: "Geleneksel Yapılar", hint: "traditional architecture" },
+  { id: "seed_8", src: "https://drive.google.com/file/d/1OqhPnMqrmS4ol_BCQuoclOF6YuidvOR0/view?usp=drivesdk", alt: "Galeri Resmi 8", caption: "Köy Hayatından Kesitler", hint: "village life scene" },
+  { id: "seed_9", src: "https://drive.google.com/file/d/1OorKCNUMQXyzD7mYTkcX9lavgZcLESto/view?usp=drivesdk", alt: "Galeri Resmi 9", caption: "Gün Batımı Manzarası", hint: "sunset view" },
+  { id: "seed_10",src: "https://drive.google.com/file/d/1O5XP3bR7s-cCc_2Td5EPb3nieAjUmnNn/view?usp=drivesdk", alt: "Galeri Resmi 10", caption: "Köy Yolları", hint: "village roads" },
 ];
 
 

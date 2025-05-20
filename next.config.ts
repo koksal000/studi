@@ -40,6 +40,12 @@ const nextConfig: NextConfig = {
         hostname: 'lh6.googleusercontent.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'drive.google.com',
+        port: '',
+        pathname: '/**',
       }
     ],
   },

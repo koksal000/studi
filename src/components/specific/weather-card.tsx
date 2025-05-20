@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { summarizeWeather, type WeatherSummaryOutput, type HourlyForecastItem, type DailyForecastItem } from '@/ai/flows/weather-summarization'; // Assuming types are exported
 import { AlertTriangle, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Loader2, Sun, Thermometer, Droplet, Wind, CalendarDays, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea importu kaldırıldı
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 
@@ -125,15 +125,16 @@ export function WeatherCard() {
                 Saatlik ve günlük tahminler. Son güncelleme: {lastUpdated?.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}
               </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="flex-grow overflow-y-auto min-h-0"> {/* Added min-h-0 */}
-              <div className="space-y-6 p-4 sm:p-6">
+            {/* ScrollArea yerine standart div ile overflow: auto kullanılıyor */}
+            <div className="flex-grow min-h-0 overflow-auto">
+              <div className="p-4 sm:p-6">
                 {/* Hourly Forecast Section */}
                 {weather.hourlyForecast && weather.hourlyForecast.length > 0 && (
-                  <section>
+                  <section className={(weather.dailyForecast && weather.dailyForecast.length > 0) ? "mb-6" : ""}>
                     <h3 className="text-lg font-semibold mb-3 text-primary flex items-center">
                       <Clock className="mr-2 h-5 w-5" /> Saatlik Tahmin (İlk 12 Saat)
                     </h3>
-                    <div className="overflow-x-auto py-2 touch-pan-x">
+                    <div className="overflow-x-auto py-2 touch-pan-x"> {/* Yatay kaydırma için */}
                       <div className="flex space-x-3 w-max">
                         {weather.hourlyForecast.map((hour, index) => (
                           <Card key={index} className="min-w-[120px] flex-shrink-0 shadow">
@@ -185,15 +186,14 @@ export function WeatherCard() {
                     </Table>
                   </section>
                 )}
-                 {!weather.hourlyForecast && !weather.dailyForecast && (
+                 {(!weather.hourlyForecast || weather.hourlyForecast.length === 0) && (!weather.dailyForecast || weather.dailyForecast.length === 0) && (
                     <p className="text-muted-foreground text-center py-4">Detaylı tahmin verisi bulunamadı.</p>
                  )}
               </div>
-            </ScrollArea>
+            </div>
           </DialogContent>
         </Dialog>
       )}
     </>
   );
 }
-

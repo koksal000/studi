@@ -4,12 +4,13 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
-import { NAVIGATION_LINKS, VILLAGE_NAME, CONTACT_INFO, TIMELINE_EVENTS, ECONOMY_DATA, POPULATION_DATA, GALLERY_IMAGES } from '@/lib/constants';
+import { NAVIGATION_LINKS, VILLAGE_NAME, CONTACT_INFO, TIMELINE_EVENTS, ECONOMY_DATA, POPULATION_DATA, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SearchX, FileText, Newspaper, Landmark, History, Phone, Image as ImageIcon, Users, BarChart3, Sparkles, Loader2 } from 'lucide-react';
 import Image from 'next/image'; // For gallery images in results
+import type { GalleryImage } from '@/hooks/use-gallery'; // Import GalleryImage type
 
 interface SearchResultItem {
   type: 'Duyuru' | 'Sayfa' | 'Tarihi Olay' | 'Galeri Öğesi' | 'Genel Bilgi';
@@ -60,7 +61,7 @@ export default function SearchResultsPage() {
         } else if (page.href === '/history') {
             pageContentKeywords += ` tarih geçmiş osmanlı göçebe ${TIMELINE_EVENTS.map(e => `${e.year} ${e.description}`).join(' ').toLowerCase()}`;
         } else if (page.href === '/gallery') {
-            pageContentKeywords += ` galeri fotoğraf resim ${GALLERY_IMAGES.map(img => img.caption.toLowerCase() + ' ' + img.alt.toLowerCase()).join(' ')}`;
+            pageContentKeywords += ` galeri fotoğraf resim ${STATIC_GALLERY_IMAGES_FOR_SEEDING.map(img => img.caption.toLowerCase() + ' ' + img.alt.toLowerCase()).join(' ')}`;
         } else if (page.href === '/contact') {
             pageContentKeywords += ` iletişim adres muhtar e-posta ${CONTACT_INFO.address.toLowerCase()} ${CONTACT_INFO.muhtar.toLowerCase()} ${CONTACT_INFO.email.toLowerCase()}`;
         } else if (page.href === '/ai-assistant') {
@@ -101,15 +102,17 @@ export default function SearchResultsPage() {
         }
       });
 
-      // Search Gallery Images captions/alt text
-      GALLERY_IMAGES.forEach(image => {
+      // Search Gallery Images captions/alt text from STATIC_GALLERY_IMAGES_FOR_SEEDING
+      // Note: For a complete search, you might also want to search the dynamic gallery images from useGallery()
+      // For now, sticking to constants for simplicity as dynamic gallery search would require hook usage here or passing data.
+      STATIC_GALLERY_IMAGES_FOR_SEEDING.forEach((image: GalleryImage) => { // Ensure image has GalleryImage type
         if (image.caption.toLowerCase().includes(searchTerm) || image.alt.toLowerCase().includes(searchTerm) || image.hint.toLowerCase().includes(searchTerm)) {
            if (!foundResults.some(r => r.type === 'Galeri Öğesi' && r.title === image.caption)) {
             foundResults.push({
                 type: 'Galeri Öğesi',
                 title: image.caption,
-                link: '/gallery', // Could link to gallery and open modal with this image
-                source: 'Galeri',
+                link: '/gallery', 
+                source: 'Galeri (Statik)', // Clarify source
                 imageUrl: image.src,
                 originalData: image
             });
@@ -128,7 +131,7 @@ export default function SearchResultsPage() {
       ];
 
       generalInfoChecks.forEach(info => {
-        if (searchTerm.includes(info.term) || info.term.includes(searchTerm)) { // Check both ways for broader matching
+        if (searchTerm.includes(info.term) || info.term.includes(searchTerm)) { 
            if (!foundResults.some(r => r.type === 'Genel Bilgi' && r.title === info.title)) {
             foundResults.push({
                 type: 'Genel Bilgi',
@@ -140,7 +143,6 @@ export default function SearchResultsPage() {
         }
       });
       
-      // Remove strict duplicates (e.g. a page found via label and then again via general info keyword)
       const uniqueResults = foundResults.reduce((acc, current) => {
         const x = acc.find(item => item.link === current.link && item.title === current.title && item.type === current.type && item.source === current.source);
         if (!x) {
@@ -247,3 +249,4 @@ export default function SearchResultsPage() {
     </div>
   );
 }
+

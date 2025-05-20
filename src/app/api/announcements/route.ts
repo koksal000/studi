@@ -1,18 +1,47 @@
+
 // src/app/api/announcements/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import type { Announcement, NewAnnouncementPayload } from '@/hooks/use-announcements';
 import announcementEmitter from '@/lib/announcement-emitter';
+import fs from 'fs';
+import path from 'path';
 
-// In-memory store for announcements.
-// WARNING: This data will be lost if the server restarts.
-// For persistent storage, a database (e.g., Firebase Firestore, Postgres, MongoDB) should be used.
-let announcementsData: Announcement[] = [];
+const ANNOUNCEMENTS_FILE_PATH = path.join(process.cwd(), '_announcements.json');
+
+// Function to read announcements from file
+const loadAnnouncementsFromFile = (): Announcement[] => {
+  try {
+    if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
+      const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
+      const parsedData = JSON.parse(fileData) as Announcement[];
+      // Ensure dates are proper Date objects if needed, though ISO strings are fine for JSON
+      return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+  } catch (error) {
+    console.error("Error reading announcements file:", error);
+  }
+  return [];
+};
+
+// Function to save announcements to file
+const saveAnnouncementsToFile = (data: Announcement[]) => {
+  try {
+    // Sort before saving to maintain order if reloaded
+    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
+  } catch (error) {
+    console.error("Error writing announcements file:", error);
+  }
+};
+
+// Initialize in-memory store from file or empty array
+let announcementsData: Announcement[] = loadAnnouncementsFromFile();
 
 export async function GET() {
   try {
-    // Return a copy to prevent direct modification of the in-memory store
-    return NextResponse.json([...announcementsData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    // Return a copy to prevent direct modification
+    return NextResponse.json([...announcementsData]);
   } catch (error) {
     console.error("Error fetching announcements:", error);
     return NextResponse.json({ message: "Internal server error while fetching announcements." }, { status: 500 });
@@ -37,9 +66,9 @@ export async function POST(request: NextRequest) {
       author: body.author,
     };
 
-    announcementsData.unshift(newAnnouncement); // Add to the beginning for chronological order (newest first)
+    announcementsData.unshift(newAnnouncement);
+    saveAnnouncementsToFile(announcementsData); // Save to file
     
-    // Notify SSE stream listeners
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json(newAnnouncement, { status: 201 });
@@ -68,7 +97,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
 
-    // Notify SSE stream listeners
+    saveAnnouncementsToFile(announcementsData); // Save to file
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });

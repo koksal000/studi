@@ -1,14 +1,14 @@
 
 "use client"; 
 
-import { useState } from 'react'; // Added useState
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 import Image from 'next/image';
 import { BarChart as BarChartIconLucide, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'; 
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
-import { Bar, Line, Pie, Cell, CartesianGrid, XAxis, YAxis, LineChart, PieChart, BarChart as RechartsBarChart } from 'recharts'; // Renamed BarChart from recharts
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'; // Added Dialog components
+import { Bar, Line, Pie, Cell, CartesianGrid, XAxis, YAxis, LineChart, PieChart, BarChart as RechartsBarChart } from 'recharts';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const chartConfigPopulation = {
   population: {
@@ -80,15 +80,19 @@ export default function AboutPage() {
            </div>
             <div
                 className="relative aspect-square w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-xs xl:max-w-sm cursor-pointer rounded-lg overflow-hidden shadow-md mt-6 mx-auto group"
-                onClick={() => setSelectedModalImage({ src: 'https://placehold.co/800x800.png', alt: 'Köy Yaşamından Bir Kare (Placeholder)', hint: 'village life' })}
+                onClick={() => setSelectedModalImage({ 
+                    src: 'https://i.ibb.co/VWHCWx31/Domani-K-yler-Haritas.png', 
+                    alt: 'Domaniç Köyleri Haritası', 
+                    hint: 'map villages' 
+                })}
             >
                 <Image
-                src="https://placehold.co/400x400.png" 
-                alt="Köy Yaşamından Bir Kare (Placeholder)"
+                src="https://i.ibb.co/VWHCWx31/Domani-K-yler-Haritas.png" 
+                alt="Domaniç Köyleri Haritası"
                 layout="fill"
-                objectFit="cover"
-                data-ai-hint="village scene"
-                className="transition-transform duration-300 group-hover:scale-105"
+                objectFit="contain"
+                data-ai-hint="map villages"
+                className="transition-transform duration-300 group-hover:scale-105 bg-muted p-1"
                 />
                 <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <p className="text-white text-lg font-semibold">Görseli Büyüt</p>
@@ -203,11 +207,11 @@ export default function AboutPage() {
 
       {selectedModalImage && (
         <Dialog open={!!selectedModalImage} onOpenChange={() => setSelectedModalImage(null)}>
-          <DialogContent className="max-w-3xl p-2 sm:p-4"> {/* Increased max-width for potentially larger images */}
+          <DialogContent className="max-w-3xl p-2 sm:p-4">
             <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">{selectedModalImage.alt}</DialogTitle>
             </DialogHeader>
-            <div className="mt-2 aspect-square w-full relative rounded-md overflow-hidden bg-muted"> {/* Changed aspect ratio to square for consistency */}
+            <div className="mt-2 aspect-square w-full relative rounded-md overflow-hidden bg-muted">
               <Image src={selectedModalImage.src} alt={selectedModalImage.alt} layout="fill" objectFit="contain" data-ai-hint={selectedModalImage.hint}/>
             </div>
           </DialogContent>
@@ -217,3 +221,5 @@ export default function AboutPage() {
   );
 }
 
+
+    

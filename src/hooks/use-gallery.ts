@@ -70,19 +70,42 @@ export function useGallery() {
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error for gallery. EventSource readyState:', eventSource.readyState, 'Event:', error);
+    eventSource.onerror = (errorEvent) => {
+      // Log more details from the error event
+      let eventDetails = {};
+      if (errorEvent) {
+        // Manually construct an object with relevant properties from the Event
+        eventDetails = {
+          type: (errorEvent as Event).type,
+          bubbles: (errorEvent as Event).bubbles,
+          cancelable: (errorEvent as Event).cancelable,
+          composed: (errorEvent as Event).composed,
+          // Add other properties if they exist and are useful, e.g., errorEvent.message (if it's an ErrorEvent)
+        };
+      }
+      console.error(
+        'SSE connection error for gallery. EventSource readyState:', 
+        eventSource.readyState, 
+        'Event details:', 
+        JSON.stringify(eventDetails, null, 2),
+        'Raw event object:', errorEvent
+      );
       toast({
         title: "Galeri Bağlantı Sorunu",
         description: "Galeri güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.",
         variant: "destructive"
       });
+      // EventSource will automatically try to reconnect.
+      // You might want to close it explicitly under certain conditions:
+      // if (eventSource.readyState === EventSource.CLOSED) {
+      //   console.log("Gallery SSE connection was closed by the server or due to fatal error.");
+      // }
     };
 
     return () => {
       eventSource.close();
     };
-  }, [toast]); // Added toast to dependency array
+  }, [toast]);
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {

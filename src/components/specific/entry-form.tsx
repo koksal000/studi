@@ -39,42 +39,42 @@ export function EntryForm() {
       </video>
 
       {/* Overlay to dim the video and ensure text on card is readable */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+      <div className="absolute inset-0 bg-black/50"></div> {/* Removed backdrop-blur-sm, adjusted opacity */}
 
       {/* Centering container for the Card, must be on top of video and overlay */}
       <div className="relative z-10 flex items-center justify-center h-full p-4">
-        <Card className="w-full max-w-md shadow-2xl bg-card"> {/* Ensure card has its own background for readability */}
+        <Card className="w-full max-w-md shadow-2xl bg-transparent border border-white/20"> {/* Made card transparent with a border */}
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-primary">{VILLAGE_NAME}</CardTitle>
-            <CardDescription className="text-muted-foreground">{DISTRICT_NAME}'in Merkez Köyü</CardDescription>
+            <CardTitle className="text-3xl font-bold text-white">{VILLAGE_NAME}</CardTitle> {/* Changed text color */}
+            <CardDescription className="text-neutral-300">{DISTRICT_NAME}'in Merkez Köyü</CardDescription> {/* Changed text color */}
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="userName" className="text-card-foreground">Adınız:</Label>
+                <Label htmlFor="userName" className="text-neutral-200">Adınız:</Label> {/* Changed text color */}
                 <Input
                   id="userName"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="bg-input text-foreground"
+                  className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" /* Styled for transparent bg */
                   placeholder="Adınızı girin"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="userSurname" className="text-card-foreground">Soyadınız:</Label>
+                <Label htmlFor="userSurname" className="text-neutral-200">Soyadınız:</Label> {/* Changed text color */}
                 <Input
                   id="userSurname"
                   type="text"
                   value={surname}
                   onChange={(e) => setSurname(e.target.value)}
                   required
-                  className="bg-input text-foreground"
+                  className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" /* Styled for transparent bg */
                   placeholder="Soyadınızı girin"
                 />
               </div>
-              <Button type="submit" className="w-full text-lg py-3">
+              <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">
                 Giriş Yap
               </Button>
             </form>

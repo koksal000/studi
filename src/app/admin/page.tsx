@@ -25,12 +25,19 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "@/components/ui/alert-dialog"; 
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
 import { UserRequestsDialog } from '@/components/specific/user-requests-dialog';
 import type { ContactMessage } from '@/app/api/contact/route';
+
+// Approx 4MB limit for base64 string. Next.js default API body limit is 1MB.
+// Base64 is ~33% larger than original file. A 3MB file ~ 4MB base64.
+// For a 1MB API limit, base64 should be < 1MB, so original file < ~750KB.
+// Let's set MAX_IMAGE_DATA_URI_LENGTH to 4MB for now, assuming server can handle it,
+// but a stricter client-side raw file check.
+const MAX_RAW_FILE_SIZE = 3 * 1024 * 1024; // 3MB limit for original file
+const MAX_IMAGE_DATA_URI_LENGTH = 4 * 1024 * 1024; // Approx 4MB for base64 string
 
 export default function AdminPage() {
   const { user } = useUser();
@@ -96,6 +103,18 @@ export default function AdminPage() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > MAX_RAW_FILE_SIZE) {
+        toast({
+          title: "Dosya Boyutu Çok Büyük",
+          description: `Lütfen ${MAX_RAW_FILE_SIZE / (1024*1024)}MB'den küçük bir resim dosyası seçin. Daha büyük dosyalar yüklenemeyebilir.`,
+          variant: "destructive",
+        });
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setNewImageFile(null);
+        setNewImagePreview(null);
+        return;
+      }
+
       setNewImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -114,6 +133,7 @@ export default function AdminPage() {
       toast({ title: "Eksik Bilgi", description: "Lütfen bir resim seçin ve başlık girin.", variant: "destructive" });
       return;
     }
+    
     setIsUploading(true);
     try {
       const reader = new FileReader();
@@ -127,11 +147,26 @@ export default function AdminPage() {
             variant: "destructive" 
           });
           setIsUploading(false);
-          if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+          if(fileInputRef.current) fileInputRef.current.value = "";
           setNewImageFile(null);
           setNewImagePreview(null);
           return;
         }
+
+        if (imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH) {
+           toast({ 
+            title: "Resim Verisi Çok Büyük", 
+            description: `Resim yüklenemedi çünkü işlenmiş veri boyutu çok büyük. Lütfen daha küçük bir resim dosyası seçin (Örn: ~${MAX_RAW_FILE_SIZE / (1024*1024)}MB veya daha az).`, 
+            variant: "destructive",
+            duration: 7000,
+          });
+          setIsUploading(false);
+          if(fileInputRef.current) fileInputRef.current.value = "";
+          setNewImageFile(null);
+          setNewImagePreview(null);
+          return;
+        }
+
 
         const payload: NewGalleryImagePayload = {
           imageDataUri,
@@ -142,12 +177,13 @@ export default function AdminPage() {
         await addGalleryImage(payload);
         toast({ 
           title: "Resim Eklendi", 
-          description: `"${newImageCaption.trim()}" başlıklı resim galeriye başarıyla eklendi. (Render.com'da kalıcı disk yapılandırıldıysa kalıcı olacaktır.)` 
+          description: `"${newImageCaption.trim()}" başlıklı resim galeriye başarıyla eklendi. (Render.com'da kalıcı disk yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse kalıcı olacaktır.)` 
         });
         setNewImageFile(null);
         setNewImageCaption('');
         setNewImagePreview(null);
         if(fileInputRef.current) fileInputRef.current.value = "";
+        setIsUploading(false);
       };
       reader.onerror = () => {
          toast({ title: "Dosya Okuma Hatası", description: "Resim dosyası okunurken bir hata oluştu.", variant: "destructive" });
@@ -155,8 +191,12 @@ export default function AdminPage() {
       }
       reader.readAsDataURL(newImageFile);
     } catch (error: any) {
-      console.error("Error adding image:", error);
-      toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
+      console.error("Error adding image in admin page:", error);
+      // Error toasts are now primarily handled by useGallery hook
+      // This is a fallback if the error doesn't get a specific toast from the hook
+      if (!error.message?.includes("Resim verisi çok büyük") && !error.message?.includes("File is too large") && !error.message?.includes("Yerel Depolama Limiti Aşıldı")) {
+        toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
+      }
       setIsUploading(false);
     }
   };
@@ -168,18 +208,19 @@ export default function AdminPage() {
 
   const performImageDelete = async () => {
     if (!imageToDelete) return;
+    setIsUploading(true); 
     try {
       await deleteGalleryImage(imageToDelete.id);
       toast({ 
         title: "Resim Silindi", 
-        description: `"${imageToDelete.caption}" başlıklı resim galeriden kalıcı olarak silindi. (Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse kalıcı olur. Aksi takdirde, bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümü geri yüklenebilir.)` 
+        description: `"${imageToDelete.caption}" başlıklı resim galeriden silindi. (Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse kalıcı olur.)` 
       });
     } catch (error: any) {
       console.error("Error deleting image:", error);
       toast({ title: "Resim Silinemedi", description: error.message || "Resim silinirken bir sorun oluştu.", variant: "destructive" });
     }
     setImageToDelete(null);
-    setIsUploading(false); // Ensure isUploading is reset after delete attempt
+    setIsUploading(false);
   };
 
 
@@ -242,7 +283,7 @@ export default function AdminPage() {
           <CardDescription>
             Yeni duyurular ekleyin veya mevcut duyuruları yönetin. 
             Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncelleniyorsa, değişiklikleriniz kalıcı olacaktır.
-            Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir.
+            Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir (Eğer "Git as DB" modeli kullanılıyorsa).
             Kalıcı değişiklikler için, yerel projenizdeki ilgili JSON dosyasını düzenleyip GitHub'a göndermeniz önerilir.
             Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_announcements.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_announcements.json</a>
           </CardDescription>
@@ -276,16 +317,15 @@ export default function AdminPage() {
            <CardDescription>
             Sitede gösterilen galeri resimlerini yönetin. Buradan eklenen veya silinen resimler,
             Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_gallery.json`) güncelleniyorsa kalıcı olacaktır.
-            Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir.
-            Kalıcı değişiklikler için, yerel projenizdeki `_gallery.json` dosyasını düzenleyip GitHub'a göndermeniz önerilir.
-            Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_gallery.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_gallery.json</a>
+            Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir (Eğer "Git as DB" modeli kullanılıyorsa).
+             Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_gallery.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_gallery.json</a>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAddImageSubmit} className="mb-8 p-6 border rounded-lg shadow-sm space-y-4">
             <h3 className="text-lg font-semibold text-primary border-b pb-2">Yeni Resim Yükle</h3>
             <div className="space-y-1">
-              <Label htmlFor="imageFile">Resim Dosyası Seçin (Max 1MB önerilir, PNG/JPG)</Label>
+              <Label htmlFor="imageFile">Resim Dosyası Seçin (Max ~3MB önerilir, PNG/JPG)</Label>
               <Input 
                 id="imageFile" 
                 type="file" 
@@ -335,28 +375,28 @@ export default function AdminPage() {
                       <Image src={image.src} alt={image.alt} layout="fill" objectFit="cover" data-ai-hint={image.hint} />
                        <div className="absolute top-2 right-2">
                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8">
+                            <AlertDialog.Trigger asChild>
+                                <Button variant="destructive" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8" disabled={isUploading}>
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
-                            </AlertDialogTrigger>
+                            </AlertDialog.Trigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
                                  <AlertDialogDescription>
                                     "{image.caption}" başlıklı resmi galeriden silmek istediğinizden emin misiniz?
                                     <br/><br/>
-                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncelleniyorsa geri alınamaz. Aksi takdirde, değişiklik bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir.
-                                    Kalıcı silme için, değişikliği yerel projenizdeki `_gallery.json` dosyasında yapıp GitHub'a göndermeniz önerilir.
+                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse kalıcı olur. Aksi takdirde, değişiklik bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir (Eğer "Git as DB" modeli kullanılıyorsa).
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                <AlertDialogCancel>İptal</AlertDialogCancel>
+                                <AlertDialogCancel disabled={isUploading}>İptal</AlertDialogCancel>
                                 <AlertDialogAction
                                     onClick={() => openDeleteConfirmation(image)}
                                     className="bg-destructive hover:bg-destructive/90"
+                                    disabled={isUploading && imageToDelete?.id === image.id}
                                 >
-                                    Evet, Sil (Geçici)
+                                     {isUploading && imageToDelete?.id === image.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil"}
                                 </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
@@ -389,6 +429,7 @@ export default function AdminPage() {
     </div>
   );
 }
+    
     
 
     

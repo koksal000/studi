@@ -77,10 +77,9 @@ export function useAnnouncements() {
   useEffect(() => {
     console.log('[SSE Announcements] useEffect for EventSource triggered. Site notifications preference:', siteNotificationsPreference);
     
-    const currentEventSource = eventSourceRef.current;
-    if (currentEventSource) {
+    if (eventSourceRef.current) {
       console.log('[SSE Announcements] Closing existing EventSource.');
-      currentEventSource.close();
+      eventSourceRef.current.close();
     }
 
     console.log('[SSE Announcements] Creating new EventSource for /api/announcements/stream');
@@ -96,22 +95,22 @@ export function useAnnouncements() {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
         console.log('[SSE Announcements] Received data via SSE:', updatedAnnouncementsFromServer.length, 'items');
         console.log('[SSE Announcements] Current local announcements (ref) before processing:', announcementsRef.current.length, 'items');
-        console.log('[SSE Announcements] Current siteNotificationsPreference in onmessage:', siteNotificationsPreference);
-        console.log('[SSE Announcements] Browser Notification.permission:', typeof window !== 'undefined' && window.Notification ? Notification.permission : 'N/A');
-
+        
+        const currentLocalAnnouncements = announcementsRef.current;
         let latestNewAnnouncementForNotification: Announcement | null = null;
+
         if (updatedAnnouncementsFromServer.length > 0) {
-            const currentLocalIds = new Set(announcementsRef.current.map(a => a.id));
-            
-            for (const serverAnn of updatedAnnouncementsFromServer) { 
-                if (!currentLocalIds.has(serverAnn.id)) {
-                    latestNewAnnouncementForNotification = serverAnn;
-                    console.log('[SSE Announcements] Identified as NEW for notification:', latestNewAnnouncementForNotification.title);
-                    break; 
-                }
+            const currentLocalIds = new Set(currentLocalAnnouncements.map(a => a.id));
+            const newAnnouncementsFromServer = updatedAnnouncementsFromServer.filter(serverAnn => !currentLocalIds.has(serverAnn.id));
+
+            if (newAnnouncementsFromServer.length > 0) {
+                // Find the most recent among the new ones for notification
+                newAnnouncementsFromServer.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                latestNewAnnouncementForNotification = newAnnouncementsFromServer[0];
+                console.log('[SSE Announcements] Identified as NEW for notification:', latestNewAnnouncementForNotification.title);
             }
         }
-
+        
         setAnnouncements(updatedAnnouncementsFromServer);
         localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncementsFromServer));
         console.log('[SSE Announcements] Local announcements and localStorage updated.');
@@ -126,7 +125,7 @@ export function useAnnouncements() {
             try {
               const notification = new Notification(latestNewAnnouncementForNotification.title, {
                 body: notificationBody,
-                tag: latestNewAnnouncementForNotification.id, // Using tag to prevent multiple notifications for the same announcement
+                tag: latestNewAnnouncementForNotification.id, 
               });
               notification.onclick = () => {
                 window.open('https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/', '_blank');
@@ -148,9 +147,9 @@ export function useAnnouncements() {
           }
         } else {
             if (!latestNewAnnouncementForNotification) console.log('[SSE Announcements] No new announcement identified for notification (latestNewAnnouncementForNotification is null).');
-            if (!siteNotificationsPreference) console.log('[SSE Announcements] Site notifications preference is OFF.');
-            if (typeof window !== 'undefined' && window.Notification && Notification.permission !== 'granted') console.log('[SSE Announcements] Browser notification permission is NOT "granted":', Notification.permission);
-            if (latestNewAnnouncementForNotification && siteNotificationsPreference) {
+            else if (!siteNotificationsPreference) console.log('[SSE Announcements] Site notifications preference is OFF.');
+            else if (typeof window !== 'undefined' && window.Notification && Notification.permission !== 'granted') console.log('[SSE Announcements] Browser notification permission is NOT "granted":', Notification.permission);
+            else {
                  console.log('[SSE Announcements] Notification conditions NOT MET. latestNew:', !!latestNewAnnouncementForNotification, 'sitePref:', siteNotificationsPreference, 'Notification API:', typeof window !== 'undefined' && !!window.Notification, 'Permission:', typeof window !== 'undefined' && window.Notification && Notification.permission);
             }
         }
@@ -175,9 +174,14 @@ export function useAnnouncements() {
           description: "Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.",
           variant: "destructive"
         });
-      } else if (readyState === EventSource.CONNECTING) {
-        console.warn("[SSE Announcements] Connection is in CONNECTING state during error.");
-      } else { 
+      } else if (readyState === EventSource.CONNECTING) { // readyState is 0
+        toast({
+          title: "Duyuru Bağlantısı Kurulamıyor",
+          description: "Sunucuya ilk bağlantı kurulamadı. Yeniden deneniyor. Lütfen internet bağlantınızı ve Vercel'deki NEXT_PUBLIC_APP_URL ayarını kontrol edin.",
+          variant: "destructive",
+          duration: 8000, 
+        });
+      } else { // For readyState OPEN (1) if an error somehow occurs, or unknown state
          toast({
           title: "Duyuru Bağlantı Hatası",
           description: "Duyuru güncellemelerinde bir hata oluştu. Yeniden deneniyor.",
@@ -253,3 +257,4 @@ export function useAnnouncements() {
 
   return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading };
 }
+

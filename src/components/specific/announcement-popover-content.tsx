@@ -49,7 +49,7 @@ export function AnnouncementPopoverContent({ announcements, onClose }: Announcem
         </div>
       </ScrollArea>
       {announcements.length > 0 && (
-         <div className="p-2 border-t">
+         <div className="p-2 border-t flex-shrink-0"> {/* Ensure footer does not shrink */}
             <Button variant="ghost" size="sm" className="w-full" asChild onClick={onClose}>
               <Link href="/announcements" className="flex items-center justify-center">
                 <Newspaper className="mr-2 h-4 w-4" /> Tüm Duyuruları Gör
@@ -60,4 +60,3 @@ export function AnnouncementPopoverContent({ announcements, onClose }: Announcem
     </div>
   );
 }
-

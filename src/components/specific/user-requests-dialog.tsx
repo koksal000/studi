@@ -1,3 +1,4 @@
+
 // src/components/specific/user-requests-dialog.tsx
 "use client";
 
@@ -34,8 +35,8 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
             İletişim formu üzerinden gönderilen tüm mesajlar.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="flex-grow min-h-0 pr-1"> {/* Added pr-1 for scrollbar clearance */}
-          <div className="p-4 sm:p-6 space-y-4">
+        <ScrollArea className="flex-grow min-h-0"> {/* ScrollArea grows and allows its content to scroll */}
+          <div className="p-4 sm:p-6 space-y-4"> {/* Padding applied to the content inside ScrollArea */}
             {isLoading && (
               <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -72,7 +73,7 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
             )}
           </div>
         </ScrollArea>
-        <div className="p-4 sm:p-6 border-t mt-auto flex-shrink-0">
+        <div className="p-4 sm:p-6 border-t mt-auto flex-shrink-0"> {/* Footer section */}
           <DialogClose asChild>
             <Button type="button" variant="outline" className="w-full">Kapat</Button>
           </DialogClose>

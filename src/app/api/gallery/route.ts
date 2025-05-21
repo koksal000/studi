@@ -22,12 +22,15 @@ const loadGalleryFromFile = (): GalleryImage[] => {
   try {
     if (fs.existsSync(GALLERY_FILE_PATH)) {
       const fileData = fs.readFileSync(GALLERY_FILE_PATH, 'utf-8');
-      return JSON.parse(fileData) as GalleryImage[];
+      const parsedData = JSON.parse(fileData) as GalleryImage[];
+      console.log(`[API/Gallery] Successfully loaded ${parsedData.length} gallery images from ${GALLERY_FILE_PATH}.`);
+      return parsedData;
     }
-    // console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Returning seed data or empty array.`);
+    console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Initializing with seed data if available.`);
     return STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0 ? [...STATIC_GALLERY_IMAGES_FOR_SEEDING] : [];
   } catch (error) {
     console.error("[API/Gallery] Error reading gallery file:", error);
+    console.warn("[API/Gallery] Falling back to seed data due to error reading gallery file.");
     return STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0 ? [...STATIC_GALLERY_IMAGES_FOR_SEEDING] : [];
   }
 };
@@ -39,7 +42,6 @@ const saveGalleryToFile = (data: GalleryImage[]) => {
     console.log("[API/Gallery] Gallery images saved to file.");
   } catch (error) {
     console.error("[API/Gallery] Error writing gallery file:", error);
-    // Removed Vercel-specific warning as user is deploying to Render
   }
 };
 
@@ -47,11 +49,15 @@ const saveGalleryToFile = (data: GalleryImage[]) => {
 let galleryImagesData: GalleryImage[] = loadGalleryFromFile();
 
 if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0) {
-  galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING];
-  saveGalleryToFile(galleryImagesData); 
-  console.log("[API/Gallery] Initialized gallery with seed data and saved to file.");
+  // This case is now handled inside loadGalleryFromFile if file doesn't exist
+  // If file existed but was empty or unparseable, loadGalleryFromFile would use seeds.
+  // If seed data was used, let's save it to create the file.
+  if (!fs.existsSync(GALLERY_FILE_PATH)) {
+      console.log("[API/Gallery] Initializing gallery with seed data and saving to file for the first time.");
+      saveGalleryToFile(galleryImagesData); 
+  }
 } else if (galleryImagesData.length === 0) {
-  console.log("[API/Gallery] Initialized with an empty gallery list (in-memory).")
+  console.log("[API/Gallery] Initialized with an empty gallery list (no file and no seed data).")
 }
 
 

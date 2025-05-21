@@ -22,9 +22,10 @@ const loadMessagesFromFile = (): ContactMessage[] => {
     if (fs.existsSync(MESSAGES_FILE_PATH)) {
       const fileData = fs.readFileSync(MESSAGES_FILE_PATH, 'utf-8');
       const parsedData = JSON.parse(fileData) as ContactMessage[];
+      console.log(`[API/Contact] Successfully loaded ${parsedData.length} contact messages from ${MESSAGES_FILE_PATH}.`);
       return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-    // console.warn(`[API/Contact] Contact messages file not found at ${MESSAGES_FILE_PATH}. Returning empty array.`);
+    console.warn(`[API/Contact] Contact messages file not found at ${MESSAGES_FILE_PATH}. Returning empty array.`);
     return [];
   } catch (error) {
     console.error("[API/Contact] Error reading contact messages file:", error);
@@ -40,13 +41,12 @@ const saveMessagesToFile = (data: ContactMessage[]) => {
     console.log("[API/Contact] Contact messages saved to file.");
   } catch (error) {
     console.error("[API/Contact] Error writing contact messages file:", error);
-    // Removed Vercel-specific warning as user is deploying to Render
   }
 };
 
 let contactMessagesData: ContactMessage[] = loadMessagesFromFile();
 if (contactMessagesData.length === 0) {
-    console.log("[API/Contact] Initialized with an empty contact messages list (or file read failed).")
+    console.log("[API/Contact] Initialized with an empty contact messages list (or file not found/read failed).")
 }
 
 export async function GET() {

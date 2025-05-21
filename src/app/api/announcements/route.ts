@@ -15,9 +15,10 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
       const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
       const parsedData = JSON.parse(fileData) as Announcement[];
+      console.log(`[API/Announcements] Successfully loaded ${parsedData.length} announcements from ${ANNOUNCEMENTS_FILE_PATH}.`);
       return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-    // console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array.`);
+    console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array.`);
     return [];
   } catch (error) {
     console.error("[API/Announcements] Error reading announcements file:", error);
@@ -33,14 +34,13 @@ const saveAnnouncementsToFile = (data: Announcement[]) => {
     console.log("[API/Announcements] Announcements saved to file.");
   } catch (error) {
     console.error("[API/Announcements] Error writing announcements file:", error);
-    // Removed Vercel-specific warning as user is deploying to Render
   }
 };
 
 // Initialize in-memory store from file or empty array
 let announcementsData: Announcement[] = loadAnnouncementsFromFile();
 if (announcementsData.length === 0) {
-  console.log("[API/Announcements] Initialized with an empty announcements list (or file read failed).")
+  console.log("[API/Announcements] Initialized with an empty announcements list (or file not found/read failed).")
 }
 
 export async function GET() {

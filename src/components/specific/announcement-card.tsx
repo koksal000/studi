@@ -43,7 +43,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     removeAnnouncement(announcement.id);
     toast({
       title: "Duyuru Silindi",
-      description: `"${announcement.title}" başlıklı duyuru silindi. Bu silme işleminin kalıcı olması için GitHub reponuzdaki _announcements.json dosyasını güncelleyip yeniden dağıtım yapmanız gerekebilir.`,
+      description: `"${announcement.title}" başlıklı duyuru kalıcı olarak silindi. (Render.com'da kalıcı disk yapılandırıldıysa)`,
     });
   };
 
@@ -143,9 +143,9 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
                 <AlertDialogHeader>
                   <AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle>
                   <AlertDialogDescription>
-                    "{announcement.title}" başlıklı duyuruyu silmek istediğinizden emin misiniz?
+                    "{announcement.title}" başlıklı duyuruyu kalıcı olarak silmek istediğinizden emin misiniz?
                     <br /><br />
-                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem sadece mevcut oturum için geçerlidir. Değişikliğin kalıcı olması için GitHub reponuzdaki <code className="text-xs bg-background/80 text-destructive p-0.5 rounded-sm">_announcements.json</code> dosyasını manuel olarak güncelleyip yeniden dağıtım yapmanız gerekir.
+                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa geri alınamaz.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -154,7 +154,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
                     onClick={() => setIsAdminPasswordDialogOpen(true)}
                     className="bg-destructive hover:bg-destructive/90"
                   >
-                    Evet, Sil (Geçici)
+                    Evet, Kalıcı Olarak Sil
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -181,3 +181,5 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     </>
   );
 }
+
+    

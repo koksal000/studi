@@ -7,38 +7,53 @@ import galleryEmitter from '@/lib/gallery-emitter';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
+
+  if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
+    console.warn(
+      '[SSE Gallery Stream] WARNING: NEXT_PUBLIC_APP_URL is not set or is misconfigured for production. '+
+      'The SSE stream may fail to fetch initial data if it relies on this URL to call its own API. '+
+      'Current appUrl for internal fetch:', appUrl
+    );
+  }
+
   const stream = new ReadableStream({
     start(controller) {
       const sendUpdate = (data: GalleryImage[]) => {
         try {
-          // Sort by caption or some other logic if needed before sending
+          // Check if controller is still usable before enqueuing
+          if (controller.desiredSize === null || controller.desiredSize <= 0) {
+            console.warn("SSE Gallery: Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate.");
+            galleryEmitter.off('update', sendUpdate); // Clean up listener
+            return;
+          }
           const sortedData = [...data].sort((a,b) => {
             if (a.id.startsWith('seed_') && !b.id.startsWith('seed_')) return -1;
             if (!a.id.startsWith('seed_') && b.id.startsWith('seed_')) return 1;
-            return a.caption.localeCompare(b.caption);
+            // Fallback to sorting by caption if ID prefixes are the same or both are not seeds
+            // This ensures a consistent order for non-seed items as well.
+            const idCompare = a.id.localeCompare(b.id); // Added for more stable sort with dynamic IDs
+            return idCompare === 0 ? a.caption.localeCompare(b.caption) : idCompare;
           });
           controller.enqueue(`data: ${JSON.stringify(sortedData)}\n\n`);
-        } catch (e) {
-            console.error("Error enqueuing data to gallery SSE stream:", e);
-            // Attempt to close the controller if an error occurs during enqueueing
+        } catch (e: any) {
+            console.error("SSE Gallery: Error enqueuing data to stream:", e.message, e.stack);
             try {
-              if (controller.desiredSize !== null) { // Check if not already closed/errored
-                controller.close();
+              if (controller.desiredSize !== null) { 
+                controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
               }
-            } catch (_) {}
+            } catch (closeErr) {
+                 console.error("SSE Gallery: Error trying to signal controller error after enqueue failure:", closeErr);
+            }
             galleryEmitter.off('update', sendUpdate);
         }
       };
 
-      // Fetching from the main API route to get the current state
-      // Ensure NEXT_PUBLIC_APP_URL is set in your .env for production/Vercel
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
       let initialFetchFailed = false;
 
-      fetch(new URL('/api/gallery', appUrl))
+      fetch(new URL('/api/gallery', appUrl), { cache: 'no-store' }) // Added cache: 'no-store'
         .then(res => {
             if (!res.ok) {
-                // Log detailed error for server-side debugging
                 const errorMsg = `Failed to fetch initial gallery images from ${res.url}: ${res.status} ${res.statusText}`;
                 console.error("SSE Gallery Stream Init Error:", errorMsg);
                 throw new Error(errorMsg);
@@ -49,16 +64,14 @@ export async function GET() {
             if (initialGalleryImages && Array.isArray(initialGalleryImages)) {
                  sendUpdate(initialGalleryImages);
             } else if (!initialGalleryImages) {
-                 // Handle case where API returns valid but empty/nullish response
                  sendUpdate([]);
             }
         }).catch(e => {
             console.error("SSE Gallery: Error during initial images fetch or processing:", e.message);
             initialFetchFailed = true;
-            // Explicitly signal an error to the client's EventSource
             try {
-              if (controller.desiredSize !== null) { // Check if not already closed/errored
-                controller.error(new Error("Failed to initialize gallery stream: Could not fetch initial data."));
+              if (controller.desiredSize !== null) { 
+                controller.error(new Error(`Failed to initialize gallery stream: Could not fetch initial data. Server error: ${e.message}`));
               }
             } catch (closeError) {
               console.error("SSE Gallery: Error trying to signal controller error after fetch failure:", closeError);
@@ -84,4 +97,3 @@ export async function GET() {
     },
   });
 }
-

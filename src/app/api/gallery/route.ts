@@ -32,22 +32,23 @@ const loadGalleryFromFile = (): GalleryImage[] => {
   }
 };
 
-// Function to save gallery to file (REMOVED USAGE FOR VERCEL COMPATIBILITY)
-// const saveGalleryToFile = (data: GalleryImage[]) => {
-//   try {
-//     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
-//   } catch (error) {
-//     console.warn("[API/Gallery] Error writing gallery file (this is expected on Vercel/serverless):", error);
-//   }
-// };
+// Function to save gallery to file
+const saveGalleryToFile = (data: GalleryImage[]) => {
+  try {
+    fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
+    console.log("[API/Gallery] Gallery images saved to file.");
+  } catch (error) {
+    console.error("[API/Gallery] Error writing gallery file:", error);
+  }
+};
 
 // Initialize in-memory store
 let galleryImagesData: GalleryImage[] = loadGalleryFromFile();
 
 if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0) {
   galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING];
-  // saveGalleryToFile(galleryImagesData); // REMOVED: Not Vercel compatible for persistence
-  console.log("[API/Gallery] Initialized gallery with seed data (in-memory).");
+  saveGalleryToFile(galleryImagesData); 
+  console.log("[API/Gallery] Initialized gallery with seed data and saved to file.");
 } else if (galleryImagesData.length === 0) {
   console.log("[API/Gallery] Initialized with an empty gallery list (in-memory).")
 }
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
     };
 
     galleryImagesData.unshift(newImage); 
-    // saveGalleryToFile(galleryImagesData); // REMOVED: Not Vercel compatible for persistence
+    saveGalleryToFile(galleryImagesData); // Save to file
     
     galleryEmitter.emit('update', [...galleryImagesData]);
 
@@ -123,7 +124,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Image not found' }, { status: 404 });
     }
 
-    // saveGalleryToFile(galleryImagesData); // REMOVED: Not Vercel compatible for persistence
+    saveGalleryToFile(galleryImagesData); // Save to file
     galleryEmitter.emit('update', [...galleryImagesData]);
 
     return NextResponse.json({ message: 'Image deleted successfully' }, { status: 200 });

@@ -25,15 +25,16 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
   }
 };
 
-// Function to save announcements to file (REMOVED USAGE FOR VERCEL COMPATIBILITY)
-// const saveAnnouncementsToFile = (data: Announcement[]) => {
-//   try {
-//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-//     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-//   } catch (error) {
-//     console.warn("[API/Announcements] Error writing announcements file (this is expected on Vercel/serverless):", error);
-//   }
-// };
+// Function to save announcements to file
+const saveAnnouncementsToFile = (data: Announcement[]) => {
+  try {
+    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    console.log("[API/Announcements] Announcements saved to file.");
+  } catch (error) {
+    console.error("[API/Announcements] Error writing announcements file:", error);
+  }
+};
 
 // Initialize in-memory store from file or empty array
 let announcementsData: Announcement[] = loadAnnouncementsFromFile();
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
     };
 
     announcementsData.unshift(newAnnouncement); // Update in-memory array
-    // saveAnnouncementsToFile(announcementsData); // REMOVED: Not Vercel compatible for persistence
+    saveAnnouncementsToFile(announcementsData); // Save to file
     
     announcementEmitter.emit('update', [...announcementsData]);
 
@@ -99,7 +100,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
 
-    // saveAnnouncementsToFile(announcementsData); // REMOVED: Not Vercel compatible for persistence
+    saveAnnouncementsToFile(announcementsData); // Save to file
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });

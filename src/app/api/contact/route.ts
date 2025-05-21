@@ -32,15 +32,16 @@ const loadMessagesFromFile = (): ContactMessage[] => {
   }
 };
 
-// Function to save messages to file (REMOVED USAGE FOR VERCEL COMPATIBILITY)
-// const saveMessagesToFile = (data: ContactMessage[]) => {
-//   try {
-//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-//     fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
-//   } catch (error) {
-//     console.warn("[API/Contact] Error writing contact messages file (this is expected on Vercel/serverless):", error);
-//   }
-// };
+// Function to save messages to file
+const saveMessagesToFile = (data: ContactMessage[]) => {
+  try {
+    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    console.log("[API/Contact] Contact messages saved to file.");
+  } catch (error) {
+    console.error("[API/Contact] Error writing contact messages file:", error);
+  }
+};
 
 let contactMessagesData: ContactMessage[] = loadMessagesFromFile();
 if (contactMessagesData.length === 0) {
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
     };
 
     contactMessagesData.unshift(newMessage); 
-    // saveMessagesToFile(contactMessagesData); // REMOVED: Not Vercel compatible for persistence
+    saveMessagesToFile(contactMessagesData); // Save to file
     
     contactEmitter.emit('update', [...contactMessagesData]);
 

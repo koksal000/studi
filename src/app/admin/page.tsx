@@ -126,7 +126,7 @@ export default function AdminPage() {
           hint: "custom upload",
         };
         await addGalleryImage(payload);
-        toast({ title: "Resim Eklendi", description: "Yeni resim galeriye başarıyla eklendi." });
+        toast({ title: "Resim Eklendi", description: "Yeni resim galeriye başarıyla eklendi. Değişikliğin kalıcı olması için GitHub reponuzdaki _gallery.json dosyasını güncelleyip yeniden dağıtım yapmanız gerekebilir." });
         setNewImageFile(null);
         setNewImageCaption('');
         setNewImagePreview(null);
@@ -153,7 +153,7 @@ export default function AdminPage() {
     if (!imageToDelete) return;
     try {
       await deleteGalleryImage(imageToDelete.id);
-      toast({ title: "Resim Silindi", description: `"${imageToDelete.caption}" başlıklı resim galeriden silindi.` });
+      toast({ title: "Resim Silindi", description: `"${imageToDelete.caption}" başlıklı resim galeriden silindi. Bu silme işleminin kalıcı olması için GitHub reponuzdaki _gallery.json dosyasını güncelleyip yeniden dağıtım yapmanız gerekebilir.` });
     } catch (error) {
       console.error("Error deleting image:", error);
       toast({ title: "Resim Silinemedi", description: "Resim silinirken bir sorun oluştu.", variant: "destructive" });
@@ -218,7 +218,7 @@ export default function AdminPage() {
               <PlusCircle className="mr-2 h-5 w-5" /> Yeni Duyuru Ekle
             </Button>
           </CardTitle>
-          <CardDescription>Yeni duyurular ekleyin veya mevcut duyuruları yönetin.</CardDescription>
+          <CardDescription>Yeni duyurular ekleyin veya mevcut duyuruları yönetin. Değişikliklerin kalıcı olması için GitHub reponuzdaki <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">_announcements.json</code> dosyasını güncelleyip yeniden dağıtım yapmanız gerekebilir.</CardDescription>
         </CardHeader>
         <CardContent>
           <AddAnnouncementDialog 
@@ -247,12 +247,14 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-6 w-6 text-primary" /> Galeri Yönetimi</CardTitle>
           <CardDescription>
-            Sitede gösterilen galeri resimlerini yönetin. Yüklenen resimler sunucu yeniden başladığında kaybolabilir.
+            Sitede gösterilen galeri resimlerini yönetin. Yeni eklenen/silinen resimlerin kalıcı olması için GitHub reponuzdaki <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">_gallery.json</code> dosyasını güncelleyip yeniden dağıtım yapmanız gerekebilir.
+            <br />
+            Buradan yüklenen resimler, sunucu (Render.com'da fonksiyon örneği) yeniden başladığında veya yeni dağıtım yapıldığında kaybolacaktır. Kalıcı resimler için aşağıdaki GitHub bağlantısından <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">_gallery.json</code> dosyasını düzenleyebilirsiniz.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAddImageSubmit} className="mb-8 p-6 border rounded-lg shadow-sm space-y-4">
-            <h3 className="text-lg font-semibold text-primary border-b pb-2">Yeni Resim Yükle</h3>
+            <h3 className="text-lg font-semibold text-primary border-b pb-2">Yeni Resim Yükle (Geçici)</h3>
             <div className="space-y-1">
               <Label htmlFor="imageFile">Resim Dosyası Seçin (Max 1MB önerilir)</Label>
               <Input 
@@ -285,14 +287,14 @@ export default function AdminPage() {
             </div>
             <Button type="submit" disabled={isUploading || !newImageFile || !newImageCaption.trim()}>
               {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              Galeriye Ekle
+              Galeriye Ekle (Geçici)
             </Button>
           </form>
 
-          <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4">Mevcut Galeri Resimleri</h3>
+          <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4">Mevcut Galeri Resimleri (<code className="text-sm font-normal">_gallery.json</code> kaynağından)</h3>
           {galleryLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Galeri resimleri yükleniyor...</div>}
           {!galleryLoading && galleryImages.length === 0 && (
-            <p className="text-muted-foreground">Galeride henüz resim bulunmamaktadır.</p>
+            <p className="text-muted-foreground">Galeride henüz resim bulunmamaktadır (<code className="text-xs">_gallery.json</code> dosyasını kontrol edin).</p>
           )}
           {!galleryLoading && galleryImages.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -312,7 +314,9 @@ export default function AdminPage() {
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                                    "{image.caption}" başlıklı resmi galeriden silmek istediğinizden emin misiniz?
+                                    <br /><br />
+                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem sadece mevcut oturum için geçerlidir. Değişikliğin kalıcı olması için GitHub reponuzdaki <code className="text-xs bg-background/80 text-destructive p-0.5 rounded-sm">_gallery.json</code> dosyasını manuel olarak güncelleyip yeniden dağıtım yapmanız gerekir.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -321,7 +325,7 @@ export default function AdminPage() {
                                     onClick={() => openDeleteConfirmation(image)}
                                     className="bg-destructive hover:bg-destructive/90"
                                 >
-                                    Evet, Sil
+                                    Evet, Sil (Geçici)
                                 </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
@@ -338,11 +342,11 @@ export default function AdminPage() {
           )}
            <div className="mt-6 text-sm text-center p-4 border-t">
               <p className="text-muted-foreground">
-                Bu panelden yüklenen resimler, sunucu (Vercel ortamında fonksiyon örneği) yeniden başladığında kaybolacaktır. Kalıcı resimler için <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">src/lib/constants.ts</code> dosyasındaki <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">STATIC_GALLERY_IMAGES_FOR_SEEDING</code> listesini düzenleyebilirsiniz. Bu liste, sunucu başladığında dinamik galeriyi tohumlamak için kullanılır.
+                Kalıcı galeri değişiklikleri için <code className="mx-1 px-1 py-0.5 bg-muted rounded-sm text-xs">_gallery.json</code> dosyasını GitHub reponuzda düzenlemeniz ve projenizi yeniden dağıtmanız gerekmektedir.
               </p>
               <Button variant="outline" size="sm" asChild className="mt-3">
-                  <a href="https://github.com/firebase/firebase-genkit-samples/blob/main/studio/intro/src/lib/constants.ts" target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="mr-2 h-4 w-4" /> constants.ts Dosyasını GitHub'da Gör
+                  <a href="https://github.com/firebase/firebase-genkit-samples/blob/main/studio/intro/_gallery.json" target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 h-4 w-4" /> _gallery.json Dosyasını GitHub'da Gör (Örnek Repo)
                   </a>
               </Button>
             </div>
@@ -364,5 +368,4 @@ export default function AdminPage() {
     </div>
   );
 }
-
     

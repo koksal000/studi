@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
 import { useState } from 'react';
-import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog'; // Yeni import
+import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog'; 
 
 interface AnnouncementCardProps {
   announcement: Announcement;
@@ -35,7 +35,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
   const { deleteAnnouncement: removeAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   const [isAdminPasswordDialogOpen, setIsAdminPasswordDialogOpen] = useState(false);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false); // Modal state'i
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false); 
 
   const canAttemptDelete = !!user;
 
@@ -43,7 +43,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     removeAnnouncement(announcement.id);
     toast({
       title: "Duyuru Silindi",
-      description: `"${announcement.title}" başlıklı duyuru başarıyla silindi.`,
+      description: `"${announcement.title}" başlıklı duyuru silindi. Bu silme işleminin kalıcı olması için GitHub reponuzdaki _announcements.json dosyasını güncelleyip yeniden dağıtım yapmanız gerekebilir.`,
     });
   };
 
@@ -141,9 +141,11 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Emin misiniz?</AlertDialogTitle>
+                  <AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Bu duyuruyu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                    "{announcement.title}" başlıklı duyuruyu silmek istediğinizden emin misiniz?
+                    <br /><br />
+                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem sadece mevcut oturum için geçerlidir. Değişikliğin kalıcı olması için GitHub reponuzdaki <code className="text-xs bg-background/80 text-destructive p-0.5 rounded-sm">_announcements.json</code> dosyasını manuel olarak güncelleyip yeniden dağıtım yapmanız gerekir.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -152,7 +154,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
                     onClick={() => setIsAdminPasswordDialogOpen(true)}
                     className="bg-destructive hover:bg-destructive/90"
                   >
-                    Evet, Silmeyi Onayla
+                    Evet, Sil (Geçici)
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

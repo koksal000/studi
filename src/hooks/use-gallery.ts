@@ -28,7 +28,7 @@ export function useGallery() {
   const fetchInitialGallery = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/gallery');
+      const response = await fetch('/api/gallery', { cache: 'no-store' });
       if (!response.ok) {
         throw new Error('Failed to fetch gallery images');
       }
@@ -37,11 +37,6 @@ export function useGallery() {
       localStorage.setItem(GALLERY_KEY, JSON.stringify(data));
     } catch (error) {
       console.error("Failed to fetch initial gallery images:", error);
-      // toast({
-      //   title: "Galeri Yüklenemedi",
-      //   description: "Sunucudan galeri resimleri alınırken bir sorun oluştu.",
-      //   variant: "destructive"
-      // });
       const storedGallery = localStorage.getItem(GALLERY_KEY);
       if (storedGallery) {
         try {
@@ -51,16 +46,15 @@ export function useGallery() {
     } finally {
       setIsLoading(false);
     }
-  }, []); // Removed toast from dependencies as it's not used in this useCallback
+  }, []);
 
   useEffect(() => {
     fetchInitialGallery();
   }, [fetchInitialGallery]);
 
   useEffect(() => {
-    const currentEventSource = eventSourceRef.current;
-    if (currentEventSource) {
-      currentEventSource.close();
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
     }
 
     const newEventSource = new EventSource('/api/gallery/stream');
@@ -81,23 +75,15 @@ export function useGallery() {
       const readyState = target?.readyState;
       const eventType = errorEvent.type || 'unknown event type';
       
-      console.error(
-        `[SSE Gallery] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
-      );
-      
-      // let toastMessage = "Galeri güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.";
-      // if (readyState === EventSource.CLOSED) {
-      //   toastMessage = "Galeri bağlantısı sonlandı. Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.";
-      // } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
-      //   toastMessage = "Galeri bağlantısı kurulamıyor. Lütfen internet bağlantınızı ve sunucu ayarlarını kontrol edin. Yeniden deneniyor...";
-      // }
-      
-      // toast({
-      //   title: "Galeri Bağlantı Sorunu",
-      //   description: toastMessage,
-      //   variant: "destructive",
-      //   duration: 8000,
-      // });
+      if (readyState === EventSource.CLOSED) {
+        console.warn(
+          `[SSE Gallery] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
+        );
+      } else {
+        console.error(
+          `[SSE Gallery] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
+        );
+      }
     };
     
     return () => {
@@ -107,12 +93,12 @@ export function useGallery() {
         eventSourceRef.current = null;
       }
     };
-  }, []); // Removed toast from dependencies
+  }, []);
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Resim eklemek için giriş yapmalısınız.", variant: "destructive" });
-      return;
+      return Promise.reject(new Error("User not logged in"));
     }
 
     try {
@@ -132,6 +118,7 @@ export function useGallery() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Resim eklenemedi');
       }
+      // SSE will handle the update
     } catch (error: any) {
       console.error("Failed to add gallery image:", error);
       toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
@@ -142,7 +129,7 @@ export function useGallery() {
   const deleteGalleryImage = useCallback(async (id: string) => {
      if (!user) {
       toast({ title: "Giriş Gerekli", description: "Resim silmek için giriş yapmalısınız.", variant: "destructive" });
-      return;
+      return Promise.reject(new Error("User not logged in"));
     }
 
     try {
@@ -154,6 +141,7 @@ export function useGallery() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Resim silinemedi');
       }
+      // SSE will handle the update
     } catch (error: any) {
       console.error("Failed to delete gallery image:", error);
       toast({ title: "Resim Silinemedi", description: error.message || "Resim silinirken bir sorun oluştu.", variant: "destructive" });

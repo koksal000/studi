@@ -1,70 +1,50 @@
-
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # Dependencies
 /node_modules
 /.pnp
 .pnp.js
-.yarn/install-state.gz
 
-# Transpiled JavaScript files
-# More info: https://nextjs.org/docs/advanced-features/custom-server
-# /.next/static
-# /.next/server
+# Testing
+/coverage
 
-# Production bundles
-.next
-.vercel
-.output
+# Next.js
+/.next/
+/out/
 
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
+# Production
+/build
 
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-.history
-
-# System files
+# Misc
 .DS_Store
-Thumbs.db
-
-# Cache files
-.eslintcache
-*.tsbuildinfo
+*.pem
 
 # Logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-# Environment variables
-.env
-.env*.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Local .env file
+# .env # Keep .env for DATA_PATH, but .env*.local should be ignored
+.env*.local 
 
-# Next.js specific
-next-env.d.ts
-
-# If you are NOT using GitHub as the source of truth for these data files
-# and ARE using Render.com's persistent disks, keep these lines.
+# Data files - These should be committed to GitHub if GitHub is the source of truth.
+# If you uncomment these, they will NOT be tracked by Git.
+# For the "Git as a database" approach on Render free tier, ensure these files
+# _announcements.json, _gallery.json, _contact_messages.json
+# ARE present in your Git repository and NOT listed (uncommented) below.
+#
 # _announcements.json
 # _gallery.json
 # _contact_messages.json
 
-# If you ARE using GitHub as the source of truth for these data files
-# and want them to be part of your repo, then comment out or remove the lines above.
-# For this request, we assume GitHub is the source, so they are NOT ignored.
+# Folders
+.firebase
+.vscode
+*.tsbuildinfo
+.eslintcache
+firebase-debug.log
+genkit.state

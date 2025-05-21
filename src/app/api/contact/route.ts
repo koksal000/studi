@@ -26,7 +26,7 @@ const loadMessagesFromFile = (): ContactMessage[] => {
       console.log(`[API/Contact] Successfully loaded ${parsedData.length} contact messages from ${MESSAGES_FILE_PATH}.`);
       return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-    console.warn(`[API/Contact] Contact messages file not found at ${MESSAGES_FILE_PATH}. Returning empty array.`);
+    console.warn(`[API/Contact] Contact messages file not found at ${MESSAGES_FILE_PATH}. Returning empty array. This is expected if starting with an empty Git repo.`);
     return [];
   } catch (error) {
     console.error("[API/Contact] Error reading contact messages file:", error);
@@ -34,19 +34,24 @@ const loadMessagesFromFile = (): ContactMessage[] => {
   }
 };
 
-// Function to save messages to file - Removed for GitHub as source of truth
-// const saveMessagesToFile = (data: ContactMessage[]) => {
-//   try {
-//     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-//       fs.mkdirSync(dataPath, { recursive: true });
-//     }
-//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-//     fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
-//     console.log("[API/Contact] Contact messages saved to file:", MESSAGES_FILE_PATH);
-//   } catch (error) {
-//     console.error("[API/Contact] Error writing contact messages file:", error);
-//   }
-// };
+// Function to save messages to file
+const saveMessagesToFile = (data: ContactMessage[]) => {
+  // This function is disabled for Render.com free tier compatibility with GitHub as data source.
+  // Changes should be made by editing the JSON file in Git and redeploying.
+  // console.log("[API/Contact] File saving is disabled. Changes are in-memory only for this instance.");
+  /*
+  try {
+    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+      fs.mkdirSync(dataPath, { recursive: true });
+    }
+    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    console.log("[API/Contact] Contact messages saved to file:", MESSAGES_FILE_PATH);
+  } catch (error) {
+    console.error("[API/Contact] Error writing contact messages file:", error);
+  }
+  */
+};
 
 let contactMessagesData: ContactMessage[] = loadMessagesFromFile();
 if (contactMessagesData.length === 0) {
@@ -84,7 +89,8 @@ export async function POST(request: NextRequest) {
     };
 
     contactMessagesData.unshift(newMessage); // Add to in-memory array
-    // saveMessagesToFile(contactMessagesData); // DO NOT SAVE TO FILE if GitHub is source of truth
+    console.log("[API/Contact] New contact message added to in-memory store. File saving is disabled; commit changes to Git for persistence.");
+    // saveMessagesToFile(contactMessagesData); // Disabled for GitHub as data source
     
     contactEmitter.emit('update', [...contactMessagesData]);
 

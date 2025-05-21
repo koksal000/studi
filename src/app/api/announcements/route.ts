@@ -19,7 +19,7 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
       console.log(`[API/Announcements] Successfully loaded ${parsedData.length} announcements from ${ANNOUNCEMENTS_FILE_PATH}.`);
       return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-    console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array.`);
+    console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array. This is expected if starting with an empty Git repo.`);
     return [];
   } catch (error) {
     console.error("[API/Announcements] Error reading announcements file:", error);
@@ -27,19 +27,24 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
   }
 };
 
-// Function to save announcements to file - Removed for GitHub as source of truth
-// const saveAnnouncementsToFile = (data: Announcement[]) => {
-//   try {
-//     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-//       fs.mkdirSync(dataPath, { recursive: true });
-//     }
-//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-//     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-//     console.log("[API/Announcements] Announcements saved to file:", ANNOUNCEMENTS_FILE_PATH);
-//   } catch (error) {
-//     console.error("[API/Announcements] Error writing announcements file:", error);
-//   }
-// };
+// Function to save announcements to file
+const saveAnnouncementsToFile = (data: Announcement[]) => {
+  // This function is disabled for Render.com free tier compatibility with GitHub as data source.
+  // Changes should be made by editing the JSON file in Git and redeploying.
+  // console.log("[API/Announcements] File saving is disabled. Changes are in-memory only for this instance.");
+  /*
+  try {
+    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+      fs.mkdirSync(dataPath, { recursive: true });
+    }
+    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    console.log("[API/Announcements] Announcements saved to file:", ANNOUNCEMENTS_FILE_PATH);
+  } catch (error) {
+    console.error("[API/Announcements] Error writing announcements file:", error);
+  }
+  */
+};
 
 let announcementsData: Announcement[] = loadAnnouncementsFromFile();
 if (announcementsData.length === 0) {
@@ -48,8 +53,9 @@ if (announcementsData.length === 0) {
 
 export async function GET() {
   try {
-    // Ensure data is loaded if it was empty initially and file might have been created by another instance
-    // This might be less relevant if we rely on startup load only
+    // If in-memory data is empty (e.g. after a serverless function cold start without file persistence)
+    // and file exists (e.g. in local dev or if it was part of the deployment bundle), try to load it.
+    // This helps in local dev if the file is manually changed.
     if (announcementsData.length === 0 && fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
         announcementsData = loadAnnouncementsFromFile();
     }
@@ -79,7 +85,8 @@ export async function POST(request: NextRequest) {
     };
 
     announcementsData.unshift(newAnnouncement); // Add to in-memory array
-    // saveAnnouncementsToFile(announcementsData); // DO NOT SAVE TO FILE if GitHub is source of truth for deployments
+    console.log("[API/Announcements] New announcement added to in-memory store. File saving is disabled; commit changes to Git for persistence.");
+    // saveAnnouncementsToFile(announcementsData); // Disabled for GitHub as data source
     
     announcementEmitter.emit('update', [...announcementsData]);
 
@@ -108,8 +115,8 @@ export async function DELETE(request: NextRequest) {
     if (announcementsData.length === initialLength) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
-
-    // saveAnnouncementsToFile(announcementsData); // DO NOT SAVE TO FILE if GitHub is source of truth for deployments
+    console.log(`[API/Announcements] Announcement with ID ${id} deleted from in-memory store. File saving is disabled; commit changes to Git for persistence.`);
+    // saveAnnouncementsToFile(announcementsData); // Disabled for GitHub as data source
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });

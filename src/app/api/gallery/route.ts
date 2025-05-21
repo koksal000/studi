@@ -27,7 +27,8 @@ const loadGalleryFromFile = (): GalleryImage[] => {
       console.log(`[API/Gallery] Successfully loaded ${parsedData.length} gallery images from ${GALLERY_FILE_PATH}.`);
       return parsedData;
     }
-    console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Initializing with seed data if available.`);
+    console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Initializing with seed data. This is expected if starting with an empty Git repo or if the file isn't committed.`);
+    // If file not found, use seed data.
     return STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0 ? [...STATIC_GALLERY_IMAGES_FOR_SEEDING] : [];
   } catch (error) {
     console.error("[API/Gallery] Error reading gallery file:", error);
@@ -36,34 +37,38 @@ const loadGalleryFromFile = (): GalleryImage[] => {
   }
 };
 
-// Function to save gallery to file - Removed for GitHub as source of truth
-// const saveGalleryToFile = (data: GalleryImage[]) => {
-//   try {
-//     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-//       fs.mkdirSync(dataPath, { recursive: true });
-//     }
-//     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
-//     console.log("[API/Gallery] Gallery images saved to file:", GALLERY_FILE_PATH);
-//   } catch (error) {
-//     console.error("[API/Gallery] Error writing gallery file:", error);
-//   }
-// };
+// Function to save gallery to file
+const saveGalleryToFile = (data: GalleryImage[]) => {
+  // This function is disabled for Render.com free tier compatibility with GitHub as data source.
+  // Changes should be made by editing the JSON file in Git and redeploying.
+  // console.log("[API/Gallery] File saving is disabled. Changes are in-memory only for this instance.");
+  /*
+  try {
+    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+      fs.mkdirSync(dataPath, { recursive: true });
+    }
+    fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
+    console.log("[API/Gallery] Gallery images saved to file:", GALLERY_FILE_PATH);
+  } catch (error) {
+    console.error("[API/Gallery] Error writing gallery file:", error);
+  }
+  */
+};
 
 let galleryImagesData: GalleryImage[] = loadGalleryFromFile();
 
 if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0) {
-  // If relying on GitHub, no need to save seed data back to a file on server start.
-  // The seed data is the primary source if _gallery.json isn't in the repo.
-  console.log("[API/Gallery] Initialized gallery with seed data as _gallery.json was not found or empty.");
+  // This case is handled by loadGalleryFromFile if the file doesn't exist.
+  // If the file exists but is empty, and we want to re-seed, explicit logic would be needed here.
+  // For now, loadGalleryFromFile handles initialization with seeds if file is absent.
+  console.log("[API/Gallery] Gallery initialized with seed data as _gallery.json was not found or empty and seed data was available.");
 } else if (galleryImagesData.length === 0) {
-  console.log("[API/Gallery] Initialized with an empty gallery list (no file and no seed data).")
+  console.log("[API/Gallery] Initialized with an empty gallery list (no file/read error and no seed data).")
 }
 
 
 export async function GET() {
   try {
-    // If data is empty and file exists (e.g., in local dev if not committed), load it.
-    // In a deployment scenario where file comes from repo, this might be redundant if loadAnnouncementsFromFile runs at startup.
     if (galleryImagesData.length === 0 && fs.existsSync(GALLERY_FILE_PATH)) {
         galleryImagesData = loadGalleryFromFile();
     }
@@ -105,7 +110,8 @@ export async function POST(request: NextRequest) {
     };
 
     galleryImagesData.unshift(newImage); // Add to in-memory array
-    // saveGalleryToFile(galleryImagesData); // DO NOT SAVE TO FILE if GitHub is source of truth
+    console.log("[API/Gallery] New image added to in-memory store. File saving is disabled; commit changes to Git for persistence.");
+    // saveGalleryToFile(galleryImagesData); // Disabled for GitHub as data source
     
     galleryEmitter.emit('update', [...galleryImagesData]);
 
@@ -134,8 +140,8 @@ export async function DELETE(request: NextRequest) {
     if (galleryImagesData.length === initialLength) {
       return NextResponse.json({ message: 'Image not found' }, { status: 404 });
     }
-
-    // saveGalleryToFile(galleryImagesData); // DO NOT SAVE TO FILE if GitHub is source of truth
+    console.log(`[API/Gallery] Image with ID ${id} deleted from in-memory store. File saving is disabled; commit changes to Git for persistence.`);
+    // saveGalleryToFile(galleryImagesData); // Disabled for GitHub as data source
     galleryEmitter.emit('update', [...galleryImagesData]);
 
     return NextResponse.json({ message: 'Image deleted successfully' }, { status: 200 });

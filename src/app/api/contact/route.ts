@@ -32,15 +32,15 @@ const loadMessagesFromFile = (): ContactMessage[] => {
   }
 };
 
-const saveMessagesToFile = (data: ContactMessage[]) => {
-  try {
-    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
-  } catch (error) {
-    console.error("[API/Contact] Error writing contact messages file (this is expected on Vercel/serverless):", error);
-    // On Vercel, file system is likely read-only or ephemeral. This write will probably fail or not persist.
-  }
-};
+// Function to save messages to file (REMOVED USAGE FOR VERCEL COMPATIBILITY)
+// const saveMessagesToFile = (data: ContactMessage[]) => {
+//   try {
+//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+//     fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
+//   } catch (error) {
+//     console.warn("[API/Contact] Error writing contact messages file (this is expected on Vercel/serverless):", error);
+//   }
+// };
 
 let contactMessagesData: ContactMessage[] = loadMessagesFromFile();
 if (contactMessagesData.length === 0) {
@@ -49,7 +49,6 @@ if (contactMessagesData.length === 0) {
 
 export async function GET() {
   try {
-    // contactMessagesData = loadMessagesFromFile(); // Re-evaluate if this re-read is beneficial or harmful on Vercel
     return NextResponse.json([...contactMessagesData]);
   } catch (error) {
     console.error("[API/Contact] Error fetching contact messages (GET):", error);
@@ -76,7 +75,7 @@ export async function POST(request: NextRequest) {
     };
 
     contactMessagesData.unshift(newMessage); 
-    saveMessagesToFile(contactMessagesData); // Attempt to save to file
+    // saveMessagesToFile(contactMessagesData); // REMOVED: Not Vercel compatible for persistence
     
     contactEmitter.emit('update', [...contactMessagesData]);
 

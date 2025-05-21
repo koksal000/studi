@@ -25,16 +25,15 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
   }
 };
 
-// Function to save announcements to file
-const saveAnnouncementsToFile = (data: Announcement[]) => {
-  try {
-    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-  } catch (error) {
-    console.error("[API/Announcements] Error writing announcements file (this is expected on Vercel/serverless):", error);
-    // On Vercel, file system is likely read-only or ephemeral. This write will probably fail or not persist.
-  }
-};
+// Function to save announcements to file (REMOVED USAGE FOR VERCEL COMPATIBILITY)
+// const saveAnnouncementsToFile = (data: Announcement[]) => {
+//   try {
+//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+//     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
+//   } catch (error) {
+//     console.warn("[API/Announcements] Error writing announcements file (this is expected on Vercel/serverless):", error);
+//   }
+// };
 
 // Initialize in-memory store from file or empty array
 let announcementsData: Announcement[] = loadAnnouncementsFromFile();
@@ -44,10 +43,6 @@ if (announcementsData.length === 0) {
 
 export async function GET() {
   try {
-    // Reload from file in case it was somehow updated by another instance (highly unlikely on Vercel)
-    // More importantly, ensures that if the file system *is* writable and persistent (local dev), we get latest.
-    // On Vercel, this will likely just re-read the initial (empty or non-existent) file.
-    // announcementsData = loadAnnouncementsFromFile(); // Re-evaluate if this re-read is beneficial or harmful on Vercel
     return NextResponse.json([...announcementsData]);
   } catch (error) {
     console.error("[API/Announcements] Error fetching announcements (GET):", error);
@@ -74,7 +69,7 @@ export async function POST(request: NextRequest) {
     };
 
     announcementsData.unshift(newAnnouncement); // Update in-memory array
-    saveAnnouncementsToFile(announcementsData); // Attempt to save to file (will likely not persist on Vercel)
+    // saveAnnouncementsToFile(announcementsData); // REMOVED: Not Vercel compatible for persistence
     
     announcementEmitter.emit('update', [...announcementsData]);
 
@@ -104,7 +99,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
 
-    saveAnnouncementsToFile(announcementsData); // Attempt to save to file (will likely not persist on Vercel)
+    // saveAnnouncementsToFile(announcementsData); // REMOVED: Not Vercel compatible for persistence
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });

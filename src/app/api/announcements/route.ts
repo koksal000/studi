@@ -2,86 +2,101 @@
 // src/app/api/announcements/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import type { Announcement, NewAnnouncementPayload } from '@/hooks/use-announcements';
+import type { Announcement } from '@/hooks/use-announcements';
 import announcementEmitter from '@/lib/announcement-emitter';
-// fs and path are no longer needed for persistence here
-// import fs from 'fs';
-// import path from 'path';
+import fs from 'fs';
+import path from 'path';
 
-// const dataPath = process.env.DATA_PATH || process.cwd();
-// const ANNOUNCEMENTS_FILE_PATH = path.join(dataPath, '_announcements.json');
+const dataDir = process.env.DATA_PATH || process.cwd();
+const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
+const MAX_ANNOUNCEMENT_BASE64_SIZE_API = Math.floor(5 * 1024 * 1024 * 1.37); // Approx 7MB for base64 from 5MB raw
 
-// Data will be in-memory for each serverless function instance
 let announcementsData: Announcement[] = [];
 let initialized = false;
 
-// Function to load initial data (e.g., from a seed file if it exists, one time per module instance)
-// This is more relevant if you have a seed _announcements.json you want to load on cold starts
-// For now, it will just ensure the array is initialized.
-const loadInitialAnnouncements = () => {
-  if (initialized) return;
-  // console.log("[API/Announcements] Initializing in-memory announcements array.");
-  // Example: try to read from a seed file if it exists in the project structure (read-only)
-  // This part would require fs and path if you want to read a seed file.
-  // For simplicity now, we'll start with an empty array.
-  // If you have _announcements.json in your repo and want to seed, you'd re-add fs/path here.
-  /*
+const loadAnnouncementsFromFile = () => {
   try {
-    const seedFilePath = path.join(process.cwd(), '_announcements.json'); // Adjust path if needed
-    if (fs.existsSync(seedFilePath)) {
-      const fileData = fs.readFileSync(seedFilePath, 'utf-8');
+    if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
+      const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
       const parsedData = JSON.parse(fileData) as Announcement[];
+      // Ensure data is sorted by date descending when loaded
       announcementsData = parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      console.log(`[API/Announcements] Successfully seeded ${announcementsData.length} announcements.`);
+      console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements from ${ANNOUNCEMENTS_FILE_PATH}`);
     } else {
-      console.log(`[API/Announcements] Seed file _announcements.json not found. Starting with empty array.`);
+      console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Starting with empty array.`);
+      announcementsData = [];
     }
   } catch (error) {
-    console.error("[API/Announcements] Error reading seed announcements file:", error);
+    console.error("[API/Announcements] Error loading announcements from file:", error);
+    announcementsData = []; // Fallback to empty array on error
   }
-  */
-  initialized = true;
 };
 
-loadInitialAnnouncements(); // Initialize when module loads
+const saveAnnouncementsToFile = () => {
+  // This function is disabled for "Git as DB" model to prevent runtime writes.
+  // For Render.com with persistent disk, ensure DATA_PATH is set and uncomment the fs.writeFileSync line.
+  if (process.env.NODE_ENV === 'production' && !process.env.DATA_PATH) {
+    console.warn("[API/Announcements] File saving is disabled in production without DATA_PATH (Git as DB model). Commit changes to Git for persistence.");
+    return;
+  }
+   try {
+    const dir = path.dirname(ANNOUNCEMENTS_FILE_PATH);
+    if (!fs.existsSync(dir)){
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    // Ensure data is sorted before saving
+    const sortedData = [...announcementsData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    // console.log(`[API/Announcements] Announcement data would be saved to ${ANNOUNCEMENTS_FILE_PATH} (currently disabled for Git as DB).`);
+  } catch (error) {
+    console.error("[API/Announcements] Error saving announcements to file:", error);
+  }
+};
+
+if (!initialized) {
+  loadAnnouncementsFromFile();
+  initialized = true;
+}
 
 export async function GET() {
-  try {
-    return NextResponse.json([...announcementsData]);
-  } catch (error) {
-    console.error("[API/Announcements] Error fetching announcements (GET):", error);
-    return NextResponse.json({ message: "Internal server error while fetching announcements." }, { status: 500 });
-  }
+  // loadAnnouncementsFromFile(); // Data is loaded once on module init
+  return NextResponse.json([...announcementsData]);
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Client now sends the full Announcement object including id, date, author
     const newAnnouncement: Announcement = await request.json();
 
-    if (!newAnnouncement.id || !newAnnouncement.title || !newAnnouncement.content || !newAnnouncement.author || !newAnnouncement.date) {
+    if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
       return NextResponse.json({ message: 'Invalid announcement payload. Missing required fields.' }, { status: 400 });
     }
 
-    // Add to in-memory store for this instance
-    // Check if announcement with same ID already exists to prevent duplicates from SSE echo
-    if (!announcementsData.some(ann => ann.id === newAnnouncement.id)) {
-        announcementsData.unshift(newAnnouncement);
-        announcementsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    } else {
-        // If it exists, maybe update it? For now, we assume IDs are unique and new if not present.
-        // Or simply ignore if it's an echo.
+    if (newAnnouncement.media && (newAnnouncement.media.startsWith("data:image/") || newAnnouncement.media.startsWith("data:video/")) && newAnnouncement.media.length > MAX_ANNOUNCEMENT_BASE64_SIZE_API) {
+        return NextResponse.json({ message: `Medya içeriği çok büyük. Maksimum boyut yaklaşık ${Math.round(MAX_ANNOUNCEMENT_BASE64_SIZE_API / (1024*1024*1.37))}MB olmalıdır.` }, { status: 413 });
     }
     
-    // Emit update for SSE
+    // Check if announcement with same ID already exists to prevent duplicates if client retries
+    const existingIndex = announcementsData.findIndex(ann => ann.id === newAnnouncement.id);
+    if (existingIndex !== -1) {
+        announcementsData[existingIndex] = newAnnouncement; // Update if exists (e.g., from a retry)
+    } else {
+        announcementsData.unshift(newAnnouncement); // Add to the beginning
+    }
+    
+    // Sort data by date descending
+    announcementsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    saveAnnouncementsToFile(); 
     announcementEmitter.emit('update', [...announcementsData]);
-    // console.log("[API/Announcements] New announcement processed for SSE broadcast.");
-
     return NextResponse.json(newAnnouncement, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.type === 'entity.too.large') { // Next.js body parser limit
+        console.error("[API/Announcements] POST Error: Payload too large.");
+        return NextResponse.json({ message: `Duyuru verisi çok büyük. Sunucu limiti aşıldı.` }, { status: 413 });
+    }
     console.error("[API/Announcements] Error creating announcement (POST):", error);
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ message: "Invalid JSON payload." }, { status: 400 });
+    if (error instanceof SyntaxError) { // Error parsing JSON
+      return NextResponse.json({ message: "Invalid JSON payload. Medya verisi doğru formatta olmayabilir veya çok büyük olabilir." }, { status: 400 });
     }
     return NextResponse.json({ message: "Internal server error while creating announcement." }, { status: 500 });
   }
@@ -99,19 +114,19 @@ export async function DELETE(request: NextRequest) {
     const initialLength = announcementsData.length;
     announcementsData = announcementsData.filter(ann => ann.id !== id);
 
-    if (announcementsData.length === initialLength) {
-      // This means the announcement wasn't in this instance's memory.
-      // It might have been deleted by another instance or never existed here.
-      // Still, we should emit an update so clients can sync.
+    if (announcementsData.length < initialLength) {
+      saveAnnouncementsToFile();
+      announcementEmitter.emit('update', [...announcementsData]);
+      return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });
+    } else {
+      // Annoncement not found, but still emit update to ensure client consistency if it was a ghost delete
+      announcementEmitter.emit('update', [...announcementsData]);
+      return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
-    
-    // Emit update for SSE
-    announcementEmitter.emit('update', [...announcementsData]);
-    // console.log(`[API/Announcements] Announcement with ID ${id} processed for deletion for SSE broadcast.`);
-
-    return NextResponse.json({ message: 'Announcement deletion processed' }, { status: 200 });
   } catch (error) {
     console.error("[API/Announcements] Error deleting announcement (DELETE):", error);
     return NextResponse.json({ message: "Internal server error while deleting announcement." }, { status: 500 });
   }
 }
+
+    

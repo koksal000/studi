@@ -26,13 +26,16 @@ interface AddAnnouncementDialogProps {
 
 type MediaType = 'image' | 'video' | 'url' | null;
 
+const MAX_ANNOUNCEMENT_RAW_FILE_SIZE = 5 * 1024 * 1024; // 5MB for announcements
+const MAX_ANNOUNCEMENT_DATA_URI_LENGTH = Math.floor(MAX_ANNOUNCEMENT_RAW_FILE_SIZE * 1.37); // Approx 37% overhead for base64
+
 export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementDialogProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [media, setMedia] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<string | null>(null); 
-  const [selectedMediaType, setSelectedMediaType] = useState<MediaType>(null);
-  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaDataUri, setMediaDataUri] = useState<string | null>(null); // Stores base64 data
+  const [mediaFileType, setMediaFileType] = useState<string | null>(null); // Stores MIME type
+  const [selectedLocalMediaType, setSelectedLocalMediaType] = useState<MediaType>(null); // For UI selection: 'image', 'video', 'url'
+  const [mediaUrlInput, setMediaUrlInput] = useState(''); // For URL input
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { addAnnouncement } = useAnnouncements();
@@ -41,26 +44,67 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Reset form when dialog closes or opens
     if (isOpen) {
       setTitle('');
       setContent('');
-      setMedia(null);
-      setMediaType(null);
-      setSelectedMediaType(null);
-      setMediaUrl('');
+      setMediaDataUri(null);
+      setMediaFileType(null);
+      setSelectedLocalMediaType(null);
+      setMediaUrlInput('');
       setIsProcessing(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // Reset file input
+      }
     }
   }, [isOpen]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > MAX_ANNOUNCEMENT_RAW_FILE_SIZE) {
+        toast({
+          title: "Dosya Boyutu Çok Büyük",
+          description: `Lütfen ${MAX_ANNOUNCEMENT_RAW_FILE_SIZE / (1024 * 1024)}MB'den küçük bir dosya seçin.`,
+          variant: "destructive",
+          duration: 7000,
+        });
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setMediaDataUri(null);
+        setMediaFileType(null);
+        return;
+      }
+
       setIsProcessing(true);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setMedia(reader.result as string);
-        setMediaType(file.type);
+        const result = reader.result as string;
+        if (!result || typeof result !== 'string' || !(result.startsWith('data:image/') || result.startsWith('data:video/'))) {
+            toast({
+                title: "Geçersiz Dosya Verisi",
+                description: "Dosya okunamadı veya format desteklenmiyor.",
+                variant: "destructive"
+            });
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            setMediaDataUri(null);
+            setMediaFileType(null);
+            setIsProcessing(false);
+            return;
+        }
+        if (result.length > MAX_ANNOUNCEMENT_DATA_URI_LENGTH) {
+          toast({
+            title: "Medya Verisi Çok Büyük",
+            description: `İşlenmiş medya verisi çok büyük. Lütfen daha küçük boyutlu bir dosya seçin (Max ~${Math.round(MAX_ANNOUNCEMENT_RAW_FILE_SIZE / (1024*1024))}MB).`,
+            variant: "destructive",
+            duration: 8000,
+          });
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          setMediaDataUri(null);
+          setMediaFileType(null);
+          setIsProcessing(false);
+          return;
+        }
+        setMediaDataUri(result);
+        setMediaFileType(file.type);
         setIsProcessing(false);
       };
       reader.onerror = () => {
@@ -69,6 +113,9 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
           description: 'Dosya okunurken bir hata oluştu.',
           variant: 'destructive',
         });
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setMediaDataUri(null);
+        setMediaFileType(null);
         setIsProcessing(false);
       }
       reader.readAsDataURL(file);
@@ -76,53 +123,80 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
   };
 
   const handleAddMediaUrl = () => {
-    if (mediaUrl.trim()) {
-      setMedia(mediaUrl.trim());
-      // Basic check for image/video URL to set a generic type
-      if (/\.(jpeg|jpg|gif|png)$/i.test(mediaUrl)) {
-        setMediaType('url'); // Could be 'image/url' if more specific type is needed
-      } else if (/\.(mp4|webm|ogg)$/i.test(mediaUrl)) {
-        setMediaType('url'); // Could be 'video/url'
-      } else {
-        setMediaType('url'); // Generic URL type
+    if (mediaUrlInput.trim()) {
+      // Basic URL validation (can be improved)
+      try {
+        new URL(mediaUrlInput.trim());
+      } catch (_) {
+        toast({ title: "Geçersiz URL", description: "Lütfen geçerli bir URL girin.", variant: "destructive" });
+        return;
       }
-      setMediaUrl(''); // Clear input after adding
+      setMediaDataUri(mediaUrlInput.trim());
+      // Determine media type from URL for better handling in AnnouncementCard
+      if (/\.(jpeg|jpg|gif|png)(\?|$)/i.test(mediaUrlInput)) {
+        setMediaFileType('image/url'); 
+      } else if (/\.(mp4|webm|ogg)(\?|$)/i.test(mediaUrlInput) || /youtu\.?be/i.test(mediaUrlInput)) { // Added YouTube check
+        setMediaFileType('video/url');
+      } else {
+        setMediaFileType('url'); // Generic URL type
+      }
+      // Do not clear mediaUrlInput here, let it persist if user wants to edit
     }
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!user) {
-      toast({
-        title: 'Hata',
-        description: 'Duyuru eklemek için giriş yapmalısınız.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Hata', description: 'Duyuru eklemek için giriş yapmalısınız.', variant: 'destructive' });
       return;
     }
     if (!title.trim() || !content.trim()) {
-      toast({
-        title: 'Eksik Bilgi',
-        description: 'Lütfen başlık ve içerik alanlarını doldurun.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Eksik Bilgi', description: 'Lütfen başlık ve içerik alanlarını doldurun.', variant: 'destructive' });
       return;
     }
 
+    let finalMedia: string | null = null;
+    let finalMediaType: string | null = null;
+
+    if (selectedLocalMediaType === 'url' && mediaUrlInput.trim()) {
+        try {
+            new URL(mediaUrlInput.trim()); // Validate URL
+            finalMedia = mediaUrlInput.trim();
+            if (/\.(jpeg|jpg|gif|png)(\?|$)/i.test(finalMedia)) finalMediaType = 'image/url';
+            else if (/\.(mp4|webm|ogg)(\?|$)/i.test(finalMedia) || /youtu\.?be/i.test(finalMedia)) finalMediaType = 'video/url';
+            else finalMediaType = 'url';
+        } catch (_) {
+            toast({ title: "Geçersiz Medya URL'si", description: "Lütfen URL alanına geçerli bir resim veya video bağlantısı girin.", variant: "destructive" });
+            return;
+        }
+    } else if ((selectedLocalMediaType === 'image' || selectedLocalMediaType === 'video') && mediaDataUri && mediaFileType) {
+        if (!(mediaDataUri.startsWith('data:image/') || mediaDataUri.startsWith('data:video/'))) {
+            toast({ title: "Geçersiz Yüklenmiş Medya", description: "Yüklenen dosya verisi hatalı görünüyor. Lütfen dosyayı tekrar seçin.", variant: "destructive" });
+            return;
+        }
+        finalMedia = mediaDataUri;
+        finalMediaType = mediaFileType;
+    }
+
+
     setIsProcessing(true);
     try {
-      addAnnouncement({ title, content, media, mediaType });
+      await addAnnouncement({ title, content, media: finalMedia, mediaType: finalMediaType });
       toast({
         title: 'Duyuru Eklendi',
         description: `"${title}" başlıklı duyurunuz başarıyla eklendi.`,
       });
-      onOpenChange(false); // Close dialog on success
-    } catch (error) {
-      toast({
-        title: 'Duyuru Eklenemedi',
-        description: 'Duyuru eklenirken bir sorun oluştu.',
-        variant: 'destructive',
-      });
+      onOpenChange(false); 
+    } catch (error: any) {
+      // Errors (like quota exceeded, API failure) are now primarily handled within useAnnouncements
+      // and will show their own toasts. Only show a generic one if it's an unexpected error here.
+      if (!error.message?.includes("localStorage") && !error.message?.includes("sunucu")) {
+        toast({
+          title: 'Duyuru Eklenemedi',
+          description: error.message || 'Duyuru eklenirken beklenmedik bir sorun oluştu.',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -131,6 +205,18 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
+
+  const handleMediaTypeSelect = (value: string) => {
+    setSelectedLocalMediaType(value as MediaType);
+    // Reset previous media if type changes
+    setMediaDataUri(null);
+    setMediaFileType(null);
+    setMediaUrlInput(''); 
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -170,33 +256,33 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="mediaType" className="text-right">
+            <Label htmlFor="mediaTypeSelect" className="text-right">
               Medya Türü
             </Label>
             <Select 
-              value={selectedMediaType || ""}
-              onValueChange={(value) => setSelectedMediaType(value as MediaType)}
+              value={selectedLocalMediaType || ""}
+              onValueChange={handleMediaTypeSelect}
               disabled={isProcessing}
             >
-              <SelectTrigger className="col-span-3">
+              <SelectTrigger className="col-span-3" id="mediaTypeSelect">
                 <SelectValue placeholder="Medya türü seçin (isteğe bağlı)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="image">Resim Yükle</SelectItem>
                 <SelectItem value="video">Video Yükle</SelectItem>
-                <SelectItem value="url">URL Ekle (Resim/Video)</SelectItem>
+                <SelectItem value="url">URL Ekle (Resim/Video/YouTube)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {selectedMediaType === 'image' && (
+          {selectedLocalMediaType === 'image' && (
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="imageFile" className="text-right">
                 Resim
               </Label>
               <div className="col-span-3">
                 <Button type="button" variant="outline" onClick={triggerFileInput} disabled={isProcessing}>
-                  <ImagePlus className="mr-2 h-4 w-4" /> Resim Seç
+                  <ImagePlus className="mr-2 h-4 w-4" /> Resim Seç (Max ~5MB)
                 </Button>
                 <input 
                   type="file" 
@@ -206,19 +292,19 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
                   className="hidden"
                   ref={fileInputRef}
                 />
-                {media && mediaType?.startsWith('image/') && <p className="text-xs mt-1 text-muted-foreground">Resim seçildi.</p>}
+                {mediaDataUri && mediaFileType?.startsWith('image/') && <p className="text-xs mt-1 text-muted-foreground">Resim seçildi.</p>}
               </div>
             </div>
           )}
 
-          {selectedMediaType === 'video' && (
+          {selectedLocalMediaType === 'video' && (
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="videoFile" className="text-right">
                 Video
               </Label>
                <div className="col-span-3">
                 <Button type="button" variant="outline" onClick={triggerFileInput} disabled={isProcessing}>
-                  <Video className="mr-2 h-4 w-4" /> Video Seç
+                  <Video className="mr-2 h-4 w-4" /> Video Seç (Max ~5MB)
                 </Button>
                  <input 
                   type="file" 
@@ -228,46 +314,64 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
                   className="hidden"
                   ref={fileInputRef}
                 />
-                {media && mediaType?.startsWith('video/') && <p className="text-xs mt-1 text-muted-foreground">Video seçildi.</p>}
+                {mediaDataUri && mediaFileType?.startsWith('video/') && <p className="text-xs mt-1 text-muted-foreground">Video seçildi.</p>}
               </div>
             </div>
           )}
           
-          {selectedMediaType === 'url' && (
+          {selectedLocalMediaType === 'url' && (
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="mediaUrl" className="text-right">
+              <Label htmlFor="mediaUrlInput" className="text-right">
                 Medya URL
               </Label>
-              <div className="col-span-3 flex gap-2">
+              <div className="col-span-3">
                 <Input
-                  id="mediaUrl"
+                  id="mediaUrlInput"
                   type="url"
-                  value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  placeholder="https://example.com/image.png"
+                  value={mediaUrlInput}
+                  onChange={(e) => {
+                    setMediaUrlInput(e.target.value);
+                    // Automatically update media and mediaType when URL input changes if it's a URL type
+                    if (e.target.value.trim()) {
+                        try {
+                            new URL(e.target.value.trim()); // Validate on change
+                            setMediaDataUri(e.target.value.trim());
+                            if (/\.(jpeg|jpg|gif|png)(\?|$)/i.test(e.target.value)) setMediaFileType('image/url');
+                            else if (/\.(mp4|webm|ogg)(\?|$)/i.test(e.target.value) || /youtu\.?be/i.test(e.target.value)) setMediaFileType('video/url');
+                            else setMediaFileType('url');
+                        } catch (_) {
+                            // Invalid URL, clear media data if previously set from URL
+                            setMediaDataUri(null);
+                            setMediaFileType(null);
+                        }
+                    } else {
+                        setMediaDataUri(null);
+                        setMediaFileType(null);
+                    }
+                  }}
+                  placeholder="https://example.com/image.png veya YouTube linki"
                   className="flex-grow"
                   disabled={isProcessing}
                 />
-                <Button type="button" onClick={handleAddMediaUrl} variant="outline" disabled={isProcessing || !mediaUrl.trim()}>
-                  <Link2 className="mr-2 h-4 w-4" /> Ekle
-                </Button>
               </div>
-               {media && mediaType === 'url' && <p className="col-start-2 col-span-3 text-xs mt-1 text-muted-foreground">URL eklendi: {media}</p>}
             </div>
           )}
 
 
-          {isProcessing && media && (mediaType?.startsWith('image/') || mediaType?.startsWith('video/')) && (
-            <div className="col-span-4 flex justify-center items-center py-2">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              <p className="text-sm text-muted-foreground">Medya işleniyor...</p>
+          {isProcessing && (selectedLocalMediaType === 'image' || selectedLocalMediaType === 'video') && (
+            <div className="col-start-2 col-span-3 flex items-center py-1">
+              <Loader2 className="h-4 w-4 animate-spin mr-2 text-primary" />
+              <p className="text-xs text-muted-foreground">Medya işleniyor...</p>
             </div>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isProcessing}>
               İptal
             </Button>
-            <Button type="submit" disabled={isProcessing || (!title.trim() || !content.trim())}>
+            <Button 
+              type="submit" 
+              disabled={isProcessing || !title.trim() || !content.trim() || (selectedLocalMediaType === 'url' && !mediaUrlInput.trim() && mediaDataUri === null) || ((selectedLocalMediaType === 'image' || selectedLocalMediaType === 'video') && !mediaDataUri)}
+            >
               {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Yayınla
             </Button>
@@ -277,5 +381,6 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
     </Dialog>
   );
 }
+    
 
     

@@ -62,10 +62,10 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement }:
         // If it's a generic URL that's not an image or video, display a link
         return (
             <div className="my-4 p-3 bg-muted rounded-md">
-                <a 
-                    href={announcement.media} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
+                <a
+                    href={announcement.media}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="text-primary hover:underline flex items-center"
                 >
                     <Link2 className="h-4 w-4 mr-2"/>
@@ -83,10 +83,12 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement }:
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0">
         <DialogHeader className="p-4 sm:p-6 pb-3 border-b flex-shrink-0">
           <DialogTitle className="text-xl sm:text-2xl">{announcement.title}</DialogTitle>
-          <DialogDescription className="text-xs pt-1">
-            <div className="flex flex-wrap gap-x-3 gap-y-1 items-center mt-1 text-muted-foreground">
-                <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
-                <span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>
+          <DialogDescription asChild className="text-xs pt-1">
+            <div className="text-muted-foreground"> {/* Wrapper div */}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 items-center mt-1">
+                  <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
+                  <span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>
+              </div>
             </div>
           </DialogDescription>
         </DialogHeader>

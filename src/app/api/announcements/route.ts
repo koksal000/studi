@@ -27,20 +27,19 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
   }
 };
 
-// Function to save announcements to file
-const saveAnnouncementsToFile = (data: Announcement[]) => {
-  try {
-    // Ensure the directory exists
-    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-      fs.mkdirSync(dataPath, { recursive: true });
-    }
-    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log("[API/Announcements] Announcements saved to file:", ANNOUNCEMENTS_FILE_PATH);
-  } catch (error) {
-    console.error("[API/Announcements] Error writing announcements file:", error);
-  }
-};
+// Function to save announcements to file - Removed for GitHub as source of truth
+// const saveAnnouncementsToFile = (data: Announcement[]) => {
+//   try {
+//     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+//       fs.mkdirSync(dataPath, { recursive: true });
+//     }
+//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+//     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
+//     console.log("[API/Announcements] Announcements saved to file:", ANNOUNCEMENTS_FILE_PATH);
+//   } catch (error) {
+//     console.error("[API/Announcements] Error writing announcements file:", error);
+//   }
+// };
 
 let announcementsData: Announcement[] = loadAnnouncementsFromFile();
 if (announcementsData.length === 0) {
@@ -50,6 +49,7 @@ if (announcementsData.length === 0) {
 export async function GET() {
   try {
     // Ensure data is loaded if it was empty initially and file might have been created by another instance
+    // This might be less relevant if we rely on startup load only
     if (announcementsData.length === 0 && fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
         announcementsData = loadAnnouncementsFromFile();
     }
@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
       author: body.author,
     };
 
-    announcementsData.unshift(newAnnouncement);
-    saveAnnouncementsToFile(announcementsData);
+    announcementsData.unshift(newAnnouncement); // Add to in-memory array
+    // saveAnnouncementsToFile(announcementsData); // DO NOT SAVE TO FILE if GitHub is source of truth for deployments
     
     announcementEmitter.emit('update', [...announcementsData]);
 
@@ -103,13 +103,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     const initialLength = announcementsData.length;
-    announcementsData = announcementsData.filter(ann => ann.id !== id);
+    announcementsData = announcementsData.filter(ann => ann.id !== id); // Remove from in-memory array
 
     if (announcementsData.length === initialLength) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
 
-    saveAnnouncementsToFile(announcementsData);
+    // saveAnnouncementsToFile(announcementsData); // DO NOT SAVE TO FILE if GitHub is source of truth for deployments
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });

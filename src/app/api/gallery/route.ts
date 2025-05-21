@@ -36,27 +36,25 @@ const loadGalleryFromFile = (): GalleryImage[] => {
   }
 };
 
-// Function to save gallery to file
-const saveGalleryToFile = (data: GalleryImage[]) => {
-  try {
-    // Ensure the directory exists
-    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-      fs.mkdirSync(dataPath, { recursive: true });
-    }
-    fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
-    console.log("[API/Gallery] Gallery images saved to file:", GALLERY_FILE_PATH);
-  } catch (error) {
-    console.error("[API/Gallery] Error writing gallery file:", error);
-  }
-};
+// Function to save gallery to file - Removed for GitHub as source of truth
+// const saveGalleryToFile = (data: GalleryImage[]) => {
+//   try {
+//     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+//       fs.mkdirSync(dataPath, { recursive: true });
+//     }
+//     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
+//     console.log("[API/Gallery] Gallery images saved to file:", GALLERY_FILE_PATH);
+//   } catch (error) {
+//     console.error("[API/Gallery] Error writing gallery file:", error);
+//   }
+// };
 
 let galleryImagesData: GalleryImage[] = loadGalleryFromFile();
 
 if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0) {
-  if (!fs.existsSync(GALLERY_FILE_PATH)) {
-      console.log("[API/Gallery] Initializing gallery with seed data and saving to file for the first time.");
-      saveGalleryToFile(galleryImagesData); 
-  }
+  // If relying on GitHub, no need to save seed data back to a file on server start.
+  // The seed data is the primary source if _gallery.json isn't in the repo.
+  console.log("[API/Gallery] Initialized gallery with seed data as _gallery.json was not found or empty.");
 } else if (galleryImagesData.length === 0) {
   console.log("[API/Gallery] Initialized with an empty gallery list (no file and no seed data).")
 }
@@ -64,6 +62,8 @@ if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length >
 
 export async function GET() {
   try {
+    // If data is empty and file exists (e.g., in local dev if not committed), load it.
+    // In a deployment scenario where file comes from repo, this might be redundant if loadAnnouncementsFromFile runs at startup.
     if (galleryImagesData.length === 0 && fs.existsSync(GALLERY_FILE_PATH)) {
         galleryImagesData = loadGalleryFromFile();
     }
@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
       hint: hint || 'uploaded image',
     };
 
-    galleryImagesData.unshift(newImage); 
-    saveGalleryToFile(galleryImagesData);
+    galleryImagesData.unshift(newImage); // Add to in-memory array
+    // saveGalleryToFile(galleryImagesData); // DO NOT SAVE TO FILE if GitHub is source of truth
     
     galleryEmitter.emit('update', [...galleryImagesData]);
 
@@ -129,13 +129,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     const initialLength = galleryImagesData.length;
-    galleryImagesData = galleryImagesData.filter(img => img.id !== id);
+    galleryImagesData = galleryImagesData.filter(img => img.id !== id); // Remove from in-memory array
 
     if (galleryImagesData.length === initialLength) {
       return NextResponse.json({ message: 'Image not found' }, { status: 404 });
     }
 
-    saveGalleryToFile(galleryImagesData);
+    // saveGalleryToFile(galleryImagesData); // DO NOT SAVE TO FILE if GitHub is source of truth
     galleryEmitter.emit('update', [...galleryImagesData]);
 
     return NextResponse.json({ message: 'Image deleted successfully' }, { status: 200 });

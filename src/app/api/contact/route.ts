@@ -34,20 +34,19 @@ const loadMessagesFromFile = (): ContactMessage[] => {
   }
 };
 
-// Function to save messages to file
-const saveMessagesToFile = (data: ContactMessage[]) => {
-  try {
-    // Ensure the directory exists
-    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-      fs.mkdirSync(dataPath, { recursive: true });
-    }
-    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log("[API/Contact] Contact messages saved to file:", MESSAGES_FILE_PATH);
-  } catch (error) {
-    console.error("[API/Contact] Error writing contact messages file:", error);
-  }
-};
+// Function to save messages to file - Removed for GitHub as source of truth
+// const saveMessagesToFile = (data: ContactMessage[]) => {
+//   try {
+//     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+//       fs.mkdirSync(dataPath, { recursive: true });
+//     }
+//     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+//     fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
+//     console.log("[API/Contact] Contact messages saved to file:", MESSAGES_FILE_PATH);
+//   } catch (error) {
+//     console.error("[API/Contact] Error writing contact messages file:", error);
+//   }
+// };
 
 let contactMessagesData: ContactMessage[] = loadMessagesFromFile();
 if (contactMessagesData.length === 0) {
@@ -84,8 +83,8 @@ export async function POST(request: NextRequest) {
       date: new Date().toISOString(),
     };
 
-    contactMessagesData.unshift(newMessage); 
-    saveMessagesToFile(contactMessagesData);
+    contactMessagesData.unshift(newMessage); // Add to in-memory array
+    // saveMessagesToFile(contactMessagesData); // DO NOT SAVE TO FILE if GitHub is source of truth
     
     contactEmitter.emit('update', [...contactMessagesData]);
 

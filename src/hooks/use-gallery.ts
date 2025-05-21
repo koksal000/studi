@@ -1,14 +1,13 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useUser } from '@/contexts/user-context'; // For potential auth checks if needed later
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useUser } from '@/contexts/user-context'; 
 import { useToast } from '@/hooks/use-toast';
 
-// Match the interface in src/app/api/gallery/route.ts
 export interface GalleryImage {
   id: string;
-  src: string; // data URI for uploaded, URL for seeded
+  src: string; 
   alt: string;
   caption: string;
   hint: string;
@@ -24,43 +23,49 @@ export function useGallery() {
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useUser();
   const { toast } = useToast();
+  const eventSourceRef = useRef<EventSource | null>(null);
 
-  useEffect(() => {
-    const fetchInitialGallery = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch('/api/gallery');
-        if (!response.ok) {
-          throw new Error('Failed to fetch gallery images');
-        }
-        const data: GalleryImage[] = await response.json();
-        setGalleryImages(data);
-        localStorage.setItem(GALLERY_KEY, JSON.stringify(data));
-      } catch (error) {
-        console.error("Failed to fetch initial gallery images:", error);
-        toast({
-          title: "Galeri Yüklenemedi",
-          description: "Sunucudan galeri resimleri alınırken bir sorun oluştu.",
-          variant: "destructive"
-        });
-        const storedGallery = localStorage.getItem(GALLERY_KEY);
-        if (storedGallery) {
-          try {
-            setGalleryImages(JSON.parse(storedGallery));
-          } catch (e) { console.error("Failed to parse gallery from localStorage", e); }
-        }
-      } finally {
-        setIsLoading(false);
+  const fetchInitialGallery = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/gallery');
+      if (!response.ok) {
+        throw new Error('Failed to fetch gallery images');
       }
-    };
-
-    fetchInitialGallery();
+      const data: GalleryImage[] = await response.json();
+      setGalleryImages(data);
+      localStorage.setItem(GALLERY_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error("Failed to fetch initial gallery images:", error);
+      toast({
+        title: "Galeri Yüklenemedi",
+        description: "Sunucudan galeri resimleri alınırken bir sorun oluştu.",
+        variant: "destructive"
+      });
+      const storedGallery = localStorage.getItem(GALLERY_KEY);
+      if (storedGallery) {
+        try {
+          setGalleryImages(JSON.parse(storedGallery));
+        } catch (e) { console.error("Failed to parse gallery from localStorage", e); }
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }, [toast]);
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/gallery/stream');
+    fetchInitialGallery();
+  }, [fetchInitialGallery]);
 
-    eventSource.onmessage = (event) => {
+  useEffect(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const newEventSource = new EventSource('/api/gallery/stream');
+    eventSourceRef.current = newEventSource;
+
+    newEventSource.onmessage = (event) => {
       try {
         const updatedGallery: GalleryImage[] = JSON.parse(event.data);
         setGalleryImages(updatedGallery);
@@ -70,40 +75,37 @@ export function useGallery() {
       }
     };
 
-    eventSource.onerror = (errorEvent) => {
-      // Log more details from the error event
-      let eventDetails = {};
-      if (errorEvent) {
-        // Manually construct an object with relevant properties from the Event
-        eventDetails = {
-          type: (errorEvent as Event).type,
-          bubbles: (errorEvent as Event).bubbles,
-          cancelable: (errorEvent as Event).cancelable,
-          composed: (errorEvent as Event).composed,
-          // Add other properties if they exist and are useful, e.g., errorEvent.message (if it's an ErrorEvent)
-        };
-      }
+    newEventSource.onerror = (errorEvent: Event) => {
+      const target = errorEvent.target as EventSource;
+      const readyState = target?.readyState;
+      const eventType = errorEvent.type || 'unknown';
+      
       console.error(
-        'SSE connection error for gallery. EventSource readyState:', 
-        eventSource.readyState, 
-        'Event details:', 
-        JSON.stringify(eventDetails, null, 2),
-        'Raw event object:', errorEvent
+        `SSE connection error for gallery. EventSource readyState: ${readyState}, Event Type: ${eventType}, Event:`, errorEvent
       );
-      toast({
-        title: "Galeri Bağlantı Sorunu",
-        description: "Galeri güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.",
-        variant: "destructive"
-      });
-      // EventSource will automatically try to reconnect.
-      // You might want to close it explicitly under certain conditions:
-      // if (eventSource.readyState === EventSource.CLOSED) {
-      //   console.log("Gallery SSE connection was closed by the server or due to fatal error.");
-      // }
+      
+      if (readyState === EventSource.CLOSED) {
+        toast({
+          title: "Galeri Bağlantısı Sonlandı",
+          description: "Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.",
+          variant: "destructive"
+        });
+      } else if (readyState === EventSource.CONNECTING) {
+        // Connecting state, usually part of retry, so maybe no toast or a very subtle one
+      } else {
+        toast({
+          title: "Galeri Bağlantı Sorunu",
+          description: "Galeri güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.",
+          variant: "destructive"
+        });
+      }
     };
-
+    
     return () => {
-      eventSource.close();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, [toast]);
 

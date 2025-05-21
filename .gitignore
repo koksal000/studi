@@ -1,51 +1,42 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
+# dependencies
 /node_modules
 /.pnp
 .pnp.js
-.yarn/install-state.gz
 
-# Localhost
-.DS_Store
-*.pem
-*.local
-*.log
-.env
-.env*.local
-.env.development.local
-.env.test.local
-.env.production.local
+# testing
+/coverage
 
-# Next.js
+# next.js
 /.next/
 /out/
 
-# Production
+# production
 /build
 
-# Misc
-.eslintcache
-# Stylelint
-.stylelintcache
-# IDEs and tools
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# misc
+.DS_Store
+*.pem
 
-# Test results
-/coverage
-/reports
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Firebase
-firebase-debug.log
-*.firebase.*.log
+# local env files
+.env*.local
+.env
 
-# Private files - User data
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Generated data files (should be handled by persistent storage on hosting)
 _announcements.json
 _gallery.json
 _contact_messages.json

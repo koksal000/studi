@@ -3,8 +3,7 @@
 "use client";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription as CardDesc } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle as CardTitlePrimitive, CardDescription as CardDesc } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
 import { useContactMessages, type ContactMessage } from '@/hooks/use-contact-messages';
 import { Button } from '@/components/ui/button';
 import { Loader2, Mail, MessageSquare, User, CalendarDays, Inbox } from 'lucide-react';
@@ -35,8 +34,9 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
             İletişim formu üzerinden gönderilen tüm mesajlar.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="flex-grow min-h-0"> {/* ScrollArea grows and allows its content to scroll */}
-          <div className="p-4 sm:p-6 space-y-4"> {/* Padding applied to the content inside ScrollArea */}
+        
+        <div className="flex-grow min-h-0 overflow-y-auto">
+          <div className="p-4 sm:p-6 space-y-4">
             {isLoading && (
               <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -54,7 +54,7 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
                 <Card key={msg.id} className="shadow-sm hover:shadow-md transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base sm:text-lg">{msg.subject}</CardTitle>
+                        <CardTitlePrimitive className="text-base sm:text-lg">{msg.subject}</CardTitlePrimitive>
                         <span className="text-xs font-normal text-muted-foreground flex items-center flex-shrink-0">
                             <CalendarDays className="mr-1 h-3.5 w-3.5" />
                             {formatMessageDate(msg.date)}
@@ -72,8 +72,9 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
               ))
             )}
           </div>
-        </ScrollArea>
-        <div className="p-4 sm:p-6 border-t mt-auto flex-shrink-0"> {/* Footer section */}
+        </div>
+        
+        <div className="p-4 sm:p-6 border-t flex-shrink-0"> {/* Footer section, removed mt-auto as flex-grow handles space */}
           <DialogClose asChild>
             <Button type="button" variant="outline" className="w-full">Kapat</Button>
           </DialogClose>

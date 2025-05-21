@@ -4,14 +4,13 @@
 import React from 'react';
 import type { Announcement } from '@/hooks/use-announcements';
 import Link from 'next/link';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Newspaper } from 'lucide-react';
 
 interface AnnouncementPopoverContentProps {
   announcements: Announcement[];
-  onClose?: () => void; // Popover'ı kapatmak için isteğe bağlı fonksiyon
+  onClose?: () => void; 
 }
 
 export function AnnouncementPopoverContent({ announcements, onClose }: AnnouncementPopoverContentProps) {
@@ -26,10 +25,10 @@ export function AnnouncementPopoverContent({ announcements, onClose }: Announcem
   };
 
   return (
-    <div className="flex flex-col">
-      <ScrollArea className="max-h-[300px] w-[300px] sm:w-[350px]">
+    <div className="flex flex-col w-[300px] sm:w-[350px]">
+      <div className="overflow-y-auto max-h-[300px]">
         <div className="p-1">
-          {announcements.slice(0, 5).map((ann, index) => ( // En son 5 duyuruyu göster
+          {announcements.slice(0, 5).map((ann, index) => ( 
             <React.Fragment key={ann.id}>
               <Link href="/announcements" passHref legacyBehavior>
                 <a
@@ -47,9 +46,9 @@ export function AnnouncementPopoverContent({ announcements, onClose }: Announcem
             </React.Fragment>
           ))}
         </div>
-      </ScrollArea>
+      </div>
       {announcements.length > 0 && (
-         <div className="p-2 border-t flex-shrink-0"> {/* Ensure footer does not shrink */}
+         <div className="p-2 border-t flex-shrink-0">
             <Button variant="ghost" size="sm" className="w-full" asChild onClick={onClose}>
               <Link href="/announcements" className="flex items-center justify-center">
                 <Newspaper className="mr-2 h-4 w-4" /> Tüm Duyuruları Gör

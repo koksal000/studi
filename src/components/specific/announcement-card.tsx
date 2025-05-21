@@ -4,7 +4,7 @@
 import type { Announcement } from '@/hooks/use-announcements';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, UserCircle, CalendarDays, Image as ImageIcon, Video as VideoIcon } from 'lucide-react';
+import { Trash2, UserCircle, CalendarDays, Image as ImageIcon, Video as VideoIcon, Link2 } from 'lucide-react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -22,11 +22,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
 import { useState } from 'react';
+import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog'; // Yeni import
 
 interface AnnouncementCardProps {
   announcement: Announcement;
   isCompact?: boolean;
-  allowDelete?: boolean; // Yeni prop eklendi
+  allowDelete?: boolean;
 }
 
 export function AnnouncementCard({ announcement, isCompact = false, allowDelete = false }: AnnouncementCardProps) {
@@ -34,6 +35,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
   const { deleteAnnouncement: removeAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   const [isAdminPasswordDialogOpen, setIsAdminPasswordDialogOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false); // Modal state'i
 
   const canAttemptDelete = !!user;
 
@@ -55,11 +57,11 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     if (announcement.mediaType?.startsWith('image/')) {
       return (
         <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
-          <Image 
-            src={announcement.media} 
-            alt={announcement.title} 
+          <Image
+            src={announcement.media}
+            alt={announcement.title}
             layout="fill"
-            objectFit="contain" 
+            objectFit="contain"
             data-ai-hint="announcement image"
           />
         </div>
@@ -70,15 +72,15 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
         <video src={announcement.media} controls className="my-4 w-full rounded-md max-h-[400px]" />
       );
     }
-    if (announcement.mediaType === 'url') { 
+    if (announcement.mediaType === 'url') {
         if (/\.(jpeg|jpg|gif|png)$/i.test(announcement.media)) {
              return (
                 <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
-                  <Image 
-                    src={announcement.media} 
-                    alt={announcement.title} 
+                  <Image
+                    src={announcement.media}
+                    alt={announcement.title}
                     layout="fill"
-                    objectFit="contain" 
+                    objectFit="contain"
                     data-ai-hint="announcement image"
                    />
                 </div>
@@ -89,26 +91,38 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     }
     return null;
   };
-  
-  const contentToShow = isCompact 
+
+  const contentToShow = isCompact
     ? (announcement.content.length > 150 ? announcement.content.substring(0, 147) + "..." : announcement.content)
     : announcement.content;
 
 
   return (
     <>
-      <Card className="shadow-md hover:shadow-lg transition-shadow duration-300">
+      <Card
+        className={`shadow-md hover:shadow-lg transition-shadow duration-300 ${isCompact ? 'cursor-pointer' : ''}`}
+        onClick={isCompact ? () => setIsDetailModalOpen(true) : undefined}
+      >
         <CardHeader>
           <CardTitle className={isCompact ? "text-xl" : "text-2xl"}>{announcement.title}</CardTitle>
           <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center mt-1">
             <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
             <span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>
-            {announcement.media && (
+            {isCompact && announcement.media && (
               <span className="flex items-center">
-                {announcement.mediaType?.startsWith('image/') || (announcement.mediaType === 'url' && /\.(jpeg|jpg|gif|png)$/i.test(announcement.media)) ? <ImageIcon className="h-3.5 w-3.5 mr-1" /> : <VideoIcon className="h-3.5 w-3.5 mr-1" />}
-                Medya İçerir
+                {announcement.mediaType?.startsWith('image/') || (announcement.mediaType === 'url' && /\.(jpeg|jpg|gif|png)$/i.test(announcement.media))
+                  ? <><ImageIcon className="h-3.5 w-3.5 mr-1 text-primary" /> Resim</>
+                  : announcement.mediaType?.startsWith('video/') || (announcement.mediaType === 'url' && /\.(mp4|webm|ogg)$/i.test(announcement.media))
+                  ? <><VideoIcon className="h-3.5 w-3.5 mr-1 text-primary" /> Video</>
+                  : <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya</>
+                }
               </span>
             )}
+             {!isCompact && announcement.media && !announcement.mediaType?.startsWith('image/') && !announcement.mediaType?.startsWith('video/') && (
+                <span className="flex items-center">
+                    <Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya Bağlantısı
+                </span>
+             )}
           </div>
         </CardHeader>
         <CardContent>
@@ -118,7 +132,6 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
           </p>
         </CardContent>
         <CardFooter className="flex justify-end items-center">
-          {/* Silme butonu için allowDelete prop'u kontrolü eklendi */}
           {canAttemptDelete && !isCompact && allowDelete && (
              <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -135,7 +148,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>İptal</AlertDialogCancel>
-                  <AlertDialogAction 
+                  <AlertDialogAction
                     onClick={() => setIsAdminPasswordDialogOpen(true)}
                     className="bg-destructive hover:bg-destructive/90"
                   >
@@ -156,6 +169,13 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
           setIsAdminPasswordDialogOpen(false);
         }}
       />
+      {isCompact && (
+        <AnnouncementDetailDialog
+            isOpen={isDetailModalOpen}
+            onOpenChange={setIsDetailModalOpen}
+            announcement={announcement}
+        />
+      )}
     </>
   );
 }

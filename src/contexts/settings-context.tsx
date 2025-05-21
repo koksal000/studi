@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { useToast } from '@/hooks/use-toast'; // useToast import edildi
+import { useToast } from '@/hooks/use-toast'; 
 
 interface SettingsContextType {
   notificationsEnabled: boolean;
@@ -20,18 +20,23 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [notificationsEnabled, setNotificationsEnabledState] = useState(false);
   const { theme, setTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast(); // toast hook'u kullanıma hazırlandı
+  const { toast } = useToast(); 
 
   useEffect(() => {
     const initializeNotificationSettings = async () => {
+      console.log('[SettingsProvider] Initializing notification settings...');
       if (typeof window !== 'undefined' && window.Notification) {
         let currentPreference = false;
         const storedPreferenceJSON = localStorage.getItem(NOTIFICATIONS_ENABLED_KEY);
+        console.log('[SettingsProvider] Browser Notification.permission:', Notification.permission);
+        console.log('[SettingsProvider] Stored preference JSON:', storedPreferenceJSON);
+
 
         if (Notification.permission === 'default') {
+          console.log('[SettingsProvider] Notification permission is default. Requesting permission...');
           try {
-            // Sayfa yüklendiğinde izin iste
             const permission = await Notification.requestPermission();
+            console.log('[SettingsProvider] Permission request result:', permission);
             if (permission === 'granted') {
               currentPreference = true;
               toast({ title: "Bildirimler Etkinleştirildi", description: "Yeni duyurular için bildirim alacaksınız." });
@@ -42,22 +47,23 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
               }
             }
           } catch (error) {
-            console.error("Error requesting notification permission:", error);
+            console.error("[SettingsProvider] Error requesting notification permission:", error);
             currentPreference = storedPreferenceJSON ? JSON.parse(storedPreferenceJSON) : false;
           }
         } else if (Notification.permission === 'granted') {
-          // İzin zaten verilmiş, localStorage'daki tercihi yükle veya varsayılan olarak true yap
+          console.log('[SettingsProvider] Notification permission already granted.');
           currentPreference = storedPreferenceJSON !== null ? JSON.parse(storedPreferenceJSON) : true;
         } else { // Notification.permission === 'denied'
-          // İzin reddedilmiş, tercihi false yap
+          console.log('[SettingsProvider] Notification permission already denied.');
           currentPreference = false;
         }
         
+        console.log('[SettingsProvider] Setting notificationsEnabledState to:', currentPreference);
         setNotificationsEnabledState(currentPreference);
         localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, JSON.stringify(currentPreference));
 
       } else {
-        // Bildirimler desteklenmiyor veya tarayıcı ortamında değiliz
+        console.log('[SettingsProvider] Notifications not supported or not in browser environment.');
         const storedPreferenceJSON = localStorage.getItem(NOTIFICATIONS_ENABLED_KEY);
         if (storedPreferenceJSON) {
           setNotificationsEnabledState(JSON.parse(storedPreferenceJSON));
@@ -66,21 +72,25 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         }
       }
       setIsLoading(false);
+      console.log('[SettingsProvider] Notification settings initialized.');
     };
 
     initializeNotificationSettings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Sadece bileşen yüklendiğinde çalışır
+  }, []); 
 
   const setNotificationsPreference = (enabled: boolean) => {
+    console.log('[SettingsProvider] setNotificationsPreference called with:', enabled);
     if (typeof window !== 'undefined' && window.Notification && Notification.permission === 'denied' && enabled) {
       toast({ title: "İzin Gerekli", description: "Bildirim almak için lütfen tarayıcı ayarlarınızdan bu siteye bildirim izni verin.", variant: 'destructive', duration: 7000 });
       localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, JSON.stringify(false));
       setNotificationsEnabledState(false);
+      console.log('[SettingsProvider] Notification permission denied, preference set to false.');
       return;
     }
     localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, JSON.stringify(enabled));
     setNotificationsEnabledState(enabled);
+    console.log('[SettingsProvider] Notification preference updated to:', enabled);
   };
 
   const setAppTheme = (newTheme: string) => {

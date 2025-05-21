@@ -3,7 +3,8 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import contactEmitter from '@/lib/contact-emitter';
-// fs and path are no longer needed
+import fs from 'fs';
+import path from 'path';
 
 export interface ContactMessage {
   id: string;
@@ -14,30 +15,47 @@ export interface ContactMessage {
   date: string;
 }
 
-// Data will be in-memory for each serverless function instance
+const dataDir = process.env.DATA_PATH || process.cwd();
+const CONTACT_MESSAGES_FILE_PATH = path.join(dataDir, '_contact_messages.json');
+
 let contactMessagesData: ContactMessage[] = [];
 let initialized = false;
 
-const loadInitialContactMessages = () => {
-  if (initialized) return;
-  // console.log("[API/Contact] Initializing in-memory contact messages array.");
-  // Seed from _contact_messages.json if needed (read-only)
-  /*
+const loadContactMessagesFromFile = () => {
   try {
-    const seedFilePath = path.join(process.cwd(), '_contact_messages.json');
-    if (fs.existsSync(seedFilePath)) {
-      const fileData = fs.readFileSync(seedFilePath, 'utf-8');
+    if (fs.existsSync(CONTACT_MESSAGES_FILE_PATH)) {
+      const fileData = fs.readFileSync(CONTACT_MESSAGES_FILE_PATH, 'utf-8');
       contactMessagesData = (JSON.parse(fileData) as ContactMessage[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      console.log(`[API/Contact] Successfully seeded ${contactMessagesData.length} contact messages.`);
+      console.log(`[API/Contact] Successfully loaded ${contactMessagesData.length} contact messages from ${CONTACT_MESSAGES_FILE_PATH}`);
+    } else {
+      contactMessagesData = [];
+      saveContactMessagesToFile(); // Attempt to create the file on first run if it doesn't exist
+      console.log(`[API/Contact] File ${CONTACT_MESSAGES_FILE_PATH} not found. Initialized with empty array and created file.`);
     }
   } catch (error) {
-    console.error("[API/Contact] Error reading seed contact_messages file:", error);
+    console.error("[API/Contact] Error loading contact_messages file:", error);
+    contactMessagesData = [];
   }
-  */
-  initialized = true;
 };
 
-loadInitialContactMessages();
+const saveContactMessagesToFile = () => {
+  try {
+    const dir = path.dirname(CONTACT_MESSAGES_FILE_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const sortedData = [...contactMessagesData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    fs.writeFileSync(CONTACT_MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    console.log(`[API/Contact] Contact messages data saved to ${CONTACT_MESSAGES_FILE_PATH}`);
+  } catch (error) {
+    console.error("[API/Contact] Error saving contact messages to file:", error);
+  }
+};
+
+if (!initialized) {
+  loadContactMessagesFromFile();
+  initialized = true;
+}
 
 export async function GET() {
   try {
@@ -50,22 +68,20 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    // Client now sends the full ContactMessage object
     const newMessage: ContactMessage = await request.json();
 
     if (!newMessage.id || !newMessage.name || !newMessage.email || !newMessage.subject || !newMessage.message || !newMessage.date) {
       return NextResponse.json({ message: 'Invalid contact message payload. Missing required fields.' }, { status: 400 });
     }
 
-    // Add to in-memory store for this instance
     if (!contactMessagesData.some(msg => msg.id === newMessage.id)) {
         contactMessagesData.unshift(newMessage);
         contactMessagesData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     
+    saveContactMessagesToFile();
     contactEmitter.emit('update', [...contactMessagesData]);
-    // console.log("[API/Contact] New contact message processed for SSE broadcast.");
-
+    
     return NextResponse.json(newMessage, { status: 201 });
   } catch (error) {
     console.error("[API/Contact] Error creating contact message (POST):", error);
@@ -75,3 +91,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Internal server error while creating contact message." }, { status: 500 });
   }
 }
+
+    

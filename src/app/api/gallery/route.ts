@@ -17,7 +17,7 @@ export interface GalleryImage {
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const GALLERY_FILE_PATH = path.join(dataDir, '_gallery.json');
-const MAX_BASE64_SIZE_API = 4 * 1024 * 1024; // Approx 4MB for the base64 string.
+const MAX_BASE64_SIZE_API = 4 * 1024 * 1024; 
 
 let galleryImagesData: GalleryImage[] = [];
 let initialized = false;
@@ -30,9 +30,9 @@ const gallerySortFnInMemory = (a: GalleryImage, b: GalleryImage): number => {
   if (!aIsSeed && bIsSeed) return 1;
 
   const extractNumericPart = (id: string) => {
-    const match = id.match(/\d+$/); // Try to get numeric part for gal_
+    const match = id.match(/\d+$/); 
     if (id.startsWith('gal_') && match) return parseInt(match[0]);
-    if (id.startsWith('seed_') && id.length > 5) return parseInt(id.substring(5)); // For seed_X
+    if (id.startsWith('seed_') && id.length > 5) return parseInt(id.substring(5)); 
     return null;
   };
 
@@ -43,11 +43,9 @@ const gallerySortFnInMemory = (a: GalleryImage, b: GalleryImage): number => {
     if (a.id.startsWith('gal_') && b.id.startsWith('gal_')) {
       return numB - numA; 
     }
-     // For seeds, or mixed, sort by numeric part primarily
     return numA - numB; 
   }
   
-  // Fallback for non-standard IDs or if one is numeric and other is not
   if (a.id.startsWith('gal_') && !b.id.startsWith('gal_')) return -1; 
   if (!a.id.startsWith('gal_') && b.id.startsWith('gal_')) return 1;
   
@@ -63,8 +61,8 @@ const loadGalleryFromFile = () => {
       console.log(`[API/Gallery] Successfully loaded ${galleryImagesData.length} images from ${GALLERY_FILE_PATH}`);
     } else {
       galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
-      // saveGalleryToFile(); // Only save if using persistent disk and it's desirable to create the file
-      console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images. File ${GALLERY_FILE_PATH} not found.`);
+      saveGalleryToFile(); // Attempt to create the file on first run if it doesn't exist, with seed data
+      console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images. File ${GALLERY_FILE_PATH} created.`);
     }
   } catch (error) {
     console.error("[API/Gallery] Error loading gallery from file, using static seeds as fallback:", error);
@@ -73,10 +71,6 @@ const loadGalleryFromFile = () => {
 };
 
 const saveGalleryToFile = () => {
-  if (!process.env.DATA_PATH) { 
-     console.warn("[API/Gallery] DATA_PATH not set. Skipping saveGalleryToFile to avoid writing to ephemeral storage or Git-tracked files.");
-     return;
-  }
   try {
     const dir = path.dirname(GALLERY_FILE_PATH);
     if (!fs.existsSync(dir)) {

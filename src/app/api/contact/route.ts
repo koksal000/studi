@@ -1,3 +1,4 @@
+
 // src/app/api/contact/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -21,32 +22,37 @@ const loadMessagesFromFile = (): ContactMessage[] => {
     if (fs.existsSync(MESSAGES_FILE_PATH)) {
       const fileData = fs.readFileSync(MESSAGES_FILE_PATH, 'utf-8');
       const parsedData = JSON.parse(fileData) as ContactMessage[];
-      // Sort by date descending when loading
       return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
+    console.warn(`[API/Contact] Contact messages file not found at ${MESSAGES_FILE_PATH}. Returning empty array.`);
+    return [];
   } catch (error) {
-    console.error("Error reading contact messages file:", error);
+    console.error("[API/Contact] Error reading contact messages file:", error);
+    return []; // Return empty array on error
   }
-  return [];
 };
 
 const saveMessagesToFile = (data: ContactMessage[]) => {
   try {
-    // Sort by date descending before saving
     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
   } catch (error) {
-    console.error("Error writing contact messages file:", error);
+    console.error("[API/Contact] Error writing contact messages file (this is expected on Vercel/serverless):", error);
+    // On Vercel, file system is likely read-only or ephemeral. This write will probably fail or not persist.
   }
 };
 
 let contactMessagesData: ContactMessage[] = loadMessagesFromFile();
+if (contactMessagesData.length === 0) {
+    console.log("[API/Contact] Initialized with an empty contact messages list (or file read failed).")
+}
 
 export async function GET() {
   try {
+    // contactMessagesData = loadMessagesFromFile(); // Re-evaluate if this re-read is beneficial or harmful on Vercel
     return NextResponse.json([...contactMessagesData]);
   } catch (error) {
-    console.error("Error fetching contact messages:", error);
+    console.error("[API/Contact] Error fetching contact messages (GET):", error);
     return NextResponse.json({ message: "Internal server error while fetching contact messages." }, { status: 500 });
   }
 }
@@ -69,14 +75,14 @@ export async function POST(request: NextRequest) {
       date: new Date().toISOString(),
     };
 
-    contactMessagesData.unshift(newMessage); // Add to the beginning to keep newest first
-    saveMessagesToFile(contactMessagesData);
+    contactMessagesData.unshift(newMessage); 
+    saveMessagesToFile(contactMessagesData); // Attempt to save to file
     
     contactEmitter.emit('update', [...contactMessagesData]);
 
     return NextResponse.json(newMessage, { status: 201 });
   } catch (error) {
-    console.error("Error creating contact message:", error);
+    console.error("[API/Contact] Error creating contact message (POST):", error);
     if (error instanceof SyntaxError) {
       return NextResponse.json({ message: "Invalid JSON payload." }, { status: 400 });
     }

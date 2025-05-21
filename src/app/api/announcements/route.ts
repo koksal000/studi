@@ -15,35 +15,42 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
       const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
       const parsedData = JSON.parse(fileData) as Announcement[];
-      // Ensure dates are proper Date objects if needed, though ISO strings are fine for JSON
       return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
+    console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array.`);
+    return [];
   } catch (error) {
-    console.error("Error reading announcements file:", error);
+    console.error("[API/Announcements] Error reading announcements file:", error);
+    return []; // Return empty array on error to prevent crashes
   }
-  return [];
 };
 
 // Function to save announcements to file
 const saveAnnouncementsToFile = (data: Announcement[]) => {
   try {
-    // Sort before saving to maintain order if reloaded
     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
   } catch (error) {
-    console.error("Error writing announcements file:", error);
+    console.error("[API/Announcements] Error writing announcements file (this is expected on Vercel/serverless):", error);
+    // On Vercel, file system is likely read-only or ephemeral. This write will probably fail or not persist.
   }
 };
 
 // Initialize in-memory store from file or empty array
 let announcementsData: Announcement[] = loadAnnouncementsFromFile();
+if (announcementsData.length === 0) {
+  console.log("[API/Announcements] Initialized with an empty announcements list (or file read failed).")
+}
 
 export async function GET() {
   try {
-    // Return a copy to prevent direct modification
+    // Reload from file in case it was somehow updated by another instance (highly unlikely on Vercel)
+    // More importantly, ensures that if the file system *is* writable and persistent (local dev), we get latest.
+    // On Vercel, this will likely just re-read the initial (empty or non-existent) file.
+    // announcementsData = loadAnnouncementsFromFile(); // Re-evaluate if this re-read is beneficial or harmful on Vercel
     return NextResponse.json([...announcementsData]);
   } catch (error) {
-    console.error("Error fetching announcements:", error);
+    console.error("[API/Announcements] Error fetching announcements (GET):", error);
     return NextResponse.json({ message: "Internal server error while fetching announcements." }, { status: 500 });
   }
 }
@@ -66,14 +73,14 @@ export async function POST(request: NextRequest) {
       author: body.author,
     };
 
-    announcementsData.unshift(newAnnouncement);
-    saveAnnouncementsToFile(announcementsData); // Save to file
+    announcementsData.unshift(newAnnouncement); // Update in-memory array
+    saveAnnouncementsToFile(announcementsData); // Attempt to save to file (will likely not persist on Vercel)
     
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json(newAnnouncement, { status: 201 });
   } catch (error) {
-    console.error("Error creating announcement:", error);
+    console.error("[API/Announcements] Error creating announcement (POST):", error);
     if (error instanceof SyntaxError) {
       return NextResponse.json({ message: "Invalid JSON payload." }, { status: 400 });
     }
@@ -91,18 +98,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     const initialLength = announcementsData.length;
-    announcementsData = announcementsData.filter(ann => ann.id !== id);
+    announcementsData = announcementsData.filter(ann => ann.id !== id); // Update in-memory array
 
     if (announcementsData.length === initialLength) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
 
-    saveAnnouncementsToFile(announcementsData); // Save to file
+    saveAnnouncementsToFile(announcementsData); // Attempt to save to file (will likely not persist on Vercel)
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });
   } catch (error) {
-    console.error("Error deleting announcement:", error);
+    console.error("[API/Announcements] Error deleting announcement (DELETE):", error);
     return NextResponse.json({ message: "Internal server error while deleting announcement." }, { status: 500 });
   }
 }

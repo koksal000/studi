@@ -9,12 +9,22 @@ import { Label } from '@/components/ui/label';
 import { CONTACT_INFO, VILLAGE_NAME, GOOGLE_MAPS_EMBED_URL } from '@/lib/constants';
 import { Mail, MapPin, Phone, User, MessageSquare, Send, Loader2, ExternalLink } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
+import { useUser } from '@/contexts/user-context';
+import { EntryForm } from '@/components/specific/entry-form';
 
 export default function ContactPage() {
   const { toast } = useToast();
-  const [formData, setFormData] = useState({ name: '', email: '', subject: '', message: '' });
+  const { user, showEntryForm } = useUser();
+  const [formData, setFormData] = useState({ email: '', subject: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Reset form if user changes (e.g., logs out and a new "session" starts)
+  useEffect(() => {
+    if (user) {
+      setFormData({ email: '', subject: '', message: '' });
+    }
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
@@ -22,15 +32,30 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      toast({
+        title: "Giriş Gerekli",
+        description: "Mesaj göndermek için lütfen adınızı ve soyadınızı girin.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsSubmitting(true);
     
     try {
+      const payload = {
+        name: `${user.name} ${user.surname}`,
+        email: formData.email,
+        subject: formData.subject,
+        message: formData.message,
+      };
+
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -42,7 +67,7 @@ export default function ContactPage() {
         title: "Mesajınız Gönderildi!",
         description: "En kısa sürede sizinle iletişime geçeceğiz.",
       });
-      setFormData({ name: '', email: '', subject: '', message: '' }); // Reset form
+      setFormData({ email: '', subject: '', message: '' }); // Reset form
     } catch (error: any) {
       console.error("Form Submission Error:", error);
       toast({
@@ -54,6 +79,10 @@ export default function ContactPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (showEntryForm || !user) {
+    return <EntryForm />;
+  }
 
   return (
     <div className="space-y-8 content-page">
@@ -68,6 +97,10 @@ export default function ContactPage() {
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-8">
           <div className="space-y-6">
+            <div>
+              <h3 className="text-xl font-semibold text-primary mb-2 flex items-center"><User className="mr-2 h-5 w-5" /> Gönderen</h3>
+              <p className="text-foreground/80">{user.name} {user.surname} (Bu bilgi mesajınıza otomatik eklenecektir)</p>
+            </div>
             <div>
               <h3 className="text-xl font-semibold text-primary mb-2 flex items-center"><MapPin className="mr-2 h-5 w-5" /> Adresimiz</h3>
               <p className="text-foreground/80">{CONTACT_INFO.address}</p>
@@ -111,10 +144,6 @@ export default function ContactPage() {
           <form onSubmit={handleSubmit} className="space-y-6 p-6 border rounded-lg shadow-sm bg-card">
             <h3 className="text-xl font-semibold text-primary mb-4 border-b pb-2">Bize Mesaj Gönderin</h3>
             <div className="space-y-2">
-              <Label htmlFor="name" className="flex items-center"><User className="mr-2 h-4 w-4 text-muted-foreground"/> Adınız Soyadınız</Label>
-              <Input id="name" type="text" placeholder="Adınız ve soyadınız" value={formData.name} onChange={handleChange} required disabled={isSubmitting} />
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="email" className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground"/> E-posta Adresiniz</Label>
               <Input id="email" type="email" placeholder="ornek@eposta.com" value={formData.email} onChange={handleChange} required disabled={isSubmitting} />
             </div>
@@ -140,3 +169,4 @@ export default function ContactPage() {
     </div>
   );
 }
+

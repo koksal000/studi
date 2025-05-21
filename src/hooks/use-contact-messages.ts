@@ -4,18 +4,16 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ContactMessage } from '@/app/api/contact/route';
-// useUser and useToast are not strictly needed here anymore if addContactMessage 
-// doesn't handle auth checks or user feedback directly, but can be kept if other features arise.
-
-const MESSAGES_LOCAL_STORAGE_KEY = 'camlicaKoyuContactMessages_localStorage_removed'; // Key changed to clear old data
 
 export function useContactMessages() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Initialize to true
   const eventSourceRef = useRef<EventSource | null>(null);
+  const initialDataLoadedRef = useRef(false); // To track if initial data is loaded
 
   useEffect(() => {
-    setIsLoading(true);
+    // setIsLoading(true); // Already initialized by useState
+    initialDataLoadedRef.current = false; // Reset for new connection attempts
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -33,10 +31,16 @@ export function useContactMessages() {
         const updatedMessages: ContactMessage[] = JSON.parse(event.data);
         updatedMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setMessages(updatedMessages);
-        if (isLoading) setIsLoading(false);
+        if (!initialDataLoadedRef.current) {
+          setIsLoading(false);
+          initialDataLoadedRef.current = true;
+        }
       } catch (error) {
         console.error("Error processing SSE message for contact messages:", error);
-        if (isLoading) setIsLoading(false);
+        if (!initialDataLoadedRef.current) {
+          setIsLoading(false);
+          initialDataLoadedRef.current = true;
+        }
       }
     };
 
@@ -44,10 +48,10 @@ export function useContactMessages() {
       const target = errorEvent.target as EventSource;
       const readyState = target?.readyState;
       const eventType = errorEvent.type || 'unknown event type';
-      
+
       if (readyState === EventSource.CLOSED) {
          console.warn(
-          `[SSE Contact] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
+          `[SSE Contact] Connection closed by server or network error. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
         );
       } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
         console.warn(`[SSE Contact] Initial connection attempt failed or stream unavailable. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will retry. Full Event:`, errorEvent);
@@ -57,7 +61,10 @@ export function useContactMessages() {
           `[SSE Contact] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
         );
       }
-      if (isLoading) setIsLoading(false);
+      if (!initialDataLoadedRef.current) {
+        setIsLoading(false);
+        initialDataLoadedRef.current = true;
+      }
     };
 
     return () => {
@@ -67,7 +74,7 @@ export function useContactMessages() {
         eventSourceRef.current = null;
       }
     };
-  }, [isLoading]); // isLoading added
+  }, []); // Removed isLoading from dependencies
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
     const newMessage: ContactMessage = {
@@ -75,9 +82,6 @@ export function useContactMessages() {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       date: new Date().toISOString(),
     };
-
-    // No optimistic UI update or localStorage.setItem here.
-    // The update will come via SSE after server processes.
 
     try {
       const response = await fetch('/api/contact', {
@@ -90,11 +94,10 @@ export function useContactMessages() {
         console.error("Failed to submit contact message to server:", errorData.message);
         throw new Error(errorData.message || "Mesaj sunucuya gönderilemedi.");
       }
-      // Success: server saves to JSON, emits SSE. UI updates via SSE.
+      // UI will update via SSE
     } catch (error) {
       console.error("Error submitting contact message:", error);
-      // The calling component (ContactPage) will handle the toast for this error.
-      throw error; // Re-throw to be caught by the form handler
+      throw error;
     }
   }, []);
 

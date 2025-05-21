@@ -23,39 +23,35 @@ export async function GET() {
         try {
           // Check if controller is still usable before enqueuing
           if (controller.desiredSize === null || controller.desiredSize <= 0) {
-            console.warn("SSE Gallery: Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate.");
+            console.warn("[SSE Gallery] Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate and removing listener.");
             galleryEmitter.off('update', sendUpdate); // Clean up listener
             return;
           }
           const sortedData = [...data].sort((a,b) => {
             if (a.id.startsWith('seed_') && !b.id.startsWith('seed_')) return -1;
             if (!a.id.startsWith('seed_') && b.id.startsWith('seed_')) return 1;
-            // Fallback to sorting by caption if ID prefixes are the same or both are not seeds
-            // This ensures a consistent order for non-seed items as well.
-            const idCompare = a.id.localeCompare(b.id); // Added for more stable sort with dynamic IDs
+            const idCompare = a.id.localeCompare(b.id);
             return idCompare === 0 ? a.caption.localeCompare(b.caption) : idCompare;
           });
           controller.enqueue(`data: ${JSON.stringify(sortedData)}\n\n`);
         } catch (e: any) {
-            console.error("SSE Gallery: Error enqueuing data to stream:", e.message, e.stack);
+            console.error("[SSE Gallery] Error enqueuing data to stream:", e.message, e.stack);
             try {
               if (controller.desiredSize !== null) { 
                 controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
               }
             } catch (closeErr) {
-                 console.error("SSE Gallery: Error trying to signal controller error after enqueue failure:", closeErr);
+                 console.error("[SSE Gallery] Error trying to signal controller error after enqueue failure:", closeErr);
             }
             galleryEmitter.off('update', sendUpdate);
         }
       };
 
-      let initialFetchFailed = false;
-
-      fetch(new URL('/api/gallery', appUrl), { cache: 'no-store' }) // Added cache: 'no-store'
+      fetch(new URL('/api/gallery', appUrl), { cache: 'no-store' })
         .then(res => {
             if (!res.ok) {
-                const errorMsg = `Failed to fetch initial gallery images from ${res.url}: ${res.status} ${res.statusText}`;
-                console.error("SSE Gallery Stream Init Error:", errorMsg);
+                const errorMsg = `SSE Gallery Stream: Failed to fetch initial gallery images from ${res.url}: ${res.status} ${res.statusText}`;
+                console.error(errorMsg);
                 throw new Error(errorMsg);
             }
             return res.json();
@@ -68,7 +64,6 @@ export async function GET() {
             }
         }).catch(e => {
             console.error("SSE Gallery: Error during initial images fetch or processing:", e.message);
-            initialFetchFailed = true;
             try {
               if (controller.desiredSize !== null) { 
                 controller.error(new Error(`Failed to initialize gallery stream: Could not fetch initial data. Server error: ${e.message}`));
@@ -82,10 +77,10 @@ export async function GET() {
 
       galleryEmitter.on('update', sendUpdate);
 
-      return function cancel() {
-        console.log("SSE gallery client disconnected. Removing listener.");
+      controller.signal.addEventListener('abort', () => {
+        console.log("SSE gallery client disconnected (abort signal). Removing listener.");
         galleryEmitter.off('update', sendUpdate);
-      };
+      });
     },
   });
 

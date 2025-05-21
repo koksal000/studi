@@ -23,7 +23,7 @@ export async function GET() {
         try {
           // Check if controller is still usable before enqueuing
           if (controller.desiredSize === null || controller.desiredSize <= 0) {
-            console.warn("SSE Announcements: Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate.");
+            console.warn("[SSE Announcements] Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate and removing listener.");
             announcementEmitter.off('update', sendUpdate); // Clean up listener
             return;
           }
@@ -31,19 +31,19 @@ export async function GET() {
           const sortedData = [...data].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           controller.enqueue(`data: ${JSON.stringify(sortedData)}\n\n`);
         } catch (e: any) {
-            console.error("SSE Announcements: Error enqueuing data to stream:", e.message, e.stack);
+            console.error("[SSE Announcements] Error enqueuing data to stream:", e.message, e.stack);
             try {
               if (controller.desiredSize !== null) { 
                 controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
               }
             } catch (closeErr) {
-                 console.error("SSE Announcements: Error trying to signal controller error after enqueue failure:", closeErr);
+                 console.error("[SSE Announcements] Error trying to signal controller error after enqueue failure:", closeErr);
             }
             announcementEmitter.off('update', sendUpdate); 
         }
       };
       
-      fetch(new URL('/api/announcements', appUrl), { cache: 'no-store' }) // Added cache: 'no-store'
+      fetch(new URL('/api/announcements', appUrl), { cache: 'no-store' })
         .then(res => {
             if (!res.ok) {
                 const errorMsg = `SSE Announcements Stream: Failed to fetch initial announcements from ${res.url}: ${res.status} ${res.statusText}`;
@@ -73,10 +73,18 @@ export async function GET() {
 
       announcementEmitter.on('update', sendUpdate);
 
-      return function cancel() {
-        console.log("SSE announcements client disconnected. Removing listener.");
+      // It's good practice to also handle the client disconnecting
+      controller.signal.addEventListener('abort', () => {
+        console.log("SSE announcements client disconnected (abort signal). Removing listener.");
         announcementEmitter.off('update', sendUpdate);
-      };
+      });
+
+      // This function is called when the stream is cancelled by the reader (e.g. client closes connection)
+      // However, 'abort' on controller.signal is often more reliable for cleanup.
+      // return function cancel() {
+      //   console.log("SSE announcements stream cancelled by reader. Removing listener.");
+      //   announcementEmitter.off('update', sendUpdate);
+      // };
     },
   });
 

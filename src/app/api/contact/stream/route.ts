@@ -1,3 +1,4 @@
+
 // src/app/api/contact/stream/route.ts
 import { NextResponse } from 'next/server';
 import type { ContactMessage } from '../route'; 
@@ -21,30 +22,30 @@ export async function GET() {
       const sendUpdate = (data: ContactMessage[]) => {
         try {
            if (controller.desiredSize === null || controller.desiredSize <= 0) {
-            console.warn("SSE Contact: Controller is not in a state to enqueue. Aborting sendUpdate.");
+            console.warn("[SSE Contact] Controller is not in a state to enqueue. Aborting sendUpdate and removing listener.");
             contactEmitter.off('update', sendUpdate);
             return;
           }
           const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           controller.enqueue(`data: ${JSON.stringify(sortedData)}\n\n`);
         } catch (e: any) {
-            console.error("SSE Contact: Error enqueuing data to stream:", e.message, e.stack);
+            console.error("[SSE Contact] Error enqueuing data to stream:", e.message, e.stack);
             try {
               if (controller.desiredSize !== null) { 
                 controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
               }
             } catch (closeErr) {
-              console.error("SSE Contact: Error trying to signal controller error after enqueue failure:", closeErr);
+              console.error("[SSE Contact] Error trying to signal controller error after enqueue failure:", closeErr);
             }
             contactEmitter.off('update', sendUpdate); 
         }
       };
 
-      fetch(new URL('/api/contact', appUrl), { cache: 'no-store' }) // Added cache: 'no-store'
+      fetch(new URL('/api/contact', appUrl), { cache: 'no-store' })
         .then(res => {
             if (!res.ok) {
-                const errorMsg = `Failed to fetch initial contact messages from ${res.url}: ${res.status} ${res.statusText}`;
-                console.error("SSE Contact Stream Init Error:", errorMsg);
+                const errorMsg = `SSE Contact Stream: Failed to fetch initial contact messages from ${res.url}: ${res.status} ${res.statusText}`;
+                console.error(errorMsg);
                 throw new Error(errorMsg);
             }
             return res.json();
@@ -69,10 +70,10 @@ export async function GET() {
 
       contactEmitter.on('update', sendUpdate);
 
-      return function cancel() {
-        console.log("SSE contact messages client disconnected. Removing listener.");
+      controller.signal.addEventListener('abort', () => {
+        console.log("SSE contact messages client disconnected (abort signal). Removing listener.");
         contactEmitter.off('update', sendUpdate);
-      };
+      });
     },
   });
 

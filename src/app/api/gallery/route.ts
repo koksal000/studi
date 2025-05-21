@@ -4,8 +4,11 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import galleryEmitter from '@/lib/gallery-emitter';
 import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
-import fs from 'fs';
-import path from 'path';
+// fs and path are no longer needed for persistence here
+
+// Data will be in-memory for each serverless function instance
+let galleryImagesData: GalleryImage[] = [];
+let initialized = false;
 
 export interface GalleryImage {
   id: string;
@@ -15,69 +18,29 @@ export interface GalleryImage {
   hint: string;
 }
 
-const dataPath = process.env.DATA_PATH || process.cwd();
-const GALLERY_FILE_PATH = path.join(dataPath, '_gallery.json');
-
-let galleryImagesData: GalleryImage[] | null = null;
-
-const loadGalleryFromFile = (): GalleryImage[] => {
-  try {
-    if (fs.existsSync(GALLERY_FILE_PATH)) {
-      const fileData = fs.readFileSync(GALLERY_FILE_PATH, 'utf-8');
-      const parsedData = JSON.parse(fileData) as GalleryImage[];
-      console.log(`[API/Gallery] Successfully loaded ${parsedData.length} gallery images from ${GALLERY_FILE_PATH}.`);
-      return parsedData;
-    }
-    console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Initializing with seed data. This is expected if starting with an empty Git repo or if the file isn't committed.`);
-    return STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0 ? [...STATIC_GALLERY_IMAGES_FOR_SEEDING] : [];
-  } catch (error) {
-    console.error("[API/Gallery] Error reading gallery file:", error);
-    console.warn("[API/Gallery] Falling back to seed data due to error reading gallery file.");
-    return STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0 ? [...STATIC_GALLERY_IMAGES_FOR_SEEDING] : [];
-  }
-};
-
-// Initialize data only once when the module is first loaded
-const initializeData = () => {
-  if (galleryImagesData === null) {
-    galleryImagesData = loadGalleryFromFile();
-  }
-};
-initializeData();
-
-// Function to save gallery to file (currently disabled for "Git as DB" on free tier)
-const saveGalleryToFile = (data: GalleryImage[]) => {
-  // This function is disabled if not using a persistent disk on Render.
-  // For "Git as DB" approach, changes should be made by editing the JSON file in Git and redeploying.
-  console.log("[API/Gallery] File saving is disabled in API; commit changes to Git for persistence.");
-  /*
-  try {
-    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-      fs.mkdirSync(dataPath, { recursive: true });
-    }
-    fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
-    console.log("[API/Gallery] Gallery images saved to file (if persistent disk is configured):", GALLERY_FILE_PATH);
-  } catch (error) {
-    console.error("[API/Gallery] Error writing gallery file:", error);
-  }
-  */
-};
-
-
-export async function GET() {
-  try {
-    if (galleryImagesData === null) { // Should ideally not happen
-        console.warn("[API/Gallery] galleryImagesData is null in GET, re-initializing. This might indicate an issue.");
-        initializeData();
-    }
-    const dataToSend = galleryImagesData || [];
-    return NextResponse.json([...dataToSend].sort((a,b) => {
+const loadInitialGallery = () => {
+  if (initialized) return;
+  // Seed with static images if the in-memory array is empty
+  if (STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0) {
+    galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort((a,b) => {
         const aIsSeed = a.id.startsWith('seed_');
         const bIsSeed = b.id.startsWith('seed_');
         if (aIsSeed && !bIsSeed) return -1;
         if (!aIsSeed && bIsSeed) return 1;
         return 0; 
-    }));
+    });
+    // console.log(`[API/Gallery] Initialized in-memory gallery with ${galleryImagesData.length} seed images.`);
+  } else {
+    // console.log(`[API/Gallery] Initialized in-memory gallery as empty (no seed images).`);
+  }
+  initialized = true;
+};
+
+loadInitialGallery(); // Initialize when module loads
+
+export async function GET() {
+  try {
+    return NextResponse.json([...galleryImagesData]);
   } catch (error) {
     console.error("[API/Gallery] Error fetching gallery images (GET):", error);
     return NextResponse.json({ message: "Internal server error while fetching gallery images." }, { status: 500 });
@@ -86,38 +49,29 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { imageDataUri, caption, alt, hint } = body;
-
-    if (!imageDataUri || !caption) {
-      return NextResponse.json({ message: 'Missing required fields: imageDataUri or caption' }, { status: 400 });
+    // Client now sends the full GalleryImage object including id, src (imageDataUri)
+    const newImage: GalleryImage = await request.json();
+    
+    // The 'src' from client is the imageDataUri for new uploads
+    // For API consistency, we can rename it or ensure the client sends 'src' as the imageDataUri
+    if (!newImage.id || !newImage.src || !newImage.caption) {
+      return NextResponse.json({ message: 'Invalid image payload. Missing required fields.' }, { status: 400 });
     }
-
-    if (!imageDataUri.startsWith('data:image/')) {
+    if (!newImage.src.startsWith('data:image/')) {
         return NextResponse.json({ message: 'Invalid image data URI format.' }, { status: 400 });
     }
-    if (imageDataUri.length > 4 * 1024 * 1024) { 
+    if (newImage.src.length > 4 * 1024 * 1024) { 
         return NextResponse.json({ message: 'Resim verisi çok büyük (maks ~3MB dosya). Lütfen daha küçük resimler kullanın.' }, { status: 413 });
     }
 
-    if (galleryImagesData === null) { // Ensure data is initialized
-        initializeData();
+    // Add to in-memory store for this instance
+    if (!galleryImagesData.some(img => img.id === newImage.id)) {
+        galleryImagesData.unshift(newImage); // Add to the beginning
+        // No specific sort order for gallery after adding, could be chronological (newest first)
     }
-    galleryImagesData = galleryImagesData || []; // Ensure it's an array
-
-    const newImage: GalleryImage = {
-      id: `gal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      src: imageDataUri,
-      alt: alt || caption,
-      caption: caption,
-      hint: hint || 'uploaded image',
-    };
-
-    galleryImagesData.unshift(newImage);
-    console.log("[API/Gallery] New image added to in-memory store. File saving is disabled; commit changes to Git for persistence.");
-    // saveGalleryToFile(galleryImagesData); // Disabled for GitHub as data source
     
     galleryEmitter.emit('update', [...galleryImagesData]);
+    // console.log("[API/Gallery] New image processed for SSE broadcast.");
 
     return NextResponse.json(newImage, { status: 201 });
   } catch (error) {
@@ -138,22 +92,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Image ID is required for deletion' }, { status: 400 });
     }
 
-    if (galleryImagesData === null) { // Ensure data is initialized
-        initializeData();
-    }
-    galleryImagesData = galleryImagesData || []; // Ensure it's an array
-
-    const initialLength = galleryImagesData.length;
-    galleryImagesData = galleryImagesData.filter(img => img.id !== id); 
-
-    if (galleryImagesData.length === initialLength) {
-      return NextResponse.json({ message: 'Image not found' }, { status: 404 });
-    }
-    console.log(`[API/Gallery] Image with ID ${id} deleted from in-memory store. File saving is disabled; commit changes to Git for persistence.`);
-    // saveGalleryToFile(galleryImagesData); // Disabled for GitHub as data source
+    galleryImagesData = galleryImagesData.filter(img => img.id !== id);
+    
     galleryEmitter.emit('update', [...galleryImagesData]);
+    // console.log(`[API/Gallery] Image with ID ${id} processed for deletion for SSE broadcast.`);
 
-    return NextResponse.json({ message: 'Image deleted successfully' }, { status: 200 });
+    return NextResponse.json({ message: 'Image deletion processed' }, { status: 200 });
   } catch (error) {
     console.error("[API/Gallery] Error deleting image (DELETE):", error);
     return NextResponse.json({ message: "Internal server error while deleting image." }, { status: 500 });

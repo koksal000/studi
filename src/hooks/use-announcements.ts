@@ -4,9 +4,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from '@/hooks/use-toast';
-import { useAnnouncementStatus } from '@/contexts/announcement-status-context'; 
-import type { SettingsContextType } from '@/contexts/settings-context'; // Assuming this type is exported if needed
-import { useSettings } from '@/contexts/settings-context'; // Import useSettings
+import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
+import type { SettingsContextType } from '@/contexts/settings-context';
+import { useSettings } from '@/contexts/settings-context';
 
 export interface Announcement {
   id: string;
@@ -16,21 +16,21 @@ export interface Announcement {
   mediaType?: string | null;
   date: string;
   author: string;
-  authorId?: string; // Added for P2P logic, may not be used by API
+  authorId?: string;
 }
 
 export type NewAnnouncementPayload = Omit<Announcement, 'id' | 'date'>;
 
-const ANNOUNCEMENTS_KEY = 'camlicaKoyuAnnouncements_api_cache';
+const ANNOUNCEMENTS_LOCAL_STORAGE_KEY = 'camlicaKoyuAnnouncements_localStorage';
 
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const announcementsRef = useRef(announcements); 
+  const announcementsRef = useRef(announcements);
 
   const { user } = useUser();
-  const { lastOpenedNotificationTimestamp } = useAnnouncementStatus(); 
-  const [unreadCount, setUnreadCount] = useState(0); 
-  const { siteNotificationsPreference } = useSettings(); // Get preference from settings
+  const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const { siteNotificationsPreference } = useSettings();
 
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -44,117 +44,98 @@ export function useAnnouncements() {
       ).length;
       setUnreadCount(newUnreadCount);
     } else {
-      // If no timestamp, all announcements are unread initially, or 0 if no announcements
       setUnreadCount(announcements.length > 0 ? announcements.length : 0);
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
 
   const showNotification = useCallback((title: string, body: string) => {
-    console.log("[SSE Announcements] Attempting to show notification. Preference:", siteNotificationsPreference, "Browser Permission:", Notification.permission);
+    console.log("[useAnnouncements] Attempting to show notification. Preference:", siteNotificationsPreference, "Browser Permission:", Notification.permission);
     if (siteNotificationsPreference && Notification.permission === 'granted') {
       if (document.visibilityState === 'visible') {
         try {
           const notification = new Notification(title, {
             body: body,
-            icon: '/images/logo.png', // Make sure you have a logo at public/images/logo.png
+            icon: '/images/logo.png',
           });
           notification.onclick = (event) => {
-            event.preventDefault(); 
+            event.preventDefault();
             window.open('https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/', '_blank');
             notification.close();
           };
         } catch (err: any) {
-          console.error("[SSE Announcements] Notification error message:", err.message);
-          console.error("[SSE Announcements] Notification error name:", err.name);
+          console.error("[useAnnouncements] Notification error message:", err.message);
+          console.error("[useAnnouncements] Notification error name:", err.name);
           toast({
-            title: "Bildirim Gösterilemedi",
-            description: `Tarayıcınız bildirimi engelledi: ${err.message}. Lütfen tarayıcı ayarlarınızı kontrol edin.`,
+            title: "Bildirim Hatası",
+            description: `Tarayıcı bildirimi gösterilemedi: ${err.message}. Lütfen tarayıcı ayarlarınızı kontrol edin.`,
             variant: "destructive",
             duration: 7000,
           });
         }
       } else {
-        console.log("[SSE Announcements] Document not visible, skipping notification.");
+        console.log("[useAnnouncements] Document not visible, skipping notification.");
       }
     } else {
-        if (!siteNotificationsPreference) console.log("[SSE Announcements] Notification skipped: User preference is off.");
-        if (Notification.permission !== 'granted') console.log("[SSE Announcements] Notification skipped: Browser permission not granted. Current status:", Notification.permission);
+        if (!siteNotificationsPreference) console.log("[useAnnouncements] Notification skipped: User preference is off.");
+        if (Notification.permission !== 'granted') console.log("[useAnnouncements] Notification skipped: Browser permission not granted. Current status:", Notification.permission);
     }
   }, [siteNotificationsPreference, toast]);
 
-
-  const fetchInitialAnnouncements = useCallback(async () => {
-    // console.log('[Announcements] Fetching initial announcements...');
+  const loadAnnouncementsFromLocalStorage = useCallback(() => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/announcements', { cache: 'no-store' });
-      if (!response.ok) {
-        // console.error('[Announcements] Failed to fetch initial announcements, status:', response.status);
-        throw new Error('Failed to fetch announcements');
-      }
-      const data: Announcement[] = await response.json();
-      data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setAnnouncements(data);
-      localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(data));
-      // console.log('[Announcements] Initial announcements fetched and set:', data.length);
-    } catch (error) {
-      console.error("[Announcements] Failed to fetch initial announcements:", error);
-      const storedAnnouncements = localStorage.getItem(ANNOUNCEMENTS_KEY);
+      const storedAnnouncements = localStorage.getItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY);
       if (storedAnnouncements) {
-        try {
-          const parsed = JSON.parse(storedAnnouncements);
-          setAnnouncements(parsed);
-        } catch (e) {
-          console.error("[Announcements] Failed to parse announcements from localStorage", e);
-        }
+        const parsed = JSON.parse(storedAnnouncements) as Announcement[];
+        parsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setAnnouncements(parsed);
+      } else {
+        // Optionally, fetch from API as a fallback if localStorage is empty for a new user
+        // For now, we'll rely on SSE to populate if it's empty.
+        setAnnouncements([]);
       }
+    } catch (error) {
+      console.error("[Announcements] Failed to load announcements from localStorage:", error);
+      setAnnouncements([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchInitialAnnouncements();
-  }, [fetchInitialAnnouncements]);
+    loadAnnouncementsFromLocalStorage();
+  }, [loadAnnouncementsFromLocalStorage]);
 
   useEffect(() => {
-    // console.log('[SSE Announcements] useEffect for EventSource triggered.'); 
-    
     if (eventSourceRef.current) {
-      // console.log('[SSE Announcements] Closing existing EventSource.');
       eventSourceRef.current.close();
     }
 
-    // console.log('[SSE Announcements] Creating new EventSource for /api/announcements/stream');
     const newEventSource = new EventSource('/api/announcements/stream');
     eventSourceRef.current = newEventSource;
 
     newEventSource.onopen = () => {
       // console.log('[SSE Announcements] Connection opened.');
     };
-    
+
     newEventSource.onmessage = (event) => {
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-        // console.log('[SSE Announcements] Received data via SSE:', updatedAnnouncementsFromServer.length, 'items');
-        
-        const currentLocalAnnouncements = announcementsRef.current;
-        setAnnouncements(prevAnnouncements => {
-          // Notify for genuinely new announcements
-          updatedAnnouncementsFromServer.forEach(newAnn => {
-            const isTrulyNew = !currentLocalAnnouncements.some(localAnn => localAnn.id === newAnn.id);
-            if (isTrulyNew) {
-                // console.log(`[SSE Announcements] New announcement detected: ${newAnn.title}`);
-                showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + "...");
-            }
-          });
-          localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncementsFromServer));
-          return updatedAnnouncementsFromServer;
-        });
-        // console.log('[SSE Announcements] Local announcements and localStorage updated.');
+        // Sort by date descending before setting
+        updatedAnnouncementsFromServer.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+        const currentLocalAnnouncements = announcementsRef.current;
+        updatedAnnouncementsFromServer.forEach(newAnn => {
+          const isTrulyNew = !currentLocalAnnouncements.some(localAnn => localAnn.id === newAnn.id && localAnn.date === newAnn.date);
+          if (isTrulyNew) {
+             showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + "...");
+          }
+        });
+        
+        setAnnouncements(updatedAnnouncementsFromServer);
+        localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(updatedAnnouncementsFromServer));
       } catch (error) {
-          console.error("[SSE Announcements] Error processing SSE message:", error);
+        console.error("[SSE Announcements] Error processing SSE message:", error);
       }
     };
 
@@ -177,13 +158,11 @@ export function useAnnouncements() {
     return () => {
       const es = eventSourceRef.current;
       if (es) {
-        // console.log('[SSE Announcements] Cleaning up EventSource on unmount or re-run.');
         es.close();
         eventSourceRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showNotification]); // showNotification is stable due to useCallback
+  }, [showNotification]);
 
   const addAnnouncement = useCallback(async (newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
     if (!user) {
@@ -191,35 +170,54 @@ export function useAnnouncements() {
       return;
     }
 
-    const payload: NewAnnouncementPayload = {
+    const newAnnouncement: Announcement = {
       ...newAnnouncementData,
+      id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      date: new Date().toISOString(),
       author: `${user.name} ${user.surname}`,
     };
 
+    // Update local state and localStorage first
+    setAnnouncements(prev => {
+      const updated = [newAnnouncement, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+
+    // Then, notify the server to broadcast via SSE
     try {
       const response = await fetch('/api/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(newAnnouncement), // Send the full new announcement
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        throw new Error(errorData.message || 'Duyuru eklenemedi');
+        throw new Error(errorData.message || 'Duyuru sunucuya iletilemedi');
       }
-      // SSE will handle the update, no need to manually setAnnouncements here
+      // SSE will handle broadcasting to other clients
     } catch (error: any) {
-      console.error("[Announcements] Failed to add announcement:", error);
-      toast({ title: "Duyuru Eklenemedi", description: error.message || "Duyuru eklenirken bir sorun oluştu.", variant: "destructive" });
+      console.error("[Announcements] Failed to notify server about new announcement:", error);
+      toast({ title: "Duyuru Gönderilemedi", description: error.message || "Yeni duyuru diğer kullanıcılara iletilirken bir sorun oluştu.", variant: "destructive" });
+      // Optionally, revert local change if server notification fails, though this can be complex
     }
   }, [user, toast]);
 
   const deleteAnnouncement = useCallback(async (id: string) => {
-     if (!user) {
+    if (!user) {
       toast({ title: "Giriş Gerekli", description: "Duyuru silmek için giriş yapmalısınız.", variant: "destructive" });
       return;
     }
 
+    // Update local state and localStorage first
+    setAnnouncements(prev => {
+      const updated = prev.filter(ann => ann.id !== id);
+      localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+    
+    // Then, notify the server to broadcast the deletion via SSE
     try {
       const response = await fetch(`/api/announcements?id=${id}`, {
         method: 'DELETE',
@@ -227,12 +225,13 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        throw new Error(errorData.message || 'Duyuru silinemedi');
+        throw new Error(errorData.message || 'Duyuru silme bilgisi sunucuya iletilemedi');
       }
-      // SSE will handle the update
+      // SSE will handle broadcasting to other clients
     } catch (error: any) {
-      console.error("[Announcements] Failed to delete announcement:", error);
-      toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silinirken bir sorun oluştu.", variant: "destructive" });
+      console.error("[Announcements] Failed to notify server about deleted announcement:", error);
+      toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silme bilgisi diğer kullanıcılara iletilirken bir sorun oluştu.", variant: "destructive" });
+      // Optionally, revert local change
     }
   }, [user, toast]);
 

@@ -12,14 +12,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, type FormEvent, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { EntryForm } from '@/components/specific/entry-form';
+import { useContactMessages } from '@/hooks/use-contact-messages'; // Import the hook
 
 export default function ContactPage() {
   const { toast } = useToast();
   const { user, showEntryForm } = useUser();
   const [formData, setFormData] = useState({ email: '', subject: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addContactMessage } = useContactMessages(); // Use the hook
 
-  // Reset form if user changes (e.g., logs out and a new "session" starts)
   useEffect(() => {
     if (user) {
       setFormData({ email: '', subject: '', message: '' });
@@ -50,18 +51,8 @@ export default function ContactPage() {
         message: formData.message,
       };
 
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Mesaj gönderilirken bir hata oluştu.' }));
-        throw new Error(errorData.message);
-      }
+      // Use the hook to add the message. This will update localStorage and POST to API.
+      await addContactMessage(payload);
 
       toast({
         title: "Mesajınız Gönderildi!",
@@ -169,4 +160,3 @@ export default function ContactPage() {
     </div>
   );
 }
-

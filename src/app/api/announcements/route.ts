@@ -4,65 +4,50 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import type { Announcement, NewAnnouncementPayload } from '@/hooks/use-announcements';
 import announcementEmitter from '@/lib/announcement-emitter';
-import fs from 'fs';
-import path from 'path';
+// fs and path are no longer needed for persistence here
+// import fs from 'fs';
+// import path from 'path';
 
-const dataPath = process.env.DATA_PATH || process.cwd();
-const ANNOUNCEMENTS_FILE_PATH = path.join(dataPath, '_announcements.json');
+// const dataPath = process.env.DATA_PATH || process.cwd();
+// const ANNOUNCEMENTS_FILE_PATH = path.join(dataPath, '_announcements.json');
 
-let announcementsData: Announcement[] | null = null;
+// Data will be in-memory for each serverless function instance
+let announcementsData: Announcement[] = [];
+let initialized = false;
 
-const loadAnnouncementsFromFile = (): Announcement[] => {
-  try {
-    if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
-      const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
-      const parsedData = JSON.parse(fileData) as Announcement[];
-      console.log(`[API/Announcements] Successfully loaded ${parsedData.length} announcements from ${ANNOUNCEMENTS_FILE_PATH}.`);
-      return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }
-    console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array. This is expected if starting with an empty Git repo.`);
-    return [];
-  } catch (error) {
-    console.error("[API/Announcements] Error reading announcements file:", error);
-    return [];
-  }
-};
-
-// Initialize data only once when the module is first loaded
-const initializeData = () => {
-  if (announcementsData === null) {
-    announcementsData = loadAnnouncementsFromFile();
-  }
-};
-initializeData();
-
-
-// Function to save announcements to file (currently disabled for "Git as DB" on free tier)
-const saveAnnouncementsToFile = (data: Announcement[]) => {
-  // This function is disabled if not using a persistent disk on Render.
-  // For "Git as DB" approach, changes should be made by editing the JSON file in Git and redeploying.
-  console.log("[API/Announcements] File saving is disabled in API; commit changes to Git for persistence.");
+// Function to load initial data (e.g., from a seed file if it exists, one time per module instance)
+// This is more relevant if you have a seed _announcements.json you want to load on cold starts
+// For now, it will just ensure the array is initialized.
+const loadInitialAnnouncements = () => {
+  if (initialized) return;
+  // console.log("[API/Announcements] Initializing in-memory announcements array.");
+  // Example: try to read from a seed file if it exists in the project structure (read-only)
+  // This part would require fs and path if you want to read a seed file.
+  // For simplicity now, we'll start with an empty array.
+  // If you have _announcements.json in your repo and want to seed, you'd re-add fs/path here.
   /*
   try {
-    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
-      fs.mkdirSync(dataPath, { recursive: true });
+    const seedFilePath = path.join(process.cwd(), '_announcements.json'); // Adjust path if needed
+    if (fs.existsSync(seedFilePath)) {
+      const fileData = fs.readFileSync(seedFilePath, 'utf-8');
+      const parsedData = JSON.parse(fileData) as Announcement[];
+      announcementsData = parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      console.log(`[API/Announcements] Successfully seeded ${announcementsData.length} announcements.`);
+    } else {
+      console.log(`[API/Announcements] Seed file _announcements.json not found. Starting with empty array.`);
     }
-    const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log("[API/Announcements] Announcements saved to file (if persistent disk is configured):", ANNOUNCEMENTS_FILE_PATH);
   } catch (error) {
-    console.error("[API/Announcements] Error writing announcements file:", error);
+    console.error("[API/Announcements] Error reading seed announcements file:", error);
   }
   */
+  initialized = true;
 };
+
+loadInitialAnnouncements(); // Initialize when module loads
 
 export async function GET() {
   try {
-    if (announcementsData === null) { // Should ideally not happen if initializeData worked
-        console.warn("[API/Announcements] announcementsData is null in GET, re-initializing. This might indicate an issue.");
-        initializeData();
-    }
-    return NextResponse.json([...(announcementsData || [])]);
+    return NextResponse.json([...announcementsData]);
   } catch (error) {
     console.error("[API/Announcements] Error fetching announcements (GET):", error);
     return NextResponse.json({ message: "Internal server error while fetching announcements." }, { status: 500 });
@@ -71,32 +56,26 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body: NewAnnouncementPayload = await request.json();
+    // Client now sends the full Announcement object including id, date, author
+    const newAnnouncement: Announcement = await request.json();
 
-    if (!body.title || !body.content || !body.author) {
-      return NextResponse.json({ message: 'Missing required fields: title, content, or author' }, { status: 400 });
+    if (!newAnnouncement.id || !newAnnouncement.title || !newAnnouncement.content || !newAnnouncement.author || !newAnnouncement.date) {
+      return NextResponse.json({ message: 'Invalid announcement payload. Missing required fields.' }, { status: 400 });
     }
 
-    if (announcementsData === null) { // Ensure data is initialized
-        initializeData();
+    // Add to in-memory store for this instance
+    // Check if announcement with same ID already exists to prevent duplicates from SSE echo
+    if (!announcementsData.some(ann => ann.id === newAnnouncement.id)) {
+        announcementsData.unshift(newAnnouncement);
+        announcementsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } else {
+        // If it exists, maybe update it? For now, we assume IDs are unique and new if not present.
+        // Or simply ignore if it's an echo.
     }
-    announcementsData = announcementsData || []; // Ensure it's an array
-
-    const newAnnouncement: Announcement = {
-      id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      date: new Date().toISOString(),
-      title: body.title,
-      content: body.content,
-      media: body.media || null,
-      mediaType: body.mediaType || null,
-      author: body.author,
-    };
-
-    announcementsData.unshift(newAnnouncement); 
-    console.log("[API/Announcements] New announcement added to in-memory store. File saving is disabled; commit changes to Git for persistence.");
-    // saveAnnouncementsToFile(announcementsData); // Disabled for GitHub as data source
     
+    // Emit update for SSE
     announcementEmitter.emit('update', [...announcementsData]);
+    // console.log("[API/Announcements] New announcement processed for SSE broadcast.");
 
     return NextResponse.json(newAnnouncement, { status: 201 });
   } catch (error) {
@@ -117,22 +96,20 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Announcement ID is required for deletion' }, { status: 400 });
     }
 
-    if (announcementsData === null) { // Ensure data is initialized
-        initializeData();
-    }
-    announcementsData = announcementsData || []; // Ensure it's an array
-
     const initialLength = announcementsData.length;
     announcementsData = announcementsData.filter(ann => ann.id !== id);
 
     if (announcementsData.length === initialLength) {
-      return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
+      // This means the announcement wasn't in this instance's memory.
+      // It might have been deleted by another instance or never existed here.
+      // Still, we should emit an update so clients can sync.
     }
-    console.log(`[API/Announcements] Announcement with ID ${id} deleted from in-memory store. File saving is disabled; commit changes to Git for persistence.`);
-    // saveAnnouncementsToFile(announcementsData); // Disabled for GitHub as data source
+    
+    // Emit update for SSE
     announcementEmitter.emit('update', [...announcementsData]);
+    // console.log(`[API/Announcements] Announcement with ID ${id} processed for deletion for SSE broadcast.`);
 
-    return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });
+    return NextResponse.json({ message: 'Announcement deletion processed' }, { status: 200 });
   } catch (error) {
     console.error("[API/Announcements] Error deleting announcement (DELETE):", error);
     return NextResponse.json({ message: "Internal server error while deleting announcement." }, { status: 500 });

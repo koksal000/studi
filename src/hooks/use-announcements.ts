@@ -23,7 +23,7 @@ const ANNOUNCEMENTS_KEY = 'camlicaKoyuAnnouncements_api_cache';
 
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const announcementsRef = useRef(announcements); // Ref to hold current announcements for SSE handler
+  const announcementsRef = useRef(announcements); 
 
   const { user } = useUser();
   const { notificationsEnabled: siteNotificationsPreference } = useSettings();
@@ -31,7 +31,6 @@ export function useAnnouncements() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Update ref whenever announcements state changes
   useEffect(() => {
     announcementsRef.current = announcements;
   }, [announcements]);
@@ -77,9 +76,11 @@ export function useAnnouncements() {
 
   useEffect(() => {
     console.log('[SSE Announcements] useEffect for EventSource triggered. Site notifications preference:', siteNotificationsPreference);
-    if (eventSourceRef.current) {
+    
+    const currentEventSource = eventSourceRef.current;
+    if (currentEventSource) {
       console.log('[SSE Announcements] Closing existing EventSource.');
-      eventSourceRef.current.close();
+      currentEventSource.close();
     }
 
     console.log('[SSE Announcements] Creating new EventSource for /api/announcements/stream');
@@ -93,8 +94,8 @@ export function useAnnouncements() {
     newEventSource.onmessage = (event) => {
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-        console.log('[SSE Announcements] Received data via SSE:', updatedAnnouncementsFromServer);
-        console.log('[SSE Announcements] Current local announcements (ref) before processing:', announcementsRef.current);
+        console.log('[SSE Announcements] Received data via SSE:', updatedAnnouncementsFromServer.length, 'items');
+        console.log('[SSE Announcements] Current local announcements (ref) before processing:', announcementsRef.current.length, 'items');
         console.log('[SSE Announcements] Current siteNotificationsPreference in onmessage:', siteNotificationsPreference);
         console.log('[SSE Announcements] Browser Notification.permission:', typeof window !== 'undefined' && window.Notification ? Notification.permission : 'N/A');
 
@@ -102,7 +103,7 @@ export function useAnnouncements() {
         if (updatedAnnouncementsFromServer.length > 0) {
             const currentLocalIds = new Set(announcementsRef.current.map(a => a.id));
             
-            for (const serverAnn of updatedAnnouncementsFromServer) { // Server already sorts by date desc
+            for (const serverAnn of updatedAnnouncementsFromServer) { 
                 if (!currentLocalIds.has(serverAnn.id)) {
                     latestNewAnnouncementForNotification = serverAnn;
                     console.log('[SSE Announcements] Identified as NEW for notification:', latestNewAnnouncementForNotification.title);
@@ -111,9 +112,9 @@ export function useAnnouncements() {
             }
         }
 
-        // Update the main announcements state with the full list from server
         setAnnouncements(updatedAnnouncementsFromServer);
         localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncementsFromServer));
+        console.log('[SSE Announcements] Local announcements and localStorage updated.');
 
         if (latestNewAnnouncementForNotification && siteNotificationsPreference && typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted') {
           console.log('[SSE Announcements] Conditions MET for showing notification for:', latestNewAnnouncementForNotification.title);
@@ -121,18 +122,29 @@ export function useAnnouncements() {
             ? latestNewAnnouncementForNotification.content.substring(0, 120) + "..."
             : latestNewAnnouncementForNotification.content;
 
-          try {
-            const notification = new Notification(latestNewAnnouncementForNotification.title, {
-              body: notificationBody,
-              tag: latestNewAnnouncementForNotification.id,
-            });
-            notification.onclick = () => {
-              window.open('https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/', '_blank');
-              window.focus(); 
-            };
-            console.log('[SSE Announcements] Notification created successfully for:', latestNewAnnouncementForNotification.title);
-          } catch (notificationError) {
-            console.error('[SSE Announcements] Error creating notification:', notificationError);
+          if (document.visibilityState === 'visible') {
+            try {
+              const notification = new Notification(latestNewAnnouncementForNotification.title, {
+                body: notificationBody,
+                tag: latestNewAnnouncementForNotification.id, // Using tag to prevent multiple notifications for the same announcement
+              });
+              notification.onclick = () => {
+                window.open('https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/', '_blank');
+                window.focus(); 
+              };
+              console.log('[SSE Announcements] Notification created successfully for:', latestNewAnnouncementForNotification.title);
+            } catch (notificationError: any) {
+              console.error('[SSE Announcements] Error creating notification (even when visible):', notificationError);
+              console.error('[SSE Announcements] Notification error message:', notificationError.message);
+              console.error('[SSE Announcements] Notification error name:', notificationError.name);
+              toast({
+                title: "Bildirim Gösterilemedi",
+                description: "Tarayıcı bildirimi oluşturulurken bir sorun oluştu: " + notificationError.message,
+                variant: "destructive"
+              });
+            }
+          } else {
+             console.log('[SSE Announcements] Notification skipped for:', latestNewAnnouncementForNotification.title, '- Page not visible. Consider using Service Worker for background notifications.');
           }
         } else {
             if (!latestNewAnnouncementForNotification) console.log('[SSE Announcements] No new announcement identified for notification (latestNewAnnouncementForNotification is null).');
@@ -175,13 +187,14 @@ export function useAnnouncements() {
     };
 
     return () => {
-      if (eventSourceRef.current) {
+      const es = eventSourceRef.current;
+      if (es) {
         console.log('[SSE Announcements] Cleaning up EventSource.');
-        eventSourceRef.current.close();
+        es.close();
         eventSourceRef.current = null;
       }
     };
-  }, [siteNotificationsPreference, toast]); // Only re-setup SSE if siteNotificationsPreference or toast changes
+  }, [siteNotificationsPreference, toast]); 
 
   const addAnnouncement = useCallback(async (newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
     if (!user) {
@@ -205,6 +218,7 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru eklenemedi');
       }
+      // SSE should handle the state update
     } catch (error: any) {
       console.error("[Announcements] Failed to add announcement:", error);
       toast({ title: "Duyuru Eklenemedi", description: error.message || "Duyuru eklenirken bir sorun oluştu.", variant: "destructive" });
@@ -226,6 +240,7 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru silinemedi');
       }
+      // SSE should handle the state update
     } catch (error: any) {
       console.error("[Announcements] Failed to delete announcement:", error);
       toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silinirken bir sorun oluştu.", variant: "destructive" });

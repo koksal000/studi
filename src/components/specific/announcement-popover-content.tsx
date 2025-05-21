@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from 'react'; // Added React import
 import type { Announcement } from '@/hooks/use-announcements';
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';

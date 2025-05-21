@@ -37,11 +37,11 @@ export function useGallery() {
       localStorage.setItem(GALLERY_KEY, JSON.stringify(data));
     } catch (error) {
       console.error("Failed to fetch initial gallery images:", error);
-      toast({
-        title: "Galeri Yüklenemedi",
-        description: "Sunucudan galeri resimleri alınırken bir sorun oluştu.",
-        variant: "destructive"
-      });
+      // toast({
+      //   title: "Galeri Yüklenemedi",
+      //   description: "Sunucudan galeri resimleri alınırken bir sorun oluştu.",
+      //   variant: "destructive"
+      // });
       const storedGallery = localStorage.getItem(GALLERY_KEY);
       if (storedGallery) {
         try {
@@ -51,15 +51,16 @@ export function useGallery() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []); // Removed toast from dependencies as it's not used in this useCallback
 
   useEffect(() => {
     fetchInitialGallery();
   }, [fetchInitialGallery]);
 
   useEffect(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
+    const currentEventSource = eventSourceRef.current;
+    if (currentEventSource) {
+      currentEventSource.close();
     }
 
     const newEventSource = new EventSource('/api/gallery/stream');
@@ -78,36 +79,35 @@ export function useGallery() {
     newEventSource.onerror = (errorEvent: Event) => {
       const target = errorEvent.target as EventSource;
       const readyState = target?.readyState;
-      const eventType = errorEvent.type || 'unknown';
+      const eventType = errorEvent.type || 'unknown event type';
       
       console.error(
-        `SSE connection error for gallery. EventSource readyState: ${readyState}, Event Type: ${eventType}, Event:`, errorEvent
+        `[SSE Gallery] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
       );
       
-      if (readyState === EventSource.CLOSED) {
-        toast({
-          title: "Galeri Bağlantısı Sonlandı",
-          description: "Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.",
-          variant: "destructive"
-        });
-      } else if (readyState === EventSource.CONNECTING) {
-        // Connecting state, usually part of retry, so maybe no toast or a very subtle one
-      } else {
-        toast({
-          title: "Galeri Bağlantı Sorunu",
-          description: "Galeri güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.",
-          variant: "destructive"
-        });
-      }
+      // let toastMessage = "Galeri güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.";
+      // if (readyState === EventSource.CLOSED) {
+      //   toastMessage = "Galeri bağlantısı sonlandı. Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.";
+      // } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
+      //   toastMessage = "Galeri bağlantısı kurulamıyor. Lütfen internet bağlantınızı ve sunucu ayarlarını kontrol edin. Yeniden deneniyor...";
+      // }
+      
+      // toast({
+      //   title: "Galeri Bağlantı Sorunu",
+      //   description: toastMessage,
+      //   variant: "destructive",
+      //   duration: 8000,
+      // });
     };
     
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      const es = eventSourceRef.current;
+      if (es) {
+        es.close();
         eventSourceRef.current = null;
       }
     };
-  }, [toast]);
+  }, []); // Removed toast from dependencies
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {

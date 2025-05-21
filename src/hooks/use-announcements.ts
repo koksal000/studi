@@ -3,9 +3,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
-// import { useSettings } from '@/contexts/settings-context'; // Kaldırıldı
 import { useToast } from '@/hooks/use-toast';
-import { useAnnouncementStatus } from '@/contexts/announcement-status-context'; // Yeni import
+import { useAnnouncementStatus } from '@/contexts/announcement-status-context'; 
 
 export interface Announcement {
   id: string;
@@ -27,9 +26,8 @@ export function useAnnouncements() {
   const announcementsRef = useRef(announcements); 
 
   const { user } = useUser();
-  // const { notificationsEnabled: siteNotificationsPreference } = useSettings(); // Kaldırıldı
-  const { lastOpenedNotificationTimestamp } = useAnnouncementStatus(); // Yeni hook
-  const [unreadCount, setUnreadCount] = useState(0); // Yeni state
+  const { lastOpenedNotificationTimestamp } = useAnnouncementStatus(); 
+  const [unreadCount, setUnreadCount] = useState(0); 
 
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -37,14 +35,12 @@ export function useAnnouncements() {
 
   useEffect(() => {
     announcementsRef.current = announcements;
-    // Okunmamış duyuru sayısını hesapla
     if (lastOpenedNotificationTimestamp) {
       const newUnreadCount = announcements.filter(
         (ann) => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp
       ).length;
       setUnreadCount(newUnreadCount);
     } else {
-      // Eğer daha önce hiç açılmamışsa, tüm duyurular okunmamış sayılır (veya ilk yüklemede 0 olabilir)
       setUnreadCount(announcements.length > 0 ? announcements.length : 0);
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
@@ -65,11 +61,11 @@ export function useAnnouncements() {
       console.log('[Announcements] Initial announcements fetched and set:', data.length);
     } catch (error) {
       console.error("[Announcements] Failed to fetch initial announcements:", error);
-      toast({
-        title: "Duyurular Yüklenemedi",
-        description: "Sunucudan duyurular alınırken bir sorun oluştu. Lütfen daha sonra tekrar deneyin.",
-        variant: "destructive"
-      });
+      // toast({
+      //   title: "Duyurular Yüklenemedi",
+      //   description: "Sunucudan duyurular alınırken bir sorun oluştu. Lütfen daha sonra tekrar deneyin.",
+      //   variant: "destructive"
+      // });
       const storedAnnouncements = localStorage.getItem(ANNOUNCEMENTS_KEY);
       if (storedAnnouncements) {
         try {
@@ -82,20 +78,19 @@ export function useAnnouncements() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchInitialAnnouncements();
   }, [fetchInitialAnnouncements]);
 
   useEffect(() => {
-    // siteNotificationsPreference kaldırıldığı için bu log güncellendi veya kaldırılabilir.
     console.log('[SSE Announcements] useEffect for EventSource triggered.'); 
     
-    if (eventSourceRef.current) {
+    const currentEventSource = eventSourceRef.current;
+    if (currentEventSource) {
       console.log('[SSE Announcements] Closing existing EventSource.');
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+      currentEventSource.close();
     }
 
     console.log('[SSE Announcements] Creating new EventSource for /api/announcements/stream');
@@ -115,9 +110,6 @@ export function useAnnouncements() {
         localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncementsFromServer));
         console.log('[SSE Announcements] Local announcements and localStorage updated.');
 
-        // Tarayıcı bildirimi gönderme mantığı kaldırıldı.
-        // Okunmamış sayısını güncelleme zaten `useEffect` içinde `announcements` ve `lastOpenedNotificationTimestamp` bağımlılıklarıyla yapılıyor.
-
       } catch (error) {
           console.error("[SSE Announcements] Error processing SSE message:", error);
       }
@@ -132,31 +124,31 @@ export function useAnnouncements() {
         `[SSE Announcements] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
       );
 
-      let toastMessage = "Duyuru güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.";
-      if (readyState === EventSource.CLOSED) {
-        toastMessage = "Duyuru bağlantısı sonlandı. Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.";
-      } else if (readyState === EventSource.CONNECTING && eventType === 'error') { // Hata CONNECTING aşamasında ise
-        toastMessage = "Duyuru bağlantısı kurulamıyor. Lütfen internet bağlantınızı ve Vercel'deki NEXT_PUBLIC_APP_URL ayarını kontrol edin. Yeniden deneniyor...";
-      }
+      // let toastMessage = "Duyuru güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.";
+      // if (readyState === EventSource.CLOSED) {
+      //   toastMessage = "Duyuru bağlantısı sonlandı. Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.";
+      // } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
+      //   toastMessage = "Duyuru bağlantısı kurulamıyor. Lütfen internet bağlantınızı ve sunucu ayarlarını kontrol edin. Yeniden deneniyor...";
+      // }
       
-      toast({
-        title: "Duyuru Bağlantı Sorunu",
-        description: toastMessage,
-        variant: "destructive",
-        duration: 8000, 
-      });
+      // toast({
+      //   title: "Duyuru Bağlantı Sorunu",
+      //   description: toastMessage,
+      //   variant: "destructive",
+      //   duration: 8000, 
+      // });
     };
 
     return () => {
       const es = eventSourceRef.current;
       if (es) {
-        console.log('[SSE Announcements] Cleaning up EventSource.');
+        console.log('[SSE Announcements] Cleaning up EventSource on unmount.');
         es.close();
         eventSourceRef.current = null;
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); 
+  }, []); 
 
   const addAnnouncement = useCallback(async (newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
     if (!user) {
@@ -180,7 +172,6 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru eklenemedi');
       }
-      // SSE should handle the state update
     } catch (error: any) {
       console.error("[Announcements] Failed to add announcement:", error);
       toast({ title: "Duyuru Eklenemedi", description: error.message || "Duyuru eklenirken bir sorun oluştu.", variant: "destructive" });
@@ -202,7 +193,6 @@ export function useAnnouncements() {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         throw new Error(errorData.message || 'Duyuru silinemedi');
       }
-      // SSE should handle the state update
     } catch (error: any) {
       console.error("[Announcements] Failed to delete announcement:", error);
       toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silinirken bir sorun oluştu.", variant: "destructive" });
@@ -213,5 +203,5 @@ export function useAnnouncements() {
     return announcements.find(ann => ann.id === id);
   }, [announcements]);
 
-  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading, unreadCount }; // unreadCount eklendi
+  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading, unreadCount };
 }

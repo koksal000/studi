@@ -26,11 +26,11 @@ export function useContactMessages() {
       localStorage.setItem(MESSAGES_KEY, JSON.stringify(data));
     } catch (error) {
       console.error("Failed to fetch initial contact messages:", error);
-      toast({
-        title: "Mesajlar Yüklenemedi",
-        description: "Sunucudan iletişim mesajları alınırken bir sorun oluştu.",
-        variant: "destructive"
-      });
+      // toast({
+      //   title: "Mesajlar Yüklenemedi",
+      //   description: "Sunucudan iletişim mesajları alınırken bir sorun oluştu.",
+      //   variant: "destructive"
+      // });
       const storedMessages = localStorage.getItem(MESSAGES_KEY);
       if (storedMessages) {
         try {
@@ -40,15 +40,16 @@ export function useContactMessages() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []); // Removed toast from dependencies
 
   useEffect(() => {
     fetchInitialMessages();
   }, [fetchInitialMessages]);
 
   useEffect(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
+    const currentEventSource = eventSourceRef.current;
+    if (currentEventSource) {
+      currentEventSource.close();
     }
 
     const newEventSource = new EventSource('/api/contact/stream');
@@ -67,36 +68,35 @@ export function useContactMessages() {
     newEventSource.onerror = (errorEvent: Event) => {
       const target = errorEvent.target as EventSource;
       const readyState = target?.readyState;
-      const eventType = errorEvent.type || 'unknown';
+      const eventType = errorEvent.type || 'unknown event type';
       
       console.error(
-        `SSE connection error for contact messages. EventSource readyState: ${readyState}, Event Type: ${eventType}, Event:`, errorEvent
+        `[SSE Contact] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
       );
       
-      if (readyState === EventSource.CLOSED) {
-        toast({
-          title: "İletişim Mesajları Bağlantısı Sonlandı",
-          description: "Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.",
-          variant: "destructive"
-        });
-      } else if (readyState === EventSource.CONNECTING) {
-        // Connecting state, expected during retries.
-      } else {
-         toast({
-          title: "İletişim Mesajları Bağlantı Hatası",
-          description: "Mesaj güncellemelerinde bir hata oluştu. Yeniden deneniyor.",
-          variant: "destructive"
-        });
-      }
+      // let toastMessage = "İletişim mesajı güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.";
+      // if (readyState === EventSource.CLOSED) {
+      //   toastMessage = "İletişim mesajları bağlantısı sonlandı. Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.";
+      // } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
+      //   toastMessage = "İletişim mesajları bağlantısı kurulamıyor. Lütfen internet bağlantınızı ve sunucu ayarlarını kontrol edin. Yeniden deneniyor...";
+      // }
+      
+      // toast({
+      //   title: "İletişim Mesajları Bağlantı Sorunu",
+      //   description: toastMessage,
+      //   variant: "destructive",
+      //   duration: 8000,
+      // });
     };
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      const es = eventSourceRef.current;
+      if (es) {
+        es.close();
         eventSourceRef.current = null;
       }
     };
-  }, [toast]); 
+  }, []); // Removed toast from dependencies
 
   const getMessageById = useCallback((id: string): ContactMessage | undefined => {
     return messages.find(msg => msg.id === id);

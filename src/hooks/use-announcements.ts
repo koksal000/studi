@@ -80,6 +80,7 @@ export function useAnnouncements() {
     if (eventSourceRef.current) {
       console.log('[SSE Announcements] Closing existing EventSource.');
       eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
 
     console.log('[SSE Announcements] Creating new EventSource for /api/announcements/stream');
@@ -104,7 +105,6 @@ export function useAnnouncements() {
             const newAnnouncementsFromServer = updatedAnnouncementsFromServer.filter(serverAnn => !currentLocalIds.has(serverAnn.id));
 
             if (newAnnouncementsFromServer.length > 0) {
-                // Find the most recent among the new ones for notification
                 newAnnouncementsFromServer.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 latestNewAnnouncementForNotification = newAnnouncementsFromServer[0];
                 console.log('[SSE Announcements] Identified as NEW for notification:', latestNewAnnouncementForNotification.title);
@@ -138,8 +138,9 @@ export function useAnnouncements() {
               console.error('[SSE Announcements] Notification error name:', notificationError.name);
               toast({
                 title: "Bildirim Gösterilemedi",
-                description: "Tarayıcı bildirimi oluşturulurken bir sorun oluştu: " + notificationError.message,
-                variant: "destructive"
+                description: `Tarayıcı, bu duyuru için bildirim göstermeyi engelledi. Tarayıcı ayarlarınızı kontrol edebilirsiniz. (Hata: ${notificationError.message})`,
+                variant: "destructive",
+                duration: 7000,
               });
             }
           } else {
@@ -168,26 +169,19 @@ export function useAnnouncements() {
         `[SSE Announcements] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
       );
 
+      let toastMessage = "Duyuru güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.";
       if (readyState === EventSource.CLOSED) {
-        toast({
-          title: "Duyuru Bağlantısı Sonlandı",
-          description: "Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.",
-          variant: "destructive"
-        });
-      } else if (readyState === EventSource.CONNECTING) { // readyState is 0
-        toast({
-          title: "Duyuru Bağlantısı Kurulamıyor",
-          description: "Sunucuya ilk bağlantı kurulamadı. Yeniden deneniyor. Lütfen internet bağlantınızı ve Vercel'deki NEXT_PUBLIC_APP_URL ayarını kontrol edin.",
-          variant: "destructive",
-          duration: 8000, 
-        });
-      } else { // For readyState OPEN (1) if an error somehow occurs, or unknown state
-         toast({
-          title: "Duyuru Bağlantı Hatası",
-          description: "Duyuru güncellemelerinde bir hata oluştu. Yeniden deneniyor.",
-          variant: "destructive"
-        });
+        toastMessage = "Duyuru bağlantısı sonlandı. Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.";
+      } else if (readyState === EventSource.CONNECTING) { 
+        toastMessage = "Duyuru bağlantısı kurulamıyor. Yeniden deneniyor. Lütfen internet bağlantınızı ve Vercel'deki NEXT_PUBLIC_APP_URL ayarını kontrol edin.";
       }
+      
+      toast({
+        title: "Duyuru Bağlantı Sorunu",
+        description: toastMessage,
+        variant: "destructive",
+        duration: 8000, 
+      });
     };
 
     return () => {
@@ -198,6 +192,7 @@ export function useAnnouncements() {
         eventSourceRef.current = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteNotificationsPreference, toast]); 
 
   const addAnnouncement = useCallback(async (newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
@@ -257,4 +252,3 @@ export function useAnnouncements() {
 
   return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading };
 }
-

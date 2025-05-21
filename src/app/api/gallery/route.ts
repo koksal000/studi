@@ -57,16 +57,19 @@ const loadGalleryFromFile = () => {
     if (fs.existsSync(GALLERY_FILE_PATH)) {
       const fileData = fs.readFileSync(GALLERY_FILE_PATH, 'utf-8');
       const parsedData = JSON.parse(fileData) as GalleryImage[];
-      galleryImagesData = parsedData.sort(gallerySortFnInMemory);
-      console.log(`[API/Gallery] Successfully loaded ${galleryImagesData.length} images from ${GALLERY_FILE_PATH}`);
+      // Eğer dosya var ama boşsa, yine de tohumlama yap
+      if (parsedData.length === 0) {
+        galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
+        console.log(`[API/Gallery] File ${GALLERY_FILE_PATH} was empty. Initialized with ${galleryImagesData.length} seed images.`);
+        saveGalleryToFile(); // Boş dosyayı tohumlanmış haliyle kaydet
+      } else {
+        galleryImagesData = parsedData.sort(gallerySortFnInMemory);
+        console.log(`[API/Gallery] Successfully loaded ${galleryImagesData.length} images from ${GALLERY_FILE_PATH}`);
+      }
     } else {
       galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
-      if (process.env.DATA_PATH) { // Only attempt to create if on Render with persistent disk
-          saveGalleryToFile(); 
-          console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images. File ${GALLERY_FILE_PATH} created on persistent disk.`);
-      } else {
-          console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images (in-memory only, file not created as DATA_PATH not set).`);
-      }
+      console.log(`[API/Gallery] File ${GALLERY_FILE_PATH} not found. Initialized with ${galleryImagesData.length} seed images.`);
+      saveGalleryToFile(); // Dosyayı ilk kez oluştur ve tohumla
     }
   } catch (error) {
     console.error("[API/Gallery] Error loading gallery from file, using static seeds as fallback:", error);
@@ -75,16 +78,16 @@ const loadGalleryFromFile = () => {
 };
 
 const saveGalleryToFile = () => {
-  try {
+   try {
     const dir = path.dirname(GALLERY_FILE_PATH);
-    if (!fs.existsSync(dir) && process.env.DATA_PATH){ // Only attempt mkdir if DATA_PATH is set
+    if (!fs.existsSync(dir) && process.env.DATA_PATH ){
         fs.mkdirSync(dir, { recursive: true });
     }
     const sortedData = [...galleryImagesData].sort(gallerySortFnInMemory);
     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(sortedData, null, 2));
     console.log(`[API/Gallery] Gallery data saved to ${GALLERY_FILE_PATH}`);
   } catch (error) {
-    console.error("[API/Gallery] Error saving gallery to file (this is expected on Vercel, but not on Render with persistent disk):", error);
+    console.error("[API/Gallery] Error saving gallery to file:", error);
   }
 };
 
@@ -122,6 +125,7 @@ export async function POST(request: NextRequest) {
     galleryImagesData.sort(gallerySortFnInMemory); 
     
     saveGalleryToFile(); 
+    console.log(`[API/Gallery] Added/Updated image: ${newImage.id}. Total images: ${galleryImagesData.length}`);
 
     galleryEmitter.emit('update', [...galleryImagesData]);
     return NextResponse.json(newImage, { status: 201 });
@@ -152,6 +156,7 @@ export async function DELETE(request: NextRequest) {
 
     if (galleryImagesData.length < initialLength) {
       saveGalleryToFile(); 
+      console.log(`[API/Gallery] Deleted image: ${id}. Total images: ${galleryImagesData.length}`);
       galleryEmitter.emit('update', [...galleryImagesData]);
       return NextResponse.json({ message: 'Image deleted successfully' }, { status: 200 });
     } else {

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from 'react'; // Added React import
+import React from 'react';
 import type { Announcement } from '@/hooks/use-announcements';
 import Link from 'next/link';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -60,3 +60,4 @@ export function AnnouncementPopoverContent({ announcements, onClose }: Announcem
     </div>
   );
 }
+

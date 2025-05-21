@@ -15,7 +15,8 @@ export interface GalleryImage {
   hint: string;
 }
 
-const GALLERY_FILE_PATH = path.join(process.cwd(), '_gallery.json');
+const dataPath = process.env.DATA_PATH || process.cwd();
+const GALLERY_FILE_PATH = path.join(dataPath, '_gallery.json');
 
 // Function to read gallery from file
 const loadGalleryFromFile = (): GalleryImage[] => {
@@ -38,20 +39,20 @@ const loadGalleryFromFile = (): GalleryImage[] => {
 // Function to save gallery to file
 const saveGalleryToFile = (data: GalleryImage[]) => {
   try {
+    // Ensure the directory exists
+    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+      fs.mkdirSync(dataPath, { recursive: true });
+    }
     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
-    console.log("[API/Gallery] Gallery images saved to file.");
+    console.log("[API/Gallery] Gallery images saved to file:", GALLERY_FILE_PATH);
   } catch (error) {
     console.error("[API/Gallery] Error writing gallery file:", error);
   }
 };
 
-// Initialize in-memory store
 let galleryImagesData: GalleryImage[] = loadGalleryFromFile();
 
 if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0) {
-  // This case is now handled inside loadGalleryFromFile if file doesn't exist
-  // If file existed but was empty or unparseable, loadGalleryFromFile would use seeds.
-  // If seed data was used, let's save it to create the file.
   if (!fs.existsSync(GALLERY_FILE_PATH)) {
       console.log("[API/Gallery] Initializing gallery with seed data and saving to file for the first time.");
       saveGalleryToFile(galleryImagesData); 
@@ -63,6 +64,9 @@ if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length >
 
 export async function GET() {
   try {
+    if (galleryImagesData.length === 0 && fs.existsSync(GALLERY_FILE_PATH)) {
+        galleryImagesData = loadGalleryFromFile();
+    }
     return NextResponse.json([...galleryImagesData].sort((a,b) => {
         const aIsSeed = a.id.startsWith('seed_');
         const bIsSeed = b.id.startsWith('seed_');
@@ -101,7 +105,7 @@ export async function POST(request: NextRequest) {
     };
 
     galleryImagesData.unshift(newImage); 
-    saveGalleryToFile(galleryImagesData); // Save to file
+    saveGalleryToFile(galleryImagesData);
     
     galleryEmitter.emit('update', [...galleryImagesData]);
 
@@ -131,7 +135,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Image not found' }, { status: 404 });
     }
 
-    saveGalleryToFile(galleryImagesData); // Save to file
+    saveGalleryToFile(galleryImagesData);
     galleryEmitter.emit('update', [...galleryImagesData]);
 
     return NextResponse.json({ message: 'Image deleted successfully' }, { status: 200 });

@@ -7,7 +7,8 @@ import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
 
-const ANNOUNCEMENTS_FILE_PATH = path.join(process.cwd(), '_announcements.json');
+const dataPath = process.env.DATA_PATH || process.cwd();
+const ANNOUNCEMENTS_FILE_PATH = path.join(dataPath, '_announcements.json');
 
 // Function to read announcements from file
 const loadAnnouncementsFromFile = (): Announcement[] => {
@@ -22,22 +23,25 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
     return [];
   } catch (error) {
     console.error("[API/Announcements] Error reading announcements file:", error);
-    return []; // Return empty array on error to prevent crashes
+    return [];
   }
 };
 
 // Function to save announcements to file
 const saveAnnouncementsToFile = (data: Announcement[]) => {
   try {
+    // Ensure the directory exists
+    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+      fs.mkdirSync(dataPath, { recursive: true });
+    }
     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log("[API/Announcements] Announcements saved to file.");
+    console.log("[API/Announcements] Announcements saved to file:", ANNOUNCEMENTS_FILE_PATH);
   } catch (error) {
     console.error("[API/Announcements] Error writing announcements file:", error);
   }
 };
 
-// Initialize in-memory store from file or empty array
 let announcementsData: Announcement[] = loadAnnouncementsFromFile();
 if (announcementsData.length === 0) {
   console.log("[API/Announcements] Initialized with an empty announcements list (or file not found/read failed).")
@@ -45,6 +49,10 @@ if (announcementsData.length === 0) {
 
 export async function GET() {
   try {
+    // Ensure data is loaded if it was empty initially and file might have been created by another instance
+    if (announcementsData.length === 0 && fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
+        announcementsData = loadAnnouncementsFromFile();
+    }
     return NextResponse.json([...announcementsData]);
   } catch (error) {
     console.error("[API/Announcements] Error fetching announcements (GET):", error);
@@ -70,8 +78,8 @@ export async function POST(request: NextRequest) {
       author: body.author,
     };
 
-    announcementsData.unshift(newAnnouncement); // Update in-memory array
-    saveAnnouncementsToFile(announcementsData); // Save to file
+    announcementsData.unshift(newAnnouncement);
+    saveAnnouncementsToFile(announcementsData);
     
     announcementEmitter.emit('update', [...announcementsData]);
 
@@ -95,13 +103,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     const initialLength = announcementsData.length;
-    announcementsData = announcementsData.filter(ann => ann.id !== id); // Update in-memory array
+    announcementsData = announcementsData.filter(ann => ann.id !== id);
 
     if (announcementsData.length === initialLength) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
 
-    saveAnnouncementsToFile(announcementsData); // Save to file
+    saveAnnouncementsToFile(announcementsData);
     announcementEmitter.emit('update', [...announcementsData]);
 
     return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });

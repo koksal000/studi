@@ -15,7 +15,8 @@ export interface ContactMessage {
   date: string;
 }
 
-const MESSAGES_FILE_PATH = path.join(process.cwd(), '_contact_messages.json');
+const dataPath = process.env.DATA_PATH || process.cwd();
+const MESSAGES_FILE_PATH = path.join(dataPath, '_contact_messages.json');
 
 const loadMessagesFromFile = (): ContactMessage[] => {
   try {
@@ -29,16 +30,20 @@ const loadMessagesFromFile = (): ContactMessage[] => {
     return [];
   } catch (error) {
     console.error("[API/Contact] Error reading contact messages file:", error);
-    return []; // Return empty array on error
+    return [];
   }
 };
 
 // Function to save messages to file
 const saveMessagesToFile = (data: ContactMessage[]) => {
   try {
+    // Ensure the directory exists
+    if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
+      fs.mkdirSync(dataPath, { recursive: true });
+    }
     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log("[API/Contact] Contact messages saved to file.");
+    console.log("[API/Contact] Contact messages saved to file:", MESSAGES_FILE_PATH);
   } catch (error) {
     console.error("[API/Contact] Error writing contact messages file:", error);
   }
@@ -51,6 +56,9 @@ if (contactMessagesData.length === 0) {
 
 export async function GET() {
   try {
+    if (contactMessagesData.length === 0 && fs.existsSync(MESSAGES_FILE_PATH)) {
+        contactMessagesData = loadMessagesFromFile();
+    }
     return NextResponse.json([...contactMessagesData]);
   } catch (error) {
     console.error("[API/Contact] Error fetching contact messages (GET):", error);
@@ -77,7 +85,7 @@ export async function POST(request: NextRequest) {
     };
 
     contactMessagesData.unshift(newMessage); 
-    saveMessagesToFile(contactMessagesData); // Save to file
+    saveMessagesToFile(contactMessagesData);
     
     contactEmitter.emit('update', [...contactMessagesData]);
 

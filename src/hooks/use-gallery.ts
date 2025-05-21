@@ -30,7 +30,6 @@ const gallerySortFn = (a: GalleryImage, b: GalleryImage): number => {
   if (aIsSeed && !bIsSeed) return -1;
   if (!aIsSeed && bIsSeed) return 1;
 
-  // If both are seeds or both are not seeds, sort by ID (newest first for 'gal_')
   const extractNumericPart = (id: string) => {
     const match = id.match(/\d+$/);
     return match ? parseInt(match[0]) : null;
@@ -41,16 +40,15 @@ const gallerySortFn = (a: GalleryImage, b: GalleryImage): number => {
 
   if (numA !== null && numB !== null) {
     if (a.id.startsWith('gal_') && b.id.startsWith('gal_')) {
-      return numB - numA; // Newest 'gal_' first
+      return numB - numA; 
     }
-    return numA - numB; // Ascending for seeds or mixed if numeric
+    return numA - numB; 
   }
   
-  // Fallback for non-standard IDs or if one is numeric and other is not
-  if (a.id.startsWith('gal_') && !b.id.startsWith('gal_')) return -1; // User uploaded before seed
+  if (a.id.startsWith('gal_') && !b.id.startsWith('gal_')) return -1; 
   if (!a.id.startsWith('gal_') && b.id.startsWith('gal_')) return 1;
   
-  return b.id.localeCompare(a.id); // Default: newer string IDs first
+  return b.id.localeCompare(a.id); 
 };
 
 
@@ -120,7 +118,7 @@ export function useGallery() {
           if (e.name === 'QuotaExceededError') {
             toast({
               title: "Yerel Depolama Uyarısı",
-              description: "Galeri güncellendi, ancak tarayıcı depolama limiti nedeniyle bazı resimler yerel olarak tam kaydedilememiş olabilir. Bu resimler sayfa yenilendiğinde kaybolabilir.",
+              description: "Galeri güncellendi, ancak tarayıcı depolama limiti nedeniyle bazı resimler yerel olarak tam kaydedilememiş olabilir.",
               variant: "warning",
               duration: 8000,
             });
@@ -167,12 +165,13 @@ export function useGallery() {
       return Promise.reject(new Error("User not logged in"));
     }
 
-    if (!payload.caption || !payload.imageDataUri) {
-        toast({ title: "Eksik Bilgi", description: "Resim verisi veya başlık eksik.", variant: "destructive" });
-        return Promise.reject(new Error("Missing image data or caption"));
+    if (!payload || !payload.imageDataUri || !payload.imageDataUri.startsWith('data:image/') || !payload.caption || !payload.caption.trim()) {
+      toast({ title: "Geçersiz Yükleme Verisi", description: "Resim verisi veya başlık eksik/hatalı. Lütfen tekrar deneyin.", variant: "destructive" });
+      console.error("addGalleryImage: Invalid payload received", { caption: payload?.caption, imageDataUriStart: payload?.imageDataUri?.substring(0,30) });
+      return Promise.reject(new Error("Invalid payload provided to addGalleryImage: Missing or invalid imageDataUri or caption."));
     }
 
-    const newImageForApi: GalleryImage = {
+    const newImageForApiAndOptimistic: GalleryImage = {
       id: `gal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       src: payload.imageDataUri, 
       alt: payload.alt || payload.caption,
@@ -180,23 +179,26 @@ export function useGallery() {
       hint: payload.hint || 'uploaded image',
     };
 
-    const previousGalleryForRevert = [...galleryImagesRef.current]; 
+    const previousGallery = [...galleryImagesRef.current]; 
     
-    setGalleryImages(prev => [newImageForApi, ...prev].sort(gallerySortFn));
+    setGalleryImages(prev => [newImageForApiAndOptimistic, ...prev].sort(gallerySortFn));
 
     try {
-      const currentGalleryForStorage = [newImageForApi, ...previousGalleryForRevert].sort(gallerySortFn);
-      localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(currentGalleryForStorage));
+      localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify([newImageForApiAndOptimistic, ...previousGallery].sort(gallerySortFn)));
     } catch (e: any) {
       if (e.name === 'QuotaExceededError') {
+        // Revert UI update for this specific image if localStorage fails immediately
+        setGalleryImages(previousGallery);
         toast({
           title: "Yerel Depolama Limiti Aşıldı",
-          description: "Resim geçici olarak eklendi ancak tarayıcı depolama alanı dolu olduğu için kalıcı olarak kaydedilemedi. Bu resim sayfa yenilendiğinde kaybolabilir.",
-          variant: "warning",
+          description: "Resim eklenemedi çünkü tarayıcı depolama alanı dolu. Lütfen bazı eski resimleri silin veya daha küçük bir resim yükleyin.",
+          variant: "destructive",
           duration: 8000,
         });
+         return Promise.reject(new Error("Yerel Depolama Limiti Aşıldı"));
       } else {
         console.error("Error saving optimistic gallery to localStorage:", e);
+        // Potentially revert UI if it's a different critical localStorage error
       }
     }
 
@@ -204,7 +206,7 @@ export function useGallery() {
       const response = await fetch('/api/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newImageForApi), 
+        body: JSON.stringify(newImageForApiAndOptimistic), 
       });
 
       if (!response.ok) {
@@ -215,30 +217,38 @@ export function useGallery() {
           errorMessage = "Resim yüklenemedi çünkü dosya boyutu sunucu limitlerini aşıyor. Lütfen daha küçük bir resim seçin.";
         }
         
-        toast({ title: "Yükleme Başarısız", description: errorMessage, variant: "destructive" });
-        
-        setGalleryImages(previousGalleryForRevert);
+        // Revert optimistic update if API call fails
+        setGalleryImages(previousGallery);
         try {
-            localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGalleryForRevert));
-        } catch (lsError) {
-            console.warn("Could not revert localStorage after API failure:", lsError);
+            localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGallery));
+        } catch (lsError: any) {
+            if (lsError.name === 'QuotaExceededError') {
+                 toast({
+                    title: "Depolama Hatası",
+                    description: "Sunucu hatası sonrası yerel depolama da güncellenemedi. Tarayıcı depolama alanı dolu olabilir.",
+                    variant: "destructive",
+                    duration: 7000,
+                 });
+            } else {
+                console.warn("Could not revert localStorage after API failure:", lsError);
+            }
         }
+        toast({ title: "Yükleme Başarısız", description: errorMessage, variant: "destructive" });
         throw new Error(errorMessage); 
       }
     } catch (error: any) {
-      console.error("Failed to send new gallery image to server:", error);
-      setGalleryImages(previousGalleryForRevert);
+      console.error("Failed to send new gallery image to server (or during revert):", error);
+      // Ensure UI is reverted if not already done
+      setGalleryImages(previousGallery);
       try {
-        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGalleryForRevert));
-      } catch (lsRevertError) {
-        console.warn("Error reverting localStorage on API error (general catch):", lsRevertError);
+        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGallery));
+      } catch (lsRevertError: any) {
+         if (lsRevertError.name !== 'QuotaExceededError') { // Avoid double toast for quota on revert
+            console.warn("Error reverting localStorage on API error (general catch):", lsRevertError);
+         }
       }
-      if (!error.message?.includes("Resim yüklenemedi çünkü dosya boyutu sunucu limitlerini aşıyor") && 
-          !error.message?.includes("Resim sunucuya iletilemedi") &&
-          !error.message?.includes("Yerel Depolama Limiti Aşıldı") /* Avoid double toast from localStorage catch */
-          ) {
-         // This path might be for network errors or unexpected issues
-         // toast({ title: "Resim Yüklenemedi", description: "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
+      if (!error.message?.includes("Yerel Depolama Limiti Aşıldı")) { // Avoid double toasting for quota
+        toast({ title: "Resim Yüklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
       throw error; 
     }
@@ -298,3 +308,4 @@ export function useGallery() {
 }
 
     
+

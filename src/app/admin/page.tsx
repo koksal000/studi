@@ -102,7 +102,7 @@ export default function AdminPage() {
       if (file.size > MAX_RAW_FILE_SIZE) {
         toast({
           title: "Dosya Boyutu Çok Büyük",
-          description: `Lütfen ${MAX_RAW_FILE_SIZE / (1024*1024)}MB'den küçük bir resim dosyası seçin. Daha büyük dosyalar sunucu tarafından reddedilebilir veya tarayıcı depolama limitlerini aşabilir.`,
+          description: `Lütfen ${MAX_RAW_FILE_SIZE / (1024*1024)}MB'den küçük bir resim dosyası seçin.`,
           variant: "destructive",
           duration: 7000,
         });
@@ -116,18 +116,7 @@ export default function AdminPage() {
       const reader = new FileReader();
       reader.onloadend = () => {
         const imageDataUri = reader.result as string;
-        if (imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH) {
-          toast({ 
-            title: "Resim Verisi Çok Büyük", 
-            description: `Resim işlendikten sonra veri boyutu çok büyük oldu (yaklaşık ${Math.round(imageDataUri.length / (1024*1024))}MB). Lütfen daha küçük boyutlu veya daha iyi sıkıştırılmış bir resim dosyası seçin (Örn: ~${MAX_RAW_FILE_SIZE / (1024*1024)}MB veya daha az).`, 
-            variant: "destructive",
-            duration: 8000,
-          });
-          if (fileInputRef.current) fileInputRef.current.value = "";
-          setNewImageFile(null);
-          setNewImagePreview(null); // Clear preview if data is too large
-          return;
-        }
+
         if (!imageDataUri || typeof imageDataUri !== 'string' || !imageDataUri.startsWith('data:image/')) {
             toast({ 
                 title: "Geçersiz Resim Verisi Okundu", 
@@ -138,6 +127,19 @@ export default function AdminPage() {
             setNewImageFile(null);
             setNewImagePreview(null);
             return;
+        }
+        
+        if (imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH) {
+          toast({ 
+            title: "Resim Verisi Çok Büyük", 
+            description: `İşlenmiş resim verisi çok büyük (yaklaşık ${Math.round(imageDataUri.length / (1024*1024))}MB). Lütfen daha küçük boyutlu veya daha iyi sıkıştırılmış bir resim dosyası seçin.`, 
+            variant: "destructive",
+            duration: 8000,
+          });
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          setNewImageFile(null);
+          setNewImagePreview(null);
+          return;
         }
         setNewImagePreview(imageDataUri);
       };
@@ -156,20 +158,21 @@ export default function AdminPage() {
 
   const handleAddImageSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!newImageFile || !newImageCaption.trim()) {
-      toast({ title: "Eksik Bilgi", description: "Lütfen bir resim seçin ve başlık girin.", variant: "destructive" });
+    
+    if (!newImageFile || !newImageCaption.trim() || !newImagePreview) {
+      toast({ title: "Eksik Bilgi", description: "Lütfen bir resim seçin, başlık girin ve resmin önizlemesinin yüklendiğinden emin olun.", variant: "destructive" });
       return;
     }
 
-    if (!newImagePreview || typeof newImagePreview !== 'string' || !newImagePreview.startsWith('data:image/')) {
+    if (typeof newImagePreview !== 'string' || !newImagePreview.startsWith('data:image/')) {
       toast({ 
         title: "Geçersiz Resim Verisi", 
-        description: "Resim yüklenemiyor. Lütfen geçerli bir resim dosyası (örn: PNG, JPG) seçin ve önizlemenin göründüğünden emin olun.", 
+        description: "Resim yüklenemiyor. Lütfen geçerli bir resim dosyası seçin ve önizlemenin doğru yüklendiğinden emin olun.", 
         variant: "destructive" 
       });
-      if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
-      setNewImageFile(null); // Reset file state
-      setNewImagePreview(null); // Reset preview state
+      if(fileInputRef.current) fileInputRef.current.value = ""; 
+      setNewImageFile(null); 
+      setNewImagePreview(null); 
       return;
     }
     
@@ -179,21 +182,32 @@ export default function AdminPage() {
         imageDataUri: newImagePreview,
         caption: newImageCaption.trim(),
         alt: newImageCaption.trim() || "Yüklenen galeri resmi",
-        hint: "custom upload",
+        hint: "custom upload", 
       };
+
+      console.log("AdminPage: Payload to addGalleryImage:", { 
+        caption: payload.caption, 
+        alt: payload.alt, 
+        hint: payload.hint, 
+        imageDataUriLength: payload.imageDataUri.length 
+      });
+
+
       await addGalleryImage(payload);
       toast({ 
-        title: "Resim Sunucuya Gönderildi", 
-        description: `"${newImageCaption.trim()}" başlıklı resim galeriye eklenmek üzere işleniyor. Değişikliğin kalıcı olması için GitHub'daki _gallery.json dosyasını manuel olarak güncellemeniz gerekebilir (Render.com'da kalıcı disk yapılandırılmadıysa).` 
+        title: "Resim Sunucuya Gönderildi (Geçici)", 
+        description: `"${newImageCaption.trim()}" başlıklı resim galeriye eklendi. Render.com üzerinde kalıcı disk doğru yapılandırıldıysa, bu değişiklik kalıcı olacaktır.` 
       });
       setNewImageFile(null);
       setNewImageCaption('');
       setNewImagePreview(null);
       if(fileInputRef.current) fileInputRef.current.value = "";
     } catch (error: any) {
-      console.error("Error adding image in admin page:", error);
-      if (!error.message?.includes("Yerel Depolama Limiti Aşıldı") && !error.message?.includes("Resim Verisi Çok Büyük") && !error.message?.includes("Dosya Boyutu Çok Büyük") && !error.message?.includes("Resim yüklenemedi çünkü dosya boyutu sunucu limitlerini aşıyor")) {
-        toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
+      console.error("AdminPage: Error calling addGalleryImage:", error);
+      // Toast messages are handled within useGallery hook for API/localStorage errors
+      // Only show a generic one if it's an unexpected client-side issue before calling the hook
+      if (!error.message?.includes("localStorage") && !error.message?.includes("sunucu") && !error.message?.includes("payload")) {
+         toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
     } finally {
       setIsUploading(false);
@@ -212,7 +226,7 @@ export default function AdminPage() {
       await deleteGalleryImage(imageToDelete.id);
       toast({ 
         title: "Resim Silindi (Geçici)", 
-        description: `"${imageToDelete.caption}" başlıklı resim mevcut oturum için galeriden silindi. Değişikliğin kalıcı olması için GitHub'daki _gallery.json dosyasını manuel olarak güncellemeniz gerekebilir (Render.com'da kalıcı disk yapılandırılmadıysa).` 
+        description: `"${imageToDelete.caption}" başlıklı resim galeriden silindi. Render.com üzerinde kalıcı disk doğru yapılandırıldıysa, bu değişiklik kalıcı olacaktır.` 
       });
     } catch (error: any) {
       console.error("Error deleting image:", error);
@@ -281,9 +295,7 @@ export default function AdminPage() {
           </CardTitle>
            <CardDescription>
             Yeni duyurular ekleyin veya mevcut duyuruları yönetin. 
-            Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_announcements.json`) güncelleniyorsa, değişiklikleriniz kalıcı olacaktır.
-            Mevcut "Git as DB" modelinde, bu panelden yapılan değişiklikler geçicidir ve kalıcı olması için `_announcements.json` dosyasının GitHub'da manuel olarak güncellenmesi gerekir.
-            Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_announcements.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_announcements.json</a>
+            Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_announcements.json`) güncelleniyorsa, değişiklikleriniz kalıcı olacaktır. Aksi takdirde, değişiklikler geçicidir ve kalıcı olması için JSON dosyasının GitHub'da manuel olarak güncellenmesi gerekir.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -313,10 +325,7 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-6 w-6 text-primary" /> Galeri Yönetimi</CardTitle>
            <CardDescription>
-            Sitede gösterilen galeri resimlerini yönetin. Buradan eklenen veya silinen resimler,
-            Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_gallery.json`) güncelleniyorsa kalıcı olacaktır.
-            Mevcut "Git as DB" modelinde, bu panelden eklenen resimler geçicidir (sunucu belleğinde kalır) ve kalıcı olması için `_gallery.json` dosyasının GitHub'da manuel olarak güncellenmesi gerekir.
-             Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_gallery.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_gallery.json</a>
+            Sitede gösterilen galeri resimlerini yönetin. Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_gallery.json`) güncelleniyorsa, değişiklikleriniz kalıcı olacaktır. Aksi takdirde, değişiklikler geçicidir ve kalıcı olması için JSON dosyasının GitHub'da manuel olarak güncellenmesi gerekir.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -357,7 +366,6 @@ export default function AdminPage() {
               Galeriye Ekle (Geçici)
             </Button>
             {isUploading && <p className="text-sm text-muted-foreground">Resim yükleniyor, lütfen bekleyin...</p>}
-             <p className="text-xs text-muted-foreground">Not: Buradan eklenen resimler sunucu belleğinde geçici olarak saklanır. Kalıcı olması için GitHub'daki `_gallery.json` dosyasını manuel olarak güncellemeniz gerekir.</p>
           </form>
 
           <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4">Mevcut Galeri Resimleri</h3>
@@ -385,7 +393,7 @@ export default function AdminPage() {
                                  <AlertDialogDescription>
                                     "{image.caption}" başlıklı resmi galeriden silmek istediğinizden emin misiniz?
                                     <br/><br/>
-                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem, mevcut "Git as DB" modelinde sadece bu oturum için geçerlidir. Değişikliğin kalıcı olması için, GitHub reponuzdaki `_gallery.json` dosyasını manuel olarak güncellemeniz ve projenizi yeniden dağıtmanız gerekir. Render.com'da kalıcı disk yapılandırıldıysa bu uyarıyı dikkate almayabilirsiniz.
+                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Render.com'da kalıcı disk doğru yapılandırıldıysa, bu işlem kalıcıdır. Aksi takdirde, bu değişiklik geçicidir ve kalıcı olması için GitHub reponuzdaki `_gallery.json` dosyasını manuel olarak güncellemeniz gerekir.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -395,7 +403,7 @@ export default function AdminPage() {
                                     className="bg-destructive hover:bg-destructive/90"
                                     disabled={isUploading && imageToDelete?.id === image.id}
                                 >
-                                     {isUploading && imageToDelete?.id === image.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil (Geçici)"}
+                                     {isUploading && imageToDelete?.id === image.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil"}
                                 </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>

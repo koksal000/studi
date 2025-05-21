@@ -30,7 +30,7 @@ export function EntryForm() {
       <video
         autoPlay
         loop
-        muted={false} // User requested "sesli" (audible). Browser policies might mute it or prevent autoplay with sound.
+        muted={true} // Changed to true to enable autoplay
         playsInline // Important for iOS to play inline
         className="absolute top-0 left-0 w-full h-full object-cover" // Video as background
         src="https://files.catbox.moe/na9jph.mp4" // Updated video URL
@@ -84,3 +84,4 @@ export function EntryForm() {
     </div>
   );
 }
+

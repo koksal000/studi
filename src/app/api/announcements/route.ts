@@ -17,7 +17,7 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
       const parsedData = JSON.parse(fileData) as Announcement[];
       return parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
-    console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array.`);
+    // console.warn(`[API/Announcements] Announcements file not found at ${ANNOUNCEMENTS_FILE_PATH}. Returning empty array.`);
     return [];
   } catch (error) {
     console.error("[API/Announcements] Error reading announcements file:", error);
@@ -33,6 +33,7 @@ const saveAnnouncementsToFile = (data: Announcement[]) => {
     console.log("[API/Announcements] Announcements saved to file.");
   } catch (error) {
     console.error("[API/Announcements] Error writing announcements file:", error);
+    // Removed Vercel-specific warning as user is deploying to Render
   }
 };
 

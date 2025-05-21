@@ -9,20 +9,21 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
 
-  if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
-    console.warn(
-      '[SSE Contact Stream] WARNING: NEXT_PUBLIC_APP_URL is not set or is misconfigured for production. '+
-      'The SSE stream may fail to fetch initial data if it relies on this URL to call its own API. '+
-      'Current appUrl for internal fetch:', appUrl
-    );
-  }
+  // Removed Vercel-specific warning about NEXT_PUBLIC_APP_URL as user is deploying to Render
+  // if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
+  //   console.warn(
+  //     '[SSE Contact Stream] WARNING: NEXT_PUBLIC_APP_URL is not set or is misconfigured for production. '+
+  //     'The SSE stream may fail to fetch initial data if it relies on this URL to call its own API. '+
+  //     'Current appUrl for internal fetch:', appUrl
+  //   );
+  // }
   
   const stream = new ReadableStream({
     start(controller) {
       const sendUpdate = (data: ContactMessage[]) => {
         try {
            if (controller.desiredSize === null || controller.desiredSize <= 0) {
-            console.warn("[SSE Contact] Controller is not in a state to enqueue. Aborting sendUpdate and removing listener.");
+            // console.warn("[SSE Contact] Controller is not in a state to enqueue. Aborting sendUpdate and removing listener.");
             contactEmitter.off('update', sendUpdate);
             return;
           }
@@ -31,7 +32,7 @@ export async function GET() {
         } catch (e: any) {
             console.error("[SSE Contact] Error enqueuing data to stream:", e.message, e.stack);
             try {
-              if (controller.desiredSize !== null) { 
+              if (controller.desiredSize !== null && controller.desiredSize > 0) { 
                 controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
               }
             } catch (closeErr) {
@@ -59,7 +60,7 @@ export async function GET() {
         }).catch(e => {
             console.error("SSE Contact: Error during initial messages fetch or processing:", e.message);
             try {
-              if (controller.desiredSize !== null) { 
+              if (controller.desiredSize !== null && controller.desiredSize > 0) { 
                 controller.error(new Error(`Failed to initialize contact messages stream: Could not fetch initial data. Server error: ${e.message}`));
               }
             } catch (closeError) {
@@ -71,7 +72,7 @@ export async function GET() {
       contactEmitter.on('update', sendUpdate);
 
       controller.signal.addEventListener('abort', () => {
-        console.log("SSE contact messages client disconnected (abort signal). Removing listener.");
+        // console.log("SSE contact messages client disconnected (abort signal). Removing listener.");
         contactEmitter.off('update', sendUpdate);
       });
     },

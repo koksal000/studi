@@ -9,13 +9,14 @@ export const dynamic = 'force-dynamic'; // Ensures this route is not statically 
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
 
-  if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
-    console.warn(
-      '[SSE Announcements Stream] WARNING: NEXT_PUBLIC_APP_URL is not set or is misconfigured for production. '+
-      'The SSE stream may fail to fetch initial data if it relies on this URL to call its own API. '+
-      'Current appUrl for internal fetch:', appUrl
-    );
-  }
+  // Removed Vercel-specific warning about NEXT_PUBLIC_APP_URL as user is deploying to Render
+  // if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
+  //   console.warn(
+  //     '[SSE Announcements Stream] WARNING: NEXT_PUBLIC_APP_URL is not set or is misconfigured for production. '+
+  //     'The SSE stream may fail to fetch initial data if it relies on this URL to call its own API. '+
+  //     'Current appUrl for internal fetch:', appUrl
+  //   );
+  // }
 
   const stream = new ReadableStream({
     start(controller) {
@@ -23,7 +24,7 @@ export async function GET() {
         try {
           // Check if controller is still usable before enqueuing
           if (controller.desiredSize === null || controller.desiredSize <= 0) {
-            console.warn("[SSE Announcements] Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate and removing listener.");
+            // console.warn("[SSE Announcements] Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate and removing listener.");
             announcementEmitter.off('update', sendUpdate); // Clean up listener
             return;
           }
@@ -33,7 +34,7 @@ export async function GET() {
         } catch (e: any) {
             console.error("[SSE Announcements] Error enqueuing data to stream:", e.message, e.stack);
             try {
-              if (controller.desiredSize !== null) { 
+              if (controller.desiredSize !== null && controller.desiredSize > 0) { 
                 controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
               }
             } catch (closeErr) {
@@ -61,7 +62,7 @@ export async function GET() {
         }).catch(e => {
             console.error("SSE Announcements: Error during initial announcements fetch or processing:", e.message); 
             try {
-              if (controller.desiredSize !== null) { 
+              if (controller.desiredSize !== null && controller.desiredSize > 0) { 
                 controller.error(new Error(`Failed to initialize announcements stream: Could not fetch initial data. Server error: ${e.message}`));
               }
             } catch (closeError) {
@@ -73,18 +74,10 @@ export async function GET() {
 
       announcementEmitter.on('update', sendUpdate);
 
-      // It's good practice to also handle the client disconnecting
       controller.signal.addEventListener('abort', () => {
-        console.log("SSE announcements client disconnected (abort signal). Removing listener.");
+        // console.log("SSE announcements client disconnected (abort signal). Removing listener.");
         announcementEmitter.off('update', sendUpdate);
       });
-
-      // This function is called when the stream is cancelled by the reader (e.g. client closes connection)
-      // However, 'abort' on controller.signal is often more reliable for cleanup.
-      // return function cancel() {
-      //   console.log("SSE announcements stream cancelled by reader. Removing listener.");
-      //   announcementEmitter.off('update', sendUpdate);
-      // };
     },
   });
 

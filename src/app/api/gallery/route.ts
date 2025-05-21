@@ -24,7 +24,7 @@ const loadGalleryFromFile = (): GalleryImage[] => {
       const fileData = fs.readFileSync(GALLERY_FILE_PATH, 'utf-8');
       return JSON.parse(fileData) as GalleryImage[];
     }
-    console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Returning seed data or empty array.`);
+    // console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Returning seed data or empty array.`);
     return STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0 ? [...STATIC_GALLERY_IMAGES_FOR_SEEDING] : [];
   } catch (error) {
     console.error("[API/Gallery] Error reading gallery file:", error);
@@ -39,6 +39,7 @@ const saveGalleryToFile = (data: GalleryImage[]) => {
     console.log("[API/Gallery] Gallery images saved to file.");
   } catch (error) {
     console.error("[API/Gallery] Error writing gallery file:", error);
+    // Removed Vercel-specific warning as user is deploying to Render
   }
 };
 

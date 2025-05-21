@@ -12,18 +12,19 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, type FormEvent, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { EntryForm } from '@/components/specific/entry-form';
-import { useContactMessages } from '@/hooks/use-contact-messages'; // Import the hook
+import { useContactMessages } from '@/hooks/use-contact-messages'; 
 
 export default function ContactPage() {
   const { toast } = useToast();
   const { user, showEntryForm } = useUser();
   const [formData, setFormData] = useState({ email: '', subject: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { addContactMessage } = useContactMessages(); // Use the hook
+  const { addContactMessage } = useContactMessages();
 
   useEffect(() => {
     if (user) {
-      setFormData({ email: '', subject: '', message: '' });
+      // Keep email if already entered, reset others if needed or keep for convenience
+      // setFormData({ email: formData.email, subject: '', message: '' });
     }
   }, [user]);
 
@@ -51,14 +52,13 @@ export default function ContactPage() {
         message: formData.message,
       };
 
-      // Use the hook to add the message. This will update localStorage and POST to API.
       await addContactMessage(payload);
 
       toast({
         title: "Mesajınız Gönderildi!",
         description: "En kısa sürede sizinle iletişime geçeceğiz.",
       });
-      setFormData({ email: '', subject: '', message: '' }); // Reset form
+      setFormData({ email: '', subject: '', message: '' }); 
     } catch (error: any) {
       console.error("Form Submission Error:", error);
       toast({

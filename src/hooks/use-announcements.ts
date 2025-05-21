@@ -5,21 +5,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from '@/hooks/use-toast';
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
-import type { SettingsContextType } from '@/contexts/settings-context'; // Keep if useSettings still exports this
 import { useSettings } from '@/contexts/settings-context';
 
 export interface Announcement {
   id: string;
   title: string;
   content: string;
-  media?: string | null;      // Can be base64 data URI or external URL
-  mediaType?: string | null;  // e.g., 'image/png', 'video/mp4', 'image/url', 'video/url', 'url'
+  media?: string | null;
+  mediaType?: string | null;
   date: string;
   author: string;
-  authorId?: string; // Added to identify originator in P2P/SSE
+  authorId?: string;
 }
 
-// Payload for creating a new announcement (media related fields are optional)
 export type NewAnnouncementPayload = {
   title: string;
   content: string;
@@ -27,43 +25,40 @@ export type NewAnnouncementPayload = {
   mediaType?: string | null;
 };
 
-
-const ANNOUNCEMENTS_LOCAL_STORAGE_KEY = 'camlicaKoyuAnnouncements_localStorage';
-const MAX_ANNOUNCEMENT_DATA_URI_LENGTH_HOOK = Math.floor(5 * 1024 * 1024 * 1.37); // Approx 7MB for base64 from 5MB raw
+const MAX_ANNOUNCEMENT_DATA_URI_LENGTH_HOOK = Math.floor(5 * 1024 * 1024 * 1.37); 
 
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const announcementsRef = useRef(announcements);
+  const announcementsRef = useRef(announcements); // To access current announcements in SSE callbacks
 
   const { user } = useUser();
   const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
-  const { siteNotificationsPreference } = useSettings(); 
+  const { siteNotificationsPreference } = useSettings();
 
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    announcementsRef.current = announcements;
+    announcementsRef.current = announcements; // Keep ref updated
     if (lastOpenedNotificationTimestamp) {
       const newUnreadCount = announcements.filter(
         (ann) => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp
       ).length;
       setUnreadCount(newUnreadCount);
     } else {
-      // If no timestamp, all are unread until popover is opened
       setUnreadCount(announcements.length > 0 ? announcements.length : 0);
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
 
   const showNotification = useCallback((title: string, body: string) => {
     if (!siteNotificationsPreference) {
-      // console.log("[useAnnouncements] Notification skipped: User preference is off.");
+      console.log("[useAnnouncements] Notification skipped: User preference is off.");
       return;
     }
     if (Notification.permission !== 'granted') {
-      // console.log("[useAnnouncements] Notification skipped: Browser permission not granted. Current status:", Notification.permission);
+      console.log("[useAnnouncements] Notification skipped: Browser permission not granted. Current status:", Notification.permission);
       return;
     }
 
@@ -71,50 +66,34 @@ export function useAnnouncements() {
       try {
         const notification = new Notification(title, {
           body: body,
-          icon: '/images/logo.png', // Ensure this path is correct in your public folder
+          icon: '/images/logo.png', 
         });
         notification.onclick = (event) => {
           event.preventDefault();
-          window.open(process.env.NEXT_PUBLIC_APP_URL || '/', '_blank'); // Use environment variable for URL
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || '/';
+          window.open(appUrl, '_blank'); 
           if(window.focus) window.focus();
           notification.close();
         };
       } catch (err: any) {
-        // console.error("[SSE Announcements] Notification error message:", err.message);
-        // console.error("[SSE Announcements] Notification error name:", err.name);
-        // Toast message is now handled directly where this function is called if needed
+        console.error("[SSE Announcements] Notification error message:", err.message);
+        console.error("[SSE Announcements] Notification error name:", err.name);
+        toast({
+          title: "Bildirim Hatası",
+          description: `Tarayıcı bildirimi gösterilemedi: ${err.message}. Tarayıcı ayarlarınızı kontrol edin.`,
+          variant: "warning",
+          duration: 7000,
+        });
       }
     } else {
-      // console.log("[useAnnouncements] Document not visible, skipping foreground notification.");
-      // For true background notifications, a Service Worker would be needed.
+      console.log("[useAnnouncements] Document not visible, skipping foreground notification.");
     }
-  }, [siteNotificationsPreference]);
+  }, [siteNotificationsPreference, toast]);
 
-
-  const loadAnnouncementsFromLocalStorage = useCallback(() => {
-    setIsLoading(true);
-    try {
-      const storedAnnouncements = localStorage.getItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY);
-      if (storedAnnouncements) {
-        const parsed = JSON.parse(storedAnnouncements) as Announcement[];
-        parsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setAnnouncements(parsed);
-      } else {
-        setAnnouncements([]);
-      }
-    } catch (error) {
-      console.error("[Announcements] Failed to load announcements from localStorage:", error);
-      setAnnouncements([]); // Fallback to empty array on error
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    loadAnnouncementsFromLocalStorage();
-  }, [loadAnnouncementsFromLocalStorage]);
+    setIsLoading(true); // Set loading true when effect runs
 
-  useEffect(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
@@ -122,43 +101,37 @@ export function useAnnouncements() {
     const newEventSource = new EventSource('/api/announcements/stream');
     eventSourceRef.current = newEventSource;
 
-    newEventSource.onopen = () => { /* console.log('[SSE Announcements] Connection opened.'); */ };
+    newEventSource.onopen = () => { 
+      // console.log('[SSE Announcements] Connection opened.'); 
+      // Initial data is fetched here, then SSE updates follow
+    };
 
     newEventSource.onmessage = (event) => {
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
         updatedAnnouncementsFromServer.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        const currentLocalAnnouncements = announcementsRef.current;
         
+        const currentLatestId = announcementsRef.current.length > 0 ? announcementsRef.current[0].id : null;
+        const serverLatestId = updatedAnnouncementsFromServer.length > 0 ? updatedAnnouncementsFromServer[0].id : null;
+
+        setAnnouncements(updatedAnnouncementsFromServer); // Update state with data from server
+
+        // Check for new announcement to show notification
         if (updatedAnnouncementsFromServer.length > 0) {
-          const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
-          const isNewer = !currentLocalAnnouncements.some(localAnn => localAnn.id === latestServerAnnouncement.id) || 
-                          new Date(latestServerAnnouncement.date) > new Date(currentLocalAnnouncements.find(la => la.id === latestServerAnnouncement.id)?.date || 0).getTime();
+            const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
+            const isNew = !announcementsRef.current.some(ann => ann.id === latestServerAnnouncement.id) || 
+                          (currentLatestId !== serverLatestId && new Date(latestServerAnnouncement.date) > new Date(announcementsRef.current.find(a => a.id === latestServerAnnouncement.id)?.date || 0).getTime());
 
-          if (isNewer && (!user || latestServerAnnouncement.authorId !== user.name + user.surname)) { // Avoid self-notification
-            showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
-          }
-        }
-        
-        setAnnouncements(updatedAnnouncementsFromServer);
-        try {
-            localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(updatedAnnouncementsFromServer));
-        } catch (e: any) {
-            if (e.name === 'QuotaExceededError') {
-                 toast({
-                    title: "Yerel Depolama Uyarısı",
-                    description: "Duyurular güncellendi, ancak tarayıcı depolama limiti aşıldığı için bazı veriler yerel olarak tam kaydedilememiş olabilir.",
-                    variant: "warning",
-                    duration: 8000,
-                });
-            } else {
-                console.error("Error saving announcement updates from SSE to localStorage:", e);
+            if (isNew && (!user || latestServerAnnouncement.authorId !== user.name + user.surname)) {
+                 showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
             }
         }
+        
+        if(isLoading) setIsLoading(false); // Set loading to false after first message (initial data)
 
       } catch (error) {
         console.error("[SSE Announcements] Error processing SSE message:", error);
+        if(isLoading) setIsLoading(false);
       }
     };
 
@@ -172,12 +145,13 @@ export function useAnnouncements() {
           `[SSE Announcements] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
         );
       } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
-        // console.warn(`[SSE Announcements] Initial connection attempt failed or stream unavailable. EventSource readyState: ${readyState}. Browser will retry.`);
+         console.warn(`[SSE Announcements] Initial connection attempt failed or stream unavailable. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will retry. Full Event:`, errorEvent);
       } else {
         console.error(
           `[SSE Announcements] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
         );
       }
+       if(isLoading) setIsLoading(false); // Also set loading false on error to prevent infinite loading state
     };
 
     return () => {
@@ -186,7 +160,7 @@ export function useAnnouncements() {
         eventSourceRef.current = null;
       }
     };
-  }, [showNotification, user, toast]); // Added user and toast to dependencies
+  }, [showNotification, user, isLoading]); // isLoading added to dependencies
 
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
     if (!user) {
@@ -202,7 +176,6 @@ export function useAnnouncements() {
         return Promise.reject(new Error("Media data URI too large."));
     }
 
-
     const newAnnouncement: Announcement = {
       id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       title: payload.title,
@@ -211,29 +184,11 @@ export function useAnnouncements() {
       mediaType: payload.mediaType || null,
       date: new Date().toISOString(),
       author: `${user.name} ${user.surname}`,
-      authorId: user.name + user.surname, // For identifying originator in SSE
+      authorId: user.name + user.surname, 
     };
 
-    const previousAnnouncements = [...announcementsRef.current];
-    setAnnouncements(prev => [newAnnouncement, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-
-    try {
-      localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify([newAnnouncement, ...previousAnnouncements].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())));
-    } catch (e: any) {
-      if (e.name === 'QuotaExceededError') {
-        setAnnouncements(previousAnnouncements); // Revert optimistic UI update
-        toast({
-          title: "Yerel Depolama Limiti Aşıldı",
-          description: "Duyuru eklenemedi çünkü tarayıcı depolama alanı dolu. API'ye gönderilmeyecek.",
-          variant: "destructive",
-          duration: 8000,
-        });
-        return Promise.reject(new Error("localStorage quota exceeded. Announcement not sent to API."));
-      } else {
-        console.error("Error saving optimistic announcement to localStorage:", e);
-        // Potentially revert UI if it's a different critical localStorage error
-      }
-    }
+    // No optimistic UI update or localStorage.setItem here.
+    // The update will come via SSE after server processes.
 
     try {
       const response = await fetch('/api/announcements', {
@@ -248,29 +203,13 @@ export function useAnnouncements() {
         if (response.status === 413) {
             errorMessage = "Duyuru yüklenemedi çünkü medya içeriği sunucu limitlerini aşıyor.";
         }
-        
-        setAnnouncements(previousAnnouncements);
-        try {
-            localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(previousAnnouncements));
-        } catch (lsError) { /* ignore localStorage error on revert */ }
         toast({ title: "Duyuru Gönderilemedi", description: errorMessage, variant: "destructive" });
         throw new Error(errorMessage);
       }
+      // Success means server will save to JSON and emit SSE. UI will update via SSE.
     } catch (error: any) {
-      console.error("[Announcements] Failed to send new announcement to server (or during revert):", error);
-      setAnnouncements(previousAnnouncements);
-      try {
-        localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(previousAnnouncements));
-      } catch (lsRevertError: any) {
-        // Avoid double toast if quota was the original issue during save attempt
-        if (!error.message?.includes("localStorage quota exceeded")) {
-            console.warn("Error reverting localStorage on API error:", lsRevertError);
-        }
-      }
-      // Avoid double toasting if the error originated from localStorage quota check
-      if (!error.message?.includes("localStorage quota exceeded")) {
-        toast({ title: "Duyuru Eklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
-      }
+      console.error("[Announcements] Failed to send new announcement to server:", error);
+      toast({ title: "Duyuru Eklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
       throw error;
     }
   }, [user, toast]);
@@ -281,23 +220,8 @@ export function useAnnouncements() {
       return Promise.reject(new Error("User not logged in"));
     }
     
-    const previousAnnouncementsForRevert = [...announcementsRef.current];
-    setAnnouncements(prev => prev.filter(ann => ann.id !== id));
-    
-    try {
-        const updatedForStorage = previousAnnouncementsForRevert.filter(ann => ann.id !== id);
-        localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(updatedForStorage));
-    } catch (e: any) {
-        console.warn("Error updating localStorage after delete (optimistic):", e);
-         if (e.name === 'QuotaExceededError') {
-            toast({
-                title: "Yerel Depolama Uyarısı",
-                description: "Duyuru silindi ancak tarayıcı depolama alanı dolu olduğu için değişiklik tam kaydedilemedi.",
-                variant: "warning",
-                duration: 7000,
-            });
-        }
-    }
+    // No optimistic UI update or localStorage.setItem here.
+    // The update will come via SSE after server processes.
 
     try {
       const response = await fetch(`/api/announcements?id=${id}`, {
@@ -306,19 +230,12 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        setAnnouncements(previousAnnouncementsForRevert); // Revert UI
-        try {
-            localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(previousAnnouncementsForRevert));
-        } catch (lsError) { /* ignore localStorage error on revert */ }
         throw new Error(errorData.message || 'Duyuru silme bilgisi sunucuya iletilemedi');
       }
+      // Success means server will save to JSON and emit SSE. UI will update via SSE.
     } catch (error: any) {
       console.error("[Announcements] Failed to notify server about deleted announcement:", error);
       toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silme bilgisi diğer kullanıcılara iletilirken bir sorun oluştu.", variant: "destructive" });
-      setAnnouncements(previousAnnouncementsForRevert); // Ensure UI is reverted
-      try {
-          localStorage.setItem(ANNOUNCEMENTS_LOCAL_STORAGE_KEY, JSON.stringify(previousAnnouncementsForRevert));
-      } catch (lsRevertError) { /* ... */ }
       throw error;
     }
   }, [user, toast]);
@@ -329,5 +246,3 @@ export function useAnnouncements() {
 
   return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading, unreadCount };
 }
-
-    

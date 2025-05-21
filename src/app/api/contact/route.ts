@@ -29,8 +29,12 @@ const loadContactMessagesFromFile = () => {
       console.log(`[API/Contact] Successfully loaded ${contactMessagesData.length} contact messages from ${CONTACT_MESSAGES_FILE_PATH}`);
     } else {
       contactMessagesData = [];
-      saveContactMessagesToFile(); // Attempt to create the file on first run if it doesn't exist
-      console.log(`[API/Contact] File ${CONTACT_MESSAGES_FILE_PATH} not found. Initialized with empty array and created file.`);
+      if (process.env.DATA_PATH) { // Only attempt to create if on Render with persistent disk
+         saveContactMessagesToFile();
+         console.log(`[API/Contact] File ${CONTACT_MESSAGES_FILE_PATH} not found. Initialized with empty array and created file on persistent disk.`);
+      } else {
+         console.log(`[API/Contact] File ${CONTACT_MESSAGES_FILE_PATH} not found. Initialized with empty array (in-memory only, file not created as DATA_PATH not set).`);
+      }
     }
   } catch (error) {
     console.error("[API/Contact] Error loading contact_messages file:", error);
@@ -41,14 +45,14 @@ const loadContactMessagesFromFile = () => {
 const saveContactMessagesToFile = () => {
   try {
     const dir = path.dirname(CONTACT_MESSAGES_FILE_PATH);
-    if (!fs.existsSync(dir)) {
+    if (!fs.existsSync(dir) && process.env.DATA_PATH ) { // Only attempt mkdir if DATA_PATH is set
       fs.mkdirSync(dir, { recursive: true });
     }
     const sortedData = [...contactMessagesData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(CONTACT_MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
     console.log(`[API/Contact] Contact messages data saved to ${CONTACT_MESSAGES_FILE_PATH}`);
   } catch (error) {
-    console.error("[API/Contact] Error saving contact messages to file:", error);
+    console.error("[API/Contact] Error saving contact messages to file (this is expected on Vercel, but not on Render with persistent disk):", error);
   }
 };
 
@@ -91,5 +95,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Internal server error while creating contact message." }, { status: 500 });
   }
 }
-
-    

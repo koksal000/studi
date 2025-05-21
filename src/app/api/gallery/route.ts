@@ -61,8 +61,12 @@ const loadGalleryFromFile = () => {
       console.log(`[API/Gallery] Successfully loaded ${galleryImagesData.length} images from ${GALLERY_FILE_PATH}`);
     } else {
       galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
-      saveGalleryToFile(); // Attempt to create the file on first run if it doesn't exist, with seed data
-      console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images. File ${GALLERY_FILE_PATH} created.`);
+      if (process.env.DATA_PATH) { // Only attempt to create if on Render with persistent disk
+          saveGalleryToFile(); 
+          console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images. File ${GALLERY_FILE_PATH} created on persistent disk.`);
+      } else {
+          console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images (in-memory only, file not created as DATA_PATH not set).`);
+      }
     }
   } catch (error) {
     console.error("[API/Gallery] Error loading gallery from file, using static seeds as fallback:", error);
@@ -73,14 +77,14 @@ const loadGalleryFromFile = () => {
 const saveGalleryToFile = () => {
   try {
     const dir = path.dirname(GALLERY_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(dir) && process.env.DATA_PATH){ // Only attempt mkdir if DATA_PATH is set
+        fs.mkdirSync(dir, { recursive: true });
     }
     const sortedData = [...galleryImagesData].sort(gallerySortFnInMemory);
     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(sortedData, null, 2));
     console.log(`[API/Gallery] Gallery data saved to ${GALLERY_FILE_PATH}`);
   } catch (error) {
-    console.error("[API/Gallery] Error saving gallery to file:", error);
+    console.error("[API/Gallery] Error saving gallery to file (this is expected on Vercel, but not on Render with persistent disk):", error);
   }
 };
 
@@ -159,5 +163,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: "Internal server error while deleting image." }, { status: 500 });
   }
 }
-
-    

@@ -9,7 +9,7 @@ import path from 'path';
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
-const MAX_ANNOUNCEMENT_BASE64_SIZE_API = Math.floor(5 * 1024 * 1024 * 1.37); // Approx 7MB for base64 from 5MB raw
+const MAX_ANNOUNCEMENT_BASE64_SIZE_API = Math.floor(5 * 1024 * 1024 * 1.37); 
 
 let announcementsData: Announcement[] = [];
 let initialized = false;
@@ -24,6 +24,10 @@ const loadAnnouncementsFromFile = () => {
     } else {
       console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Starting with empty array.`);
       announcementsData = [];
+      // Attempt to create the file on first run if it doesn't exist with Render persistent disk
+      if (process.env.DATA_PATH) {
+          saveAnnouncementsToFile();
+      }
     }
   } catch (error) {
     console.error("[API/Announcements] Error loading announcements from file:", error);
@@ -34,14 +38,14 @@ const loadAnnouncementsFromFile = () => {
 const saveAnnouncementsToFile = () => {
    try {
     const dir = path.dirname(ANNOUNCEMENTS_FILE_PATH);
-    if (!fs.existsSync(dir)){
+    if (!fs.existsSync(dir) && process.env.DATA_PATH){ // Only attempt mkdir if DATA_PATH is set (for Render)
         fs.mkdirSync(dir, { recursive: true });
     }
     const sortedData = [...announcementsData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
     console.log(`[API/Announcements] Announcement data saved to ${ANNOUNCEMENTS_FILE_PATH}`);
   } catch (error) {
-    console.error("[API/Announcements] Error saving announcements to file:", error);
+    console.error("[API/Announcements] Error saving announcements to file (this is expected on Vercel, but not on Render with persistent disk):", error);
   }
 };
 
@@ -108,7 +112,7 @@ export async function DELETE(request: NextRequest) {
       announcementEmitter.emit('update', [...announcementsData]);
       return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });
     } else {
-      announcementEmitter.emit('update', [...announcementsData]);
+      announcementEmitter.emit('update', [...announcementsData]); // Emit even if not found to sync clients
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
     }
   } catch (error) {
@@ -116,5 +120,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: "Internal server error while deleting announcement." }, { status: 500 });
   }
 }
-
-    

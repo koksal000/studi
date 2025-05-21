@@ -25,6 +25,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"; 
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
@@ -34,8 +35,6 @@ import type { ContactMessage } from '@/app/api/contact/route';
 // Approx 4MB limit for base64 string. Next.js default API body limit is 1MB.
 // Base64 is ~33% larger than original file. A 3MB file ~ 4MB base64.
 // For a 1MB API limit, base64 should be < 1MB, so original file < ~750KB.
-// Let's set MAX_IMAGE_DATA_URI_LENGTH to 4MB for now, assuming server can handle it,
-// but a stricter client-side raw file check.
 const MAX_RAW_FILE_SIZE = 3 * 1024 * 1024; // 3MB limit for original file
 const MAX_IMAGE_DATA_URI_LENGTH = 4 * 1024 * 1024; // Approx 4MB for base64 string
 
@@ -213,7 +212,7 @@ export default function AdminPage() {
       await deleteGalleryImage(imageToDelete.id);
       toast({ 
         title: "Resim Silindi", 
-        description: `"${imageToDelete.caption}" başlıklı resim galeriden silindi. (Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse kalıcı olur.)` 
+        description: `"${imageToDelete.caption}" başlıklı resim galeriden silindi. Bu işlem kalıcıdır (Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse).` 
       });
     } catch (error: any) {
       console.error("Error deleting image:", error);
@@ -282,7 +281,7 @@ export default function AdminPage() {
           </CardTitle>
           <CardDescription>
             Yeni duyurular ekleyin veya mevcut duyuruları yönetin. 
-            Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncelleniyorsa, değişiklikleriniz kalıcı olacaktır.
+            Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_announcements.json`) güncelleniyorsa, değişiklikleriniz kalıcı olacaktır.
             Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir (Eğer "Git as DB" modeli kullanılıyorsa).
             Kalıcı değişiklikler için, yerel projenizdeki ilgili JSON dosyasını düzenleyip GitHub'a göndermeniz önerilir.
             Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_announcements.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_announcements.json</a>
@@ -318,6 +317,7 @@ export default function AdminPage() {
             Sitede gösterilen galeri resimlerini yönetin. Buradan eklenen veya silinen resimler,
             Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_gallery.json`) güncelleniyorsa kalıcı olacaktır.
             Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir (Eğer "Git as DB" modeli kullanılıyorsa).
+            Kalıcı değişiklikler için, yerel projenizdeki ilgili JSON dosyasını düzenleyip GitHub'a göndermeniz önerilir.
              Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_gallery.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_gallery.json</a>
           </CardDescription>
         </CardHeader>
@@ -375,18 +375,18 @@ export default function AdminPage() {
                       <Image src={image.src} alt={image.alt} layout="fill" objectFit="cover" data-ai-hint={image.hint} />
                        <div className="absolute top-2 right-2">
                         <AlertDialog>
-                            <AlertDialog.Trigger asChild>
+                            <AlertDialogTrigger asChild>
                                 <Button variant="destructive" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8" disabled={isUploading}>
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
-                            </AlertDialog.Trigger>
+                            </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
                                  <AlertDialogDescription>
                                     "{image.caption}" başlıklı resmi galeriden silmek istediğinizden emin misiniz?
                                     <br/><br/>
-                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse kalıcı olur. Aksi takdirde, değişiklik bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir (Eğer "Git as DB" modeli kullanılıyorsa).
+                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem kalıcıdır (Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse).
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -430,6 +430,8 @@ export default function AdminPage() {
   );
 }
     
+    
+
     
 
     

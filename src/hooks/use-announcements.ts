@@ -3,8 +3,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
-import { useSettings } from '@/contexts/settings-context';
+// import { useSettings } from '@/contexts/settings-context'; // Kaldırıldı
 import { useToast } from '@/hooks/use-toast';
+import { useAnnouncementStatus } from '@/contexts/announcement-status-context'; // Yeni import
 
 export interface Announcement {
   id: string;
@@ -26,14 +27,27 @@ export function useAnnouncements() {
   const announcementsRef = useRef(announcements); 
 
   const { user } = useUser();
-  const { notificationsEnabled: siteNotificationsPreference } = useSettings();
+  // const { notificationsEnabled: siteNotificationsPreference } = useSettings(); // Kaldırıldı
+  const { lastOpenedNotificationTimestamp } = useAnnouncementStatus(); // Yeni hook
+  const [unreadCount, setUnreadCount] = useState(0); // Yeni state
+
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     announcementsRef.current = announcements;
-  }, [announcements]);
+    // Okunmamış duyuru sayısını hesapla
+    if (lastOpenedNotificationTimestamp) {
+      const newUnreadCount = announcements.filter(
+        (ann) => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp
+      ).length;
+      setUnreadCount(newUnreadCount);
+    } else {
+      // Eğer daha önce hiç açılmamışsa, tüm duyurular okunmamış sayılır (veya ilk yüklemede 0 olabilir)
+      setUnreadCount(announcements.length > 0 ? announcements.length : 0);
+    }
+  }, [announcements, lastOpenedNotificationTimestamp]);
 
   const fetchInitialAnnouncements = useCallback(async () => {
     console.log('[Announcements] Fetching initial announcements...');
@@ -75,7 +89,8 @@ export function useAnnouncements() {
   }, [fetchInitialAnnouncements]);
 
   useEffect(() => {
-    console.log('[SSE Announcements] useEffect for EventSource triggered. Site notifications preference:', siteNotificationsPreference);
+    // siteNotificationsPreference kaldırıldığı için bu log güncellendi veya kaldırılabilir.
+    console.log('[SSE Announcements] useEffect for EventSource triggered.'); 
     
     if (eventSourceRef.current) {
       console.log('[SSE Announcements] Closing existing EventSource.');
@@ -95,65 +110,13 @@ export function useAnnouncements() {
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
         console.log('[SSE Announcements] Received data via SSE:', updatedAnnouncementsFromServer.length, 'items');
-        console.log('[SSE Announcements] Current local announcements (ref) before processing:', announcementsRef.current.length, 'items');
-        
-        const currentLocalAnnouncements = announcementsRef.current;
-        let latestNewAnnouncementForNotification: Announcement | null = null;
-
-        if (updatedAnnouncementsFromServer.length > 0) {
-            const currentLocalIds = new Set(currentLocalAnnouncements.map(a => a.id));
-            const newAnnouncementsFromServer = updatedAnnouncementsFromServer.filter(serverAnn => !currentLocalIds.has(serverAnn.id));
-
-            if (newAnnouncementsFromServer.length > 0) {
-                newAnnouncementsFromServer.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                latestNewAnnouncementForNotification = newAnnouncementsFromServer[0];
-                console.log('[SSE Announcements] Identified as NEW for notification:', latestNewAnnouncementForNotification.title);
-            }
-        }
         
         setAnnouncements(updatedAnnouncementsFromServer);
         localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(updatedAnnouncementsFromServer));
         console.log('[SSE Announcements] Local announcements and localStorage updated.');
 
-        if (latestNewAnnouncementForNotification && siteNotificationsPreference && typeof window !== 'undefined' && window.Notification && Notification.permission === 'granted') {
-          console.log('[SSE Announcements] Conditions MET for showing notification for:', latestNewAnnouncementForNotification.title);
-          const notificationBody = latestNewAnnouncementForNotification.content.length > 120
-            ? latestNewAnnouncementForNotification.content.substring(0, 120) + "..."
-            : latestNewAnnouncementForNotification.content;
-
-          if (document.visibilityState === 'visible') {
-            try {
-              const notification = new Notification(latestNewAnnouncementForNotification.title, {
-                body: notificationBody,
-                tag: latestNewAnnouncementForNotification.id, 
-              });
-              notification.onclick = () => {
-                window.open('https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/', '_blank');
-                window.focus(); 
-              };
-              console.log('[SSE Announcements] Notification created successfully for:', latestNewAnnouncementForNotification.title);
-            } catch (notificationError: any) {
-              console.error('[SSE Announcements] Error creating notification (even when visible):', notificationError);
-              console.error('[SSE Announcements] Notification error message:', notificationError.message);
-              console.error('[SSE Announcements] Notification error name:', notificationError.name);
-              toast({
-                title: "Bildirim Gösterilemedi",
-                description: `Tarayıcı, bu duyuru için bildirim göstermeyi engelledi. Tarayıcı ayarlarınızı kontrol edebilirsiniz. (Hata: ${notificationError.message})`,
-                variant: "destructive",
-                duration: 7000,
-              });
-            }
-          } else {
-             console.log('[SSE Announcements] Notification skipped for:', latestNewAnnouncementForNotification.title, '- Page not visible. Consider using Service Worker for background notifications.');
-          }
-        } else {
-            if (!latestNewAnnouncementForNotification) console.log('[SSE Announcements] No new announcement identified for notification (latestNewAnnouncementForNotification is null).');
-            else if (!siteNotificationsPreference) console.log('[SSE Announcements] Site notifications preference is OFF.');
-            else if (typeof window !== 'undefined' && window.Notification && Notification.permission !== 'granted') console.log('[SSE Announcements] Browser notification permission is NOT "granted":', Notification.permission);
-            else {
-                 console.log('[SSE Announcements] Notification conditions NOT MET. latestNew:', !!latestNewAnnouncementForNotification, 'sitePref:', siteNotificationsPreference, 'Notification API:', typeof window !== 'undefined' && !!window.Notification, 'Permission:', typeof window !== 'undefined' && window.Notification && Notification.permission);
-            }
-        }
+        // Tarayıcı bildirimi gönderme mantığı kaldırıldı.
+        // Okunmamış sayısını güncelleme zaten `useEffect` içinde `announcements` ve `lastOpenedNotificationTimestamp` bağımlılıklarıyla yapılıyor.
 
       } catch (error) {
           console.error("[SSE Announcements] Error processing SSE message:", error);
@@ -172,8 +135,8 @@ export function useAnnouncements() {
       let toastMessage = "Duyuru güncellemeleriyle bağlantı kesildi. Otomatik olarak yeniden deneniyor.";
       if (readyState === EventSource.CLOSED) {
         toastMessage = "Duyuru bağlantısı sonlandı. Otomatik yeniden bağlanma denenecek. Sorun devam ederse sayfayı yenileyin.";
-      } else if (readyState === EventSource.CONNECTING) { 
-        toastMessage = "Duyuru bağlantısı kurulamıyor. Yeniden deneniyor. Lütfen internet bağlantınızı ve Vercel'deki NEXT_PUBLIC_APP_URL ayarını kontrol edin.";
+      } else if (readyState === EventSource.CONNECTING && eventType === 'error') { // Hata CONNECTING aşamasında ise
+        toastMessage = "Duyuru bağlantısı kurulamıyor. Lütfen internet bağlantınızı ve Vercel'deki NEXT_PUBLIC_APP_URL ayarını kontrol edin. Yeniden deneniyor...";
       }
       
       toast({
@@ -193,7 +156,7 @@ export function useAnnouncements() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteNotificationsPreference, toast]); 
+  }, [toast]); 
 
   const addAnnouncement = useCallback(async (newAnnouncementData: Omit<Announcement, 'id' | 'date' | 'author' | 'authorId'>) => {
     if (!user) {
@@ -250,5 +213,5 @@ export function useAnnouncements() {
     return announcements.find(ann => ann.id === id);
   }, [announcements]);
 
-  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading };
+  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading, unreadCount }; // unreadCount eklendi
 }

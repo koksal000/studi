@@ -18,7 +18,8 @@ export interface GalleryImage {
 const dataPath = process.env.DATA_PATH || process.cwd();
 const GALLERY_FILE_PATH = path.join(dataPath, '_gallery.json');
 
-// Function to read gallery from file
+let galleryImagesData: GalleryImage[] | null = null;
+
 const loadGalleryFromFile = (): GalleryImage[] => {
   try {
     if (fs.existsSync(GALLERY_FILE_PATH)) {
@@ -28,7 +29,6 @@ const loadGalleryFromFile = (): GalleryImage[] => {
       return parsedData;
     }
     console.warn(`[API/Gallery] Gallery file not found at ${GALLERY_FILE_PATH}. Initializing with seed data. This is expected if starting with an empty Git repo or if the file isn't committed.`);
-    // If file not found, use seed data.
     return STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0 ? [...STATIC_GALLERY_IMAGES_FOR_SEEDING] : [];
   } catch (error) {
     console.error("[API/Gallery] Error reading gallery file:", error);
@@ -37,42 +37,41 @@ const loadGalleryFromFile = (): GalleryImage[] => {
   }
 };
 
-// Function to save gallery to file
+// Initialize data only once when the module is first loaded
+const initializeData = () => {
+  if (galleryImagesData === null) {
+    galleryImagesData = loadGalleryFromFile();
+  }
+};
+initializeData();
+
+// Function to save gallery to file (currently disabled for "Git as DB" on free tier)
 const saveGalleryToFile = (data: GalleryImage[]) => {
-  // This function is disabled for Render.com free tier compatibility with GitHub as data source.
-  // Changes should be made by editing the JSON file in Git and redeploying.
-  // console.log("[API/Gallery] File saving is disabled. Changes are in-memory only for this instance.");
+  // This function is disabled if not using a persistent disk on Render.
+  // For "Git as DB" approach, changes should be made by editing the JSON file in Git and redeploying.
+  console.log("[API/Gallery] File saving is disabled in API; commit changes to Git for persistence.");
   /*
   try {
     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
       fs.mkdirSync(dataPath, { recursive: true });
     }
     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(data, null, 2));
-    console.log("[API/Gallery] Gallery images saved to file:", GALLERY_FILE_PATH);
+    console.log("[API/Gallery] Gallery images saved to file (if persistent disk is configured):", GALLERY_FILE_PATH);
   } catch (error) {
     console.error("[API/Gallery] Error writing gallery file:", error);
   }
   */
 };
 
-let galleryImagesData: GalleryImage[] = loadGalleryFromFile();
-
-if (galleryImagesData.length === 0 && STATIC_GALLERY_IMAGES_FOR_SEEDING.length > 0) {
-  // This case is handled by loadGalleryFromFile if the file doesn't exist.
-  // If the file exists but is empty, and we want to re-seed, explicit logic would be needed here.
-  // For now, loadGalleryFromFile handles initialization with seeds if file is absent.
-  console.log("[API/Gallery] Gallery initialized with seed data as _gallery.json was not found or empty and seed data was available.");
-} else if (galleryImagesData.length === 0) {
-  console.log("[API/Gallery] Initialized with an empty gallery list (no file/read error and no seed data).")
-}
-
 
 export async function GET() {
   try {
-    if (galleryImagesData.length === 0 && fs.existsSync(GALLERY_FILE_PATH)) {
-        galleryImagesData = loadGalleryFromFile();
+    if (galleryImagesData === null) { // Should ideally not happen
+        console.warn("[API/Gallery] galleryImagesData is null in GET, re-initializing. This might indicate an issue.");
+        initializeData();
     }
-    return NextResponse.json([...galleryImagesData].sort((a,b) => {
+    const dataToSend = galleryImagesData || [];
+    return NextResponse.json([...dataToSend].sort((a,b) => {
         const aIsSeed = a.id.startsWith('seed_');
         const bIsSeed = b.id.startsWith('seed_');
         if (aIsSeed && !bIsSeed) return -1;
@@ -101,6 +100,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Resim verisi çok büyük (maks ~3MB dosya). Lütfen daha küçük resimler kullanın.' }, { status: 413 });
     }
 
+    if (galleryImagesData === null) { // Ensure data is initialized
+        initializeData();
+    }
+    galleryImagesData = galleryImagesData || []; // Ensure it's an array
+
     const newImage: GalleryImage = {
       id: `gal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       src: imageDataUri,
@@ -109,7 +113,7 @@ export async function POST(request: NextRequest) {
       hint: hint || 'uploaded image',
     };
 
-    galleryImagesData.unshift(newImage); // Add to in-memory array
+    galleryImagesData.unshift(newImage);
     console.log("[API/Gallery] New image added to in-memory store. File saving is disabled; commit changes to Git for persistence.");
     // saveGalleryToFile(galleryImagesData); // Disabled for GitHub as data source
     
@@ -134,8 +138,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Image ID is required for deletion' }, { status: 400 });
     }
 
+    if (galleryImagesData === null) { // Ensure data is initialized
+        initializeData();
+    }
+    galleryImagesData = galleryImagesData || []; // Ensure it's an array
+
     const initialLength = galleryImagesData.length;
-    galleryImagesData = galleryImagesData.filter(img => img.id !== id); // Remove from in-memory array
+    galleryImagesData = galleryImagesData.filter(img => img.id !== id); 
 
     if (galleryImagesData.length === initialLength) {
       return NextResponse.json({ message: 'Image not found' }, { status: 404 });

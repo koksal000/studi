@@ -10,7 +10,8 @@ import path from 'path';
 const dataPath = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataPath, '_announcements.json');
 
-// Function to read announcements from file
+let announcementsData: Announcement[] | null = null;
+
 const loadAnnouncementsFromFile = (): Announcement[] => {
   try {
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
@@ -27,11 +28,20 @@ const loadAnnouncementsFromFile = (): Announcement[] => {
   }
 };
 
-// Function to save announcements to file
+// Initialize data only once when the module is first loaded
+const initializeData = () => {
+  if (announcementsData === null) {
+    announcementsData = loadAnnouncementsFromFile();
+  }
+};
+initializeData();
+
+
+// Function to save announcements to file (currently disabled for "Git as DB" on free tier)
 const saveAnnouncementsToFile = (data: Announcement[]) => {
-  // This function is disabled for Render.com free tier compatibility with GitHub as data source.
-  // Changes should be made by editing the JSON file in Git and redeploying.
-  // console.log("[API/Announcements] File saving is disabled. Changes are in-memory only for this instance.");
+  // This function is disabled if not using a persistent disk on Render.
+  // For "Git as DB" approach, changes should be made by editing the JSON file in Git and redeploying.
+  console.log("[API/Announcements] File saving is disabled in API; commit changes to Git for persistence.");
   /*
   try {
     if (!fs.existsSync(dataPath) && dataPath !== process.cwd()) {
@@ -39,27 +49,20 @@ const saveAnnouncementsToFile = (data: Announcement[]) => {
     }
     const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log("[API/Announcements] Announcements saved to file:", ANNOUNCEMENTS_FILE_PATH);
+    console.log("[API/Announcements] Announcements saved to file (if persistent disk is configured):", ANNOUNCEMENTS_FILE_PATH);
   } catch (error) {
     console.error("[API/Announcements] Error writing announcements file:", error);
   }
   */
 };
 
-let announcementsData: Announcement[] = loadAnnouncementsFromFile();
-if (announcementsData.length === 0) {
-  console.log("[API/Announcements] Initialized with an empty announcements list (or file not found/read failed).")
-}
-
 export async function GET() {
   try {
-    // If in-memory data is empty (e.g. after a serverless function cold start without file persistence)
-    // and file exists (e.g. in local dev or if it was part of the deployment bundle), try to load it.
-    // This helps in local dev if the file is manually changed.
-    if (announcementsData.length === 0 && fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
-        announcementsData = loadAnnouncementsFromFile();
+    if (announcementsData === null) { // Should ideally not happen if initializeData worked
+        console.warn("[API/Announcements] announcementsData is null in GET, re-initializing. This might indicate an issue.");
+        initializeData();
     }
-    return NextResponse.json([...announcementsData]);
+    return NextResponse.json([...(announcementsData || [])]);
   } catch (error) {
     console.error("[API/Announcements] Error fetching announcements (GET):", error);
     return NextResponse.json({ message: "Internal server error while fetching announcements." }, { status: 500 });
@@ -74,6 +77,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Missing required fields: title, content, or author' }, { status: 400 });
     }
 
+    if (announcementsData === null) { // Ensure data is initialized
+        initializeData();
+    }
+    announcementsData = announcementsData || []; // Ensure it's an array
+
     const newAnnouncement: Announcement = {
       id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       date: new Date().toISOString(),
@@ -84,7 +92,7 @@ export async function POST(request: NextRequest) {
       author: body.author,
     };
 
-    announcementsData.unshift(newAnnouncement); // Add to in-memory array
+    announcementsData.unshift(newAnnouncement); 
     console.log("[API/Announcements] New announcement added to in-memory store. File saving is disabled; commit changes to Git for persistence.");
     // saveAnnouncementsToFile(announcementsData); // Disabled for GitHub as data source
     
@@ -109,8 +117,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ message: 'Announcement ID is required for deletion' }, { status: 400 });
     }
 
+    if (announcementsData === null) { // Ensure data is initialized
+        initializeData();
+    }
+    announcementsData = announcementsData || []; // Ensure it's an array
+
     const initialLength = announcementsData.length;
-    announcementsData = announcementsData.filter(ann => ann.id !== id); // Remove from in-memory array
+    announcementsData = announcementsData.filter(ann => ann.id !== id);
 
     if (announcementsData.length === initialLength) {
       return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });

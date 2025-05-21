@@ -30,7 +30,7 @@ export function EntryForm() {
       <video
         autoPlay
         loop
-        muted={true} // Changed to true to enable autoplay
+        muted={false} // Sesli oynatma için false olarak ayarlandı
         playsInline // Important for iOS to play inline
         className="absolute top-0 left-0 w-full h-full object-cover" // Video as background
         src="https://files.catbox.moe/na9jph.mp4" // Updated video URL
@@ -84,4 +84,3 @@ export function EntryForm() {
     </div>
   );
 }
-

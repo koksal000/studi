@@ -4,19 +4,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from '@/hooks/use-toast';
-import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants'; // For initial seed
+import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants'; 
 
 export interface GalleryImage {
   id: string;
-  src: string; // This will be base64 data URI for new uploads, or URL from seed
+  src: string; 
   alt: string;
   caption: string;
   hint: string;
 }
 
-// Payload from client form to the hook
 export type NewGalleryImagePayload = {
-  imageDataUri: string; // base64
+  imageDataUri: string; 
   caption: string;
   alt: string;
   hint: string;
@@ -24,12 +23,48 @@ export type NewGalleryImagePayload = {
 
 const GALLERY_LOCAL_STORAGE_KEY = 'camlicaKoyuGallery_localStorage';
 
+const gallerySortFn = (a: GalleryImage, b: GalleryImage): number => {
+  const aIsSeed = a.id.startsWith('seed_');
+  const bIsSeed = b.id.startsWith('seed_');
+  
+  if (aIsSeed && !bIsSeed) return -1;
+  if (!aIsSeed && bIsSeed) return 1;
+
+  // If both are seeds or both are not seeds, sort by ID (newest first for 'gal_')
+  const extractNumericPart = (id: string) => {
+    const match = id.match(/\d+$/);
+    return match ? parseInt(match[0]) : null;
+  };
+
+  const numA = extractNumericPart(a.id);
+  const numB = extractNumericPart(b.id);
+
+  if (numA !== null && numB !== null) {
+    if (a.id.startsWith('gal_') && b.id.startsWith('gal_')) {
+      return numB - numA; // Newest 'gal_' first
+    }
+    return numA - numB; // Ascending for seeds or mixed if numeric
+  }
+  
+  // Fallback for non-standard IDs or if one is numeric and other is not
+  if (a.id.startsWith('gal_') && !b.id.startsWith('gal_')) return -1; // User uploaded before seed
+  if (!a.id.startsWith('gal_') && b.id.startsWith('gal_')) return 1;
+  
+  return b.id.localeCompare(a.id); // Default: newer string IDs first
+};
+
+
 export function useGallery() {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+  const galleryImagesRef = useRef(galleryImages); 
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useUser();
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    galleryImagesRef.current = galleryImages;
+  }, [galleryImages]);
 
   const loadGalleryFromLocalStorage = useCallback(() => {
     setIsLoading(true);
@@ -37,15 +72,9 @@ export function useGallery() {
       const storedGallery = localStorage.getItem(GALLERY_LOCAL_STORAGE_KEY);
       if (storedGallery) {
         const parsed = JSON.parse(storedGallery) as GalleryImage[];
-        setGalleryImages(parsed);
+        setGalleryImages(parsed.sort(gallerySortFn));
       } else {
-        const seededImages = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort((a,b) => {
-            const aIsSeed = a.id.startsWith('seed_');
-            const bIsSeed = b.id.startsWith('seed_');
-            if (aIsSeed && !bIsSeed) return -1;
-            if (!aIsSeed && bIsSeed) return 1;
-            return 0; 
-        });
+        const seededImages = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn);
         setGalleryImages(seededImages);
         localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(seededImages));
       }
@@ -54,19 +83,13 @@ export function useGallery() {
       if (error.name === 'QuotaExceededError') {
         toast({
           title: "Yerel Depolama Alanı Dolu",
-          description: "Tarayıcınızın yerel depolama alanı dolu olduğu için galeri yüklenemedi. Lütfen bazı verileri temizleyin veya daha az resim saklayın.",
+          description: "Tarayıcınızın yerel depolama alanı dolu olduğu için galeri yüklenemedi.",
           variant: "destructive",
           duration: 7000,
         });
       }
-      const seededImagesOnLoadError = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort((a,b) => {
-        const aIsSeed = a.id.startsWith('seed_');
-        const bIsSeed = b.id.startsWith('seed_');
-        if (aIsSeed && !bIsSeed) return -1;
-        if (!aIsSeed && bIsSeed) return 1;
-        return 0; 
-      });
-      setGalleryImages(seededImagesOnLoadError);
+      const seededImagesOnLoadError = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn);
+      setGalleryImages(seededImagesOnLoadError); 
     } finally {
       setIsLoading(false);
     }
@@ -87,27 +110,19 @@ export function useGallery() {
     es.onmessage = (event) => {
       try {
         const updatedGalleryFromServer: GalleryImage[] = JSON.parse(event.data);
-        const sortedData = [...updatedGalleryFromServer].sort((a,b) => {
-            if (a.id.startsWith('seed_') && !b.id.startsWith('seed_')) return -1;
-            if (!a.id.startsWith('seed_') && b.id.startsWith('seed_')) return 1;
-            const idA = a.id.replace(/^(seed_|gal_)/, '');
-            const idB = b.id.replace(/^(seed_|gal_)/, '');
-            if (isNaN(parseInt(idA)) || isNaN(parseInt(idB))) {
-                return a.id.localeCompare(b.id);
-            }
-            return parseInt(idB) - parseInt(idA);
-          });
-        setGalleryImages(sortedData);
+        const sortedData = [...updatedGalleryFromServer].sort(gallerySortFn);
+        
+        setGalleryImages(sortedData); 
+
         try {
           localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(sortedData));
         } catch (e: any) {
           if (e.name === 'QuotaExceededError') {
-            console.warn("LocalStorage quota exceeded while trying to save gallery updates from SSE.");
             toast({
               title: "Yerel Depolama Uyarısı",
-              description: "Galeri güncellendi, ancak tarayıcı depolama limiti nedeniyle bazı resimler yerel olarak tam kaydedilememiş olabilir.",
+              description: "Galeri güncellendi, ancak tarayıcı depolama limiti nedeniyle bazı resimler yerel olarak tam kaydedilememiş olabilir. Bu resimler sayfa yenilendiğinde kaybolabilir.",
               variant: "warning",
-              duration: 7000,
+              duration: 8000,
             });
           } else {
             console.error("Error saving gallery updates from SSE to localStorage:", e);
@@ -144,7 +159,7 @@ export function useGallery() {
         eventSourceRef.current = null;
       }
     };
-  }, [toast]);
+  }, [toast]); 
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {
@@ -152,7 +167,12 @@ export function useGallery() {
       return Promise.reject(new Error("User not logged in"));
     }
 
-    const newImageForApiAndOptimistic: GalleryImage = {
+    if (!payload.caption || !payload.imageDataUri) {
+        toast({ title: "Eksik Bilgi", description: "Resim verisi veya başlık eksik.", variant: "destructive" });
+        return Promise.reject(new Error("Missing image data or caption"));
+    }
+
+    const newImageForApi: GalleryImage = {
       id: `gal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       src: payload.imageDataUri, 
       alt: payload.alt || payload.caption,
@@ -160,24 +180,23 @@ export function useGallery() {
       hint: payload.hint || 'uploaded image',
     };
 
-    const previousGallery = [...galleryImages];
-    setGalleryImages(prev => [newImageForApiAndOptimistic, ...prev]);
+    const previousGalleryForRevert = [...galleryImagesRef.current]; 
+    
+    setGalleryImages(prev => [newImageForApi, ...prev].sort(gallerySortFn));
 
     try {
-      localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify([newImageForApiAndOptimistic, ...previousGallery]));
+      const currentGalleryForStorage = [newImageForApi, ...previousGalleryForRevert].sort(gallerySortFn);
+      localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(currentGalleryForStorage));
     } catch (e: any) {
       if (e.name === 'QuotaExceededError') {
-        setGalleryImages(previousGallery); // Revert optimistic UI update if localStorage fails immediately
-        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGallery)); // Try to save previous state
         toast({
           title: "Yerel Depolama Limiti Aşıldı",
-          description: "Resim yüklenemedi çünkü tarayıcı depolama alanı dolu. Lütfen bazı resimleri silin.",
-          variant: "destructive",
-          duration: 7000,
+          description: "Resim geçici olarak eklendi ancak tarayıcı depolama alanı dolu olduğu için kalıcı olarak kaydedilemedi. Bu resim sayfa yenilendiğinde kaybolabilir.",
+          variant: "warning",
+          duration: 8000,
         });
-        throw e; // Re-throw to be caught by admin page
       } else {
-        console.error("Error saving new image to localStorage (optimistic):", e);
+        console.error("Error saving optimistic gallery to localStorage:", e);
       }
     }
 
@@ -185,40 +204,45 @@ export function useGallery() {
       const response = await fetch('/api/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newImageForApiAndOptimistic), 
+        body: JSON.stringify(newImageForApi), 
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         let errorMessage = errorData.message || 'Resim sunucuya iletilemedi';
         
-        if (response.status === 413) { // Payload Too Large
-          errorMessage = "Resim yüklenemedi çünkü dosya boyutu çok büyük. Lütfen daha küçük bir resim seçin.";
+        if (response.status === 413) { 
+          errorMessage = "Resim yüklenemedi çünkü dosya boyutu sunucu limitlerini aşıyor. Lütfen daha küçük bir resim seçin.";
         }
         
         toast({ title: "Yükleme Başarısız", description: errorMessage, variant: "destructive" });
         
-        // Revert optimistic update on API error
-        setGalleryImages(previousGallery);
-        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGallery));
-        throw new Error(errorMessage);
+        setGalleryImages(previousGalleryForRevert);
+        try {
+            localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGalleryForRevert));
+        } catch (lsError) {
+            console.warn("Could not revert localStorage after API failure:", lsError);
+        }
+        throw new Error(errorMessage); 
       }
-      // On successful API call, SSE will eventually update all clients.
-      // Our local state and localStorage are already optimistically updated.
     } catch (error: any) {
-      console.error("Failed to notify server about new gallery image:", error);
-       // If error was not already toasted as a specific 413 or quota error
-      if (!error.message?.includes("Resim verisi çok büyük") && !error.message?.includes("Yerel Depolama Limiti Aşıldı")) {
-         // A general toast for other types of errors, but not if already handled
+      console.error("Failed to send new gallery image to server:", error);
+      setGalleryImages(previousGalleryForRevert);
+      try {
+        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGalleryForRevert));
+      } catch (lsRevertError) {
+        console.warn("Error reverting localStorage on API error (general catch):", lsRevertError);
       }
-      // Revert if not already reverted and if it's not a quota error which reverted already
-      if (!error.name?.includes('QuotaExceededError')) {
-        setGalleryImages(previousGallery);
-        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGallery));
+      if (!error.message?.includes("Resim yüklenemedi çünkü dosya boyutu sunucu limitlerini aşıyor") && 
+          !error.message?.includes("Resim sunucuya iletilemedi") &&
+          !error.message?.includes("Yerel Depolama Limiti Aşıldı") /* Avoid double toast from localStorage catch */
+          ) {
+         // This path might be for network errors or unexpected issues
+         // toast({ title: "Resim Yüklenemedi", description: "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
       throw error; 
     }
-  }, [user, toast, galleryImages]);
+  }, [user, toast]); 
 
   const deleteGalleryImage = useCallback(async (id: string) => {
     if (!user) {
@@ -226,16 +250,23 @@ export function useGallery() {
       return Promise.reject(new Error("User not logged in"));
     }
 
-    const imageToDelete = galleryImages.find(img => img.id === id);
-    const previousGallery = [...galleryImages];
+    const previousGalleryForRevert = [...galleryImagesRef.current];    
+    setGalleryImages(prev => prev.filter(img => img.id !== id).sort(gallerySortFn));
     
-    setGalleryImages(prev => prev.filter(img => img.id !== id));
     try {
-        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(galleryImages.filter(img => img.id !== id)));
+        const updatedGalleryForStorage = previousGalleryForRevert.filter(img => img.id !== id).sort(gallerySortFn);
+        localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(updatedGalleryForStorage));
     } catch (e: any) {
         console.warn("Error updating localStorage after delete (optimistic):", e);
+        if (e.name === 'QuotaExceededError') {
+            toast({
+                title: "Yerel Depolama Uyarısı",
+                description: "Resim silindi ancak tarayıcı depolama alanı dolu olduğu için değişiklik tam kaydedilemedi.",
+                variant: "warning",
+                duration: 7000,
+            });
+        }
     }
-
 
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
@@ -244,25 +275,24 @@ export function useGallery() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        if (imageToDelete) { // Revert optimistic update
-            setGalleryImages(previousGallery);
-             try {
-                localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGallery));
-            } catch (e: any) { /* ignore localStorage error on revert */ }
-        }
+        setGalleryImages(previousGalleryForRevert);
+        try {
+            localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGalleryForRevert));
+        } catch (lsError) { /* ignore localStorage error on revert */ }
+        
         throw new Error(errorData.message || 'Resim silme bilgisi sunucuya iletilemedi');
       }
     } catch (error: any) {
       console.error("Failed to notify server about deleted gallery image:", error);
       toast({ title: "Resim Silinemedi", description: error.message || "Resim silme bilgisi diğer kullanıcılara iletilirken bir sorun oluştu.", variant: "destructive" });
-      // Revert if not already reverted
-      if (imageToDelete && !galleryImages.find(img => img.id === id)) {
-         setGalleryImages(previousGallery);
-         localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGallery));
-      }
-      throw error;
+      
+      setGalleryImages(previousGalleryForRevert);
+      try {
+          localStorage.setItem(GALLERY_LOCAL_STORAGE_KEY, JSON.stringify(previousGalleryForRevert));
+      } catch (lsRevertError) { /* ... */ }
+      throw error; 
     }
-  }, [user, toast, galleryImages]);
+  }, [user, toast]); 
 
   return { galleryImages, addGalleryImage, deleteGalleryImage, isLoading };
 }

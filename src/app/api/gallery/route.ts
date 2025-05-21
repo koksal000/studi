@@ -9,7 +9,7 @@ import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 
 export interface GalleryImage {
   id: string;
-  src: string; // base64 data URI or URL for seeded images
+  src: string; 
   alt: string;
   caption: string;
   hint: string;
@@ -17,73 +17,74 @@ export interface GalleryImage {
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const GALLERY_FILE_PATH = path.join(dataDir, '_gallery.json');
-// Next.js default body parser limit is 1MB. Base64 is ~33% larger.
-// A 700KB file can become ~1MB base64.
-// Vercel Hobby plan serverless function request payload limit is 4.5MB.
-// Let's set a practical limit for the base64 string itself.
 const MAX_BASE64_SIZE_API = 4 * 1024 * 1024; // Approx 4MB for the base64 string.
 
 let galleryImagesData: GalleryImage[] = [];
 let initialized = false;
+
+const gallerySortFnInMemory = (a: GalleryImage, b: GalleryImage): number => {
+  const aIsSeed = a.id.startsWith('seed_');
+  const bIsSeed = b.id.startsWith('seed_');
+  
+  if (aIsSeed && !bIsSeed) return -1;
+  if (!aIsSeed && bIsSeed) return 1;
+
+  const extractNumericPart = (id: string) => {
+    const match = id.match(/\d+$/); // Try to get numeric part for gal_
+    if (id.startsWith('gal_') && match) return parseInt(match[0]);
+    if (id.startsWith('seed_') && id.length > 5) return parseInt(id.substring(5)); // For seed_X
+    return null;
+  };
+
+  const numA = extractNumericPart(a.id);
+  const numB = extractNumericPart(b.id);
+
+  if (numA !== null && numB !== null) {
+    if (a.id.startsWith('gal_') && b.id.startsWith('gal_')) {
+      return numB - numA; 
+    }
+     // For seeds, or mixed, sort by numeric part primarily
+    return numA - numB; 
+  }
+  
+  // Fallback for non-standard IDs or if one is numeric and other is not
+  if (a.id.startsWith('gal_') && !b.id.startsWith('gal_')) return -1; 
+  if (!a.id.startsWith('gal_') && b.id.startsWith('gal_')) return 1;
+  
+  return b.id.localeCompare(a.id); 
+};
 
 const loadGalleryFromFile = () => {
   try {
     if (fs.existsSync(GALLERY_FILE_PATH)) {
       const fileData = fs.readFileSync(GALLERY_FILE_PATH, 'utf-8');
       const parsedData = JSON.parse(fileData) as GalleryImage[];
-      galleryImagesData = parsedData.sort((a,b) => {
-        const aIsSeed = a.id.startsWith('seed_');
-        const bIsSeed = b.id.startsWith('seed_');
-        if (aIsSeed && !bIsSeed) return -1;
-        if (!aIsSeed && bIsSeed) return 1;
-        const idA = a.id.replace(/^(seed_|gal_)/, '');
-        const idB = b.id.replace(/^(seed_|gal_)/, '');
-        if (isNaN(parseInt(idA)) || isNaN(parseInt(idB))) {
-            return a.id.localeCompare(b.id);
-        }
-        return parseInt(idB) - parseInt(idA);
-      });
+      galleryImagesData = parsedData.sort(gallerySortFnInMemory);
       console.log(`[API/Gallery] Successfully loaded ${galleryImagesData.length} images from ${GALLERY_FILE_PATH}`);
     } else {
-      galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort((a,b) => {
-        const aIsSeed = a.id.startsWith('seed_');
-        const bIsSeed = b.id.startsWith('seed_');
-        if (aIsSeed && !bIsSeed) return -1;
-        if (!aIsSeed && bIsSeed) return 1;
-        return 0;
-      });
-      saveGalleryToFile();
-      console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images and saved to ${GALLERY_FILE_PATH}`);
+      galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
+      // saveGalleryToFile(); // Only save if using persistent disk and it's desirable to create the file
+      console.log(`[API/Gallery] Initialized with ${galleryImagesData.length} seed images. File ${GALLERY_FILE_PATH} not found.`);
     }
   } catch (error) {
     console.error("[API/Gallery] Error loading gallery from file, using static seeds as fallback:", error);
-    galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort((a,b) => {
-        const aIsSeed = a.id.startsWith('seed_');
-        const bIsSeed = b.id.startsWith('seed_');
-        if (aIsSeed && !bIsSeed) return -1;
-        if (!aIsSeed && bIsSeed) return 1;
-        return 0;
-      });
+    galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
   }
 };
 
 const saveGalleryToFile = () => {
+  if (!process.env.DATA_PATH) { 
+     console.warn("[API/Gallery] DATA_PATH not set. Skipping saveGalleryToFile to avoid writing to ephemeral storage or Git-tracked files.");
+     return;
+  }
   try {
     const dir = path.dirname(GALLERY_FILE_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const sortedData = [...galleryImagesData].sort((a,b) => {
-        const aIsSeed = a.id.startsWith('seed_');
-        const bIsSeed = b.id.startsWith('seed_');
-        if (aIsSeed && !bIsSeed) return -1;
-        if (!aIsSeed && bIsSeed) return 1;
-        const idA = a.id.replace(/^(seed_|gal_)/, '');
-        const idB = b.id.replace(/^(seed_|gal_)/, '');
-        if (isNaN(parseInt(idA)) || isNaN(parseInt(idB))) return a.id.localeCompare(b.id);
-        return parseInt(idB) - parseInt(idA);
-    });
+    const sortedData = [...galleryImagesData].sort(gallerySortFnInMemory);
     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    console.log(`[API/Gallery] Gallery data saved to ${GALLERY_FILE_PATH}`);
   } catch (error) {
     console.error("[API/Gallery] Error saving gallery to file:", error);
   }
@@ -100,9 +101,6 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    // Note: Next.js default body parser limit is 1MB.
-    // If request body is larger, it might not even reach this handler or be truncated.
-    // The MAX_BASE64_SIZE_API check below is an additional safeguard.
     const newImage: GalleryImage = await request.json();
     
     if (!newImage.id || !newImage.src || !newImage.caption) {
@@ -113,7 +111,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Invalid image data URI format.' }, { status: 400 });
     }
 
-    // Check size of base64 string
     if (newImage.src.length > MAX_BASE64_SIZE_API) { 
         return NextResponse.json({ message: `Resim verisi çok büyük. Maksimum boyut yaklaşık ${MAX_BASE64_SIZE_API / (1024*1024)}MB olmalıdır (işlenmiş veri).` }, { status: 413 });
     }
@@ -124,18 +121,19 @@ export async function POST(request: NextRequest) {
     } else {
       galleryImagesData.unshift(newImage); 
     }
+    galleryImagesData.sort(gallerySortFnInMemory); 
     
-    saveGalleryToFile();
+    saveGalleryToFile(); 
+
     galleryEmitter.emit('update', [...galleryImagesData]);
     return NextResponse.json(newImage, { status: 201 });
   } catch (error: any) {
-    // Check if error is due to payload size exceeding Next.js body parser limit
     if (error.type === 'entity.too.large') {
         console.error("[API/Gallery] POST Error: Payload too large, exceeded Next.js body parser limit.");
         return NextResponse.json({ message: `Resim dosyası çok büyük. Sunucu limiti aşıldı. Lütfen daha küçük bir dosya kullanın.` }, { status: 413 });
     }
     console.error("[API/Gallery] Error creating gallery image (POST):", error);
-    if (error instanceof SyntaxError) { // JSON parsing error
+    if (error instanceof SyntaxError) { 
       return NextResponse.json({ message: "Invalid JSON payload. Resim verisi doğru formatta olmayabilir veya çok büyük olabilir." }, { status: 400 });
     }
     return NextResponse.json({ message: "Internal server error while creating gallery image." }, { status: 500 });
@@ -155,10 +153,11 @@ export async function DELETE(request: NextRequest) {
     galleryImagesData = galleryImagesData.filter(img => img.id !== id);
 
     if (galleryImagesData.length < initialLength) {
-      saveGalleryToFile();
+      saveGalleryToFile(); 
       galleryEmitter.emit('update', [...galleryImagesData]);
       return NextResponse.json({ message: 'Image deleted successfully' }, { status: 200 });
     } else {
+      galleryEmitter.emit('update', [...galleryImagesData]); 
       return NextResponse.json({ message: 'Image not found' }, { status: 404 });
     }
   } catch (error) {

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
 import { useState } from 'react';
-import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog'; 
+import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog';
 
 interface AnnouncementCardProps {
   announcement: Announcement;
@@ -35,7 +35,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
   const { deleteAnnouncement: removeAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   const [isAdminPasswordDialogOpen, setIsAdminPasswordDialogOpen] = useState(false);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false); 
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const canAttemptDelete = !!user;
 
@@ -43,7 +43,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     removeAnnouncement(announcement.id);
     toast({
       title: "Duyuru Silindi",
-      description: `"${announcement.title}" başlıklı duyuru kalıcı olarak silindi. (Render.com'da kalıcı disk yapılandırıldıysa)`,
+      description: `"${announcement.title}" başlıklı duyuru başarıyla silindi.`,
     });
   };
 
@@ -54,7 +54,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
   const renderMedia = () => {
     if (!announcement.media) return null;
 
-    if (announcement.mediaType?.startsWith('image/')) {
+    if (announcement.mediaType?.startsWith('image/')) { // Catches 'image/png', 'image/jpeg', 'image/url'
       return (
         <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
           <Image
@@ -62,32 +62,30 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
             alt={announcement.title}
             layout="fill"
             objectFit="contain"
-            data-ai-hint="announcement image"
+            data-ai-hint="announcement media"
           />
         </div>
       );
     }
-    if (announcement.mediaType?.startsWith('video/')) {
+    if (announcement.mediaType?.startsWith('video/')) { // Catches 'video/mp4', 'video/url'
       return (
         <video src={announcement.media} controls className="my-4 w-full rounded-md max-h-[400px]" />
       );
     }
-    if (announcement.mediaType === 'url') {
-        if (/\.(jpeg|jpg|gif|png)$/i.test(announcement.media)) {
-             return (
-                <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
-                  <Image
-                    src={announcement.media}
-                    alt={announcement.title}
-                    layout="fill"
-                    objectFit="contain"
-                    data-ai-hint="announcement image"
-                   />
-                </div>
-             );
-        } else if (/\.(mp4|webm|ogg)$/i.test(announcement.media)) {
-            return <video src={announcement.media} controls className="my-4 w-full rounded-md max-h-[400px]" />;
-        }
+    if (announcement.mediaType === 'url/link') { // Generic link
+        return (
+            <div className="my-4 p-3 bg-muted rounded-md">
+                <a
+                    href={announcement.media}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline flex items-center"
+                >
+                    <Link2 className="h-4 w-4 mr-2"/>
+                    Medyayı Görüntüle: {announcement.media.substring(0,50)}{announcement.media.length > 50 ? "..." : ""}
+                </a>
+            </div>
+        );
     }
     return null;
   };
@@ -96,6 +94,13 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     ? (announcement.content.length > 150 ? announcement.content.substring(0, 147) + "..." : announcement.content)
     : announcement.content;
 
+  const getCompactMediaIndicator = () => {
+    if (!announcement.media) return null;
+    if (announcement.mediaType?.startsWith('image/')) return <><ImageIcon className="h-3.5 w-3.5 mr-1 text-primary" /> Resim</>;
+    if (announcement.mediaType?.startsWith('video/')) return <><VideoIcon className="h-3.5 w-3.5 mr-1 text-primary" /> Video</>;
+    if (announcement.mediaType === 'url/link') return <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Bağlantı</>;
+    return <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya</>; // Fallback
+  };
 
   return (
     <>
@@ -110,15 +115,10 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
             <span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>
             {isCompact && announcement.media && (
               <span className="flex items-center">
-                {announcement.mediaType?.startsWith('image/') || (announcement.mediaType === 'url' && /\.(jpeg|jpg|gif|png)$/i.test(announcement.media))
-                  ? <><ImageIcon className="h-3.5 w-3.5 mr-1 text-primary" /> Resim</>
-                  : announcement.mediaType?.startsWith('video/') || (announcement.mediaType === 'url' && /\.(mp4|webm|ogg)$/i.test(announcement.media))
-                  ? <><VideoIcon className="h-3.5 w-3.5 mr-1 text-primary" /> Video</>
-                  : <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya</>
-                }
+                {getCompactMediaIndicator()}
               </span>
             )}
-             {!isCompact && announcement.media && !announcement.mediaType?.startsWith('image/') && !announcement.mediaType?.startsWith('video/') && (
+             {!isCompact && announcement.media && announcement.mediaType === 'url/link' && (
                 <span className="flex items-center">
                     <Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya Bağlantısı
                 </span>
@@ -143,9 +143,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
                 <AlertDialogHeader>
                   <AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle>
                   <AlertDialogDescription>
-                    "{announcement.title}" başlıklı duyuruyu kalıcı olarak silmek istediğinizden emin misiniz?
-                    <br /><br />
-                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa geri alınamaz.
+                    "{announcement.title}" başlıklı duyuruyu kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -154,7 +152,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
                     onClick={() => setIsAdminPasswordDialogOpen(true)}
                     className="bg-destructive hover:bg-destructive/90"
                   >
-                    Evet, Kalıcı Olarak Sil
+                    Evet, Sil
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -181,5 +179,3 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     </>
   );
 }
-
-    

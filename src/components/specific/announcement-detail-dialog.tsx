@@ -4,7 +4,7 @@
 import type { Announcement } from '@/hooks/use-announcements';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import Image from 'next/image';
-import { UserCircle, CalendarDays, Link2 } from 'lucide-react'; // Link2 eklendi
+import { UserCircle, CalendarDays, Link2 } from 'lucide-react';
 
 interface AnnouncementDetailDialogProps {
   isOpen: boolean;
@@ -24,7 +24,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement }:
   const renderMedia = () => {
     if (!announcement.media) return null;
 
-    if (announcement.mediaType?.startsWith('image/')) {
+    if (announcement.mediaType?.startsWith('image/')) { // Catches 'image/png', 'image/jpeg', 'image/url'
       return (
         <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
           <Image
@@ -32,34 +32,40 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement }:
             alt={announcement.title}
             layout="fill"
             objectFit="contain"
-            data-ai-hint="announcement image detail"
+            data-ai-hint="announcement media detail"
           />
         </div>
       );
     }
-    if (announcement.mediaType?.startsWith('video/')) {
+    if (announcement.mediaType?.startsWith('video/')) { // Catches 'video/mp4', 'video/url' (including YouTube if identified as video/url)
+      // Basic YouTube embed logic (can be improved with a proper library)
+      if (announcement.media.includes("youtube.com/watch?v=") || announcement.media.includes("youtu.be/")) {
+        const videoId = announcement.media.includes("youtu.be/") 
+          ? announcement.media.split("youtu.be/")[1].split("?")[0]
+          : new URL(announcement.media).searchParams.get("v");
+        if (videoId) {
+          return (
+            <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
+              <iframe
+                width="100%"
+                height="100%"
+                src={`https://www.youtube.com/embed/${videoId}`}
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full"
+              ></iframe>
+            </div>
+          );
+        }
+      }
+      // Fallback for other video URLs
       return (
         <video src={announcement.media} controls className="my-4 w-full rounded-md max-h-[400px]" />
       );
     }
-    if (announcement.mediaType === 'url') { // Check if it's a generic URL
-      // Attempt to render if it's an image or video URL
-      if (/\.(jpeg|jpg|gif|png)$/i.test(announcement.media)) {
-        return (
-          <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
-            <Image
-              src={announcement.media}
-              alt={announcement.title}
-              layout="fill"
-              objectFit="contain"
-              data-ai-hint="announcement image detail"
-            />
-          </div>
-        );
-      } else if (/\.(mp4|webm|ogg)$/i.test(announcement.media)) {
-        return <video src={announcement.media} controls className="my-4 w-full rounded-md max-h-[400px]" />;
-      } else {
-        // If it's a generic URL that's not an image or video, display a link
+    if (announcement.mediaType === 'url/link') { // Generic link
         return (
             <div className="my-4 p-3 bg-muted rounded-md">
                 <a
@@ -73,7 +79,6 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement }:
                 </a>
             </div>
         );
-      }
     }
     return null;
   };
@@ -85,7 +90,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement }:
           <DialogTitle className="text-xl sm:text-2xl">{announcement.title}</DialogTitle>
           <DialogDescription asChild className="text-xs pt-1">
             <div className="text-muted-foreground"> {/* Wrapper div */}
-              <div className="flex flex-wrap gap-x-3 gap-y-1 items-center mt-1">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 items-center mt-1 text-muted-foreground">
                   <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
                   <span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>
               </div>

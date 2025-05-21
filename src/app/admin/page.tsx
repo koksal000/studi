@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
-import { VILLAGE_NAME, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
+import { VILLAGE_NAME } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users } from 'lucide-react'; // Added MailQuestion, Users
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -30,7 +30,7 @@ import {
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
 import { UserRequestsDialog } from '@/components/specific/user-requests-dialog';
-import type { ContactMessage } from '@/app/api/contact/route'; // Import ContactMessage type
+import type { ContactMessage } from '@/app/api/contact/route';
 
 export default function AdminPage() {
   const { user } = useUser();
@@ -68,13 +68,13 @@ export default function AdminPage() {
       } catch (error) {
         console.error("Error fetching unique contacts:", error);
         toast({ title: "Hata", description: "İletişim istatistikleri alınamadı.", variant: "destructive" });
-        setUniqueContactCount(0); // Fallback to 0 on error
+        setUniqueContactCount(0);
       } finally {
         setIsContactCountLoading(false);
       }
     };
 
-    if (user) { // Only fetch if admin is logged in
+    if (user) {
       fetchUniqueContacts();
     }
   }, [user, toast]);
@@ -119,6 +119,20 @@ export default function AdminPage() {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const imageDataUri = reader.result as string;
+        
+        if (!imageDataUri || typeof imageDataUri !== 'string' || !imageDataUri.startsWith('data:image/')) {
+          toast({ 
+            title: "Geçersiz Resim Verisi", 
+            description: "Resim dosyası okunamadı veya dosya formatı desteklenmiyor. Lütfen geçerli bir resim dosyası (örn: PNG, JPG) seçin.", 
+            variant: "destructive" 
+          });
+          setIsUploading(false);
+          if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+          setNewImageFile(null);
+          setNewImagePreview(null);
+          return;
+        }
+
         const payload: NewGalleryImagePayload = {
           imageDataUri,
           caption: newImageCaption.trim(),
@@ -126,7 +140,10 @@ export default function AdminPage() {
           hint: "custom upload",
         };
         await addGalleryImage(payload);
-        toast({ title: "Resim Eklendi", description: "Yeni resim galeriye başarıyla eklendi. (Render.com'da kalıcı disk yapılandırıldıysa kalıcı olacaktır.)" });
+        toast({ 
+          title: "Resim Eklendi", 
+          description: `"${newImageCaption.trim()}" başlıklı resim galeriye başarıyla eklendi. (Render.com'da kalıcı disk yapılandırıldıysa kalıcı olacaktır.)` 
+        });
         setNewImageFile(null);
         setNewImageCaption('');
         setNewImagePreview(null);
@@ -134,12 +151,12 @@ export default function AdminPage() {
       };
       reader.onerror = () => {
          toast({ title: "Dosya Okuma Hatası", description: "Resim dosyası okunurken bir hata oluştu.", variant: "destructive" });
+         setIsUploading(false);
       }
       reader.readAsDataURL(newImageFile);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding image:", error);
-      toast({ title: "Resim Eklenemedi", description: "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
-    } finally {
+      toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken bir sorun oluştu.", variant: "destructive" });
       setIsUploading(false);
     }
   };
@@ -153,12 +170,16 @@ export default function AdminPage() {
     if (!imageToDelete) return;
     try {
       await deleteGalleryImage(imageToDelete.id);
-      toast({ title: "Resim Silindi", description: `"${imageToDelete.caption}" başlıklı resim galeriden kalıcı olarak silindi. (Render.com'da kalıcı disk yapılandırıldıysa)` });
-    } catch (error) {
+      toast({ 
+        title: "Resim Silindi", 
+        description: `"${imageToDelete.caption}" başlıklı resim galeriden kalıcı olarak silindi. (Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncellendiyse kalıcı olur. Aksi takdirde, bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümü geri yüklenebilir.)` 
+      });
+    } catch (error: any) {
       console.error("Error deleting image:", error);
-      toast({ title: "Resim Silinemedi", description: "Resim silinirken bir sorun oluştu.", variant: "destructive" });
+      toast({ title: "Resim Silinemedi", description: error.message || "Resim silinirken bir sorun oluştu.", variant: "destructive" });
     }
     setImageToDelete(null);
+    setIsUploading(false); // Ensure isUploading is reset after delete attempt
   };
 
 
@@ -218,7 +239,13 @@ export default function AdminPage() {
               <PlusCircle className="mr-2 h-5 w-5" /> Yeni Duyuru Ekle
             </Button>
           </CardTitle>
-          <CardDescription>Yeni duyurular ekleyin veya mevcut duyuruları yönetin. Render.com projenizde kalıcı disk doğru yapılandırıldıysa, değişiklikleriniz kalıcı olacaktır.</CardDescription>
+          <CardDescription>
+            Yeni duyurular ekleyin veya mevcut duyuruları yönetin. 
+            Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncelleniyorsa, değişiklikleriniz kalıcı olacaktır.
+            Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir.
+            Kalıcı değişiklikler için, yerel projenizdeki ilgili JSON dosyasını düzenleyip GitHub'a göndermeniz önerilir.
+            Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_announcements.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_announcements.json</a>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <AddAnnouncementDialog 
@@ -246,20 +273,23 @@ export default function AdminPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-6 w-6 text-primary" /> Galeri Yönetimi</CardTitle>
-          <CardDescription>
-            Sitede gösterilen galeri resimlerini yönetin. Render.com projenizde kalıcı disk doğru yapılandırıldıysa, buradan eklenen veya silinen resimler kalıcı olacaktır.
-            Statik olarak eklenen başlangıç görselleri için (_gallery.json içindeki "seed_" ID'li olanlar) kalıcı değişiklik için bu dosyayı doğrudan GitHub reponuzda düzenleyebilirsiniz.
+           <CardDescription>
+            Sitede gösterilen galeri resimlerini yönetin. Buradan eklenen veya silinen resimler,
+            Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası (`_gallery.json`) güncelleniyorsa kalıcı olacaktır.
+            Aksi takdirde, değişiklikler bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir.
+            Kalıcı değişiklikler için, yerel projenizdeki `_gallery.json` dosyasını düzenleyip GitHub'a göndermeniz önerilir.
+            Örnek JSON dosyası: <a href="https://github.com/MuctebaGOKSAL/KoyumDomanic/blob/main/_gallery.json" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">_gallery.json</a>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAddImageSubmit} className="mb-8 p-6 border rounded-lg shadow-sm space-y-4">
             <h3 className="text-lg font-semibold text-primary border-b pb-2">Yeni Resim Yükle</h3>
             <div className="space-y-1">
-              <Label htmlFor="imageFile">Resim Dosyası Seçin (Max 1MB önerilir)</Label>
+              <Label htmlFor="imageFile">Resim Dosyası Seçin (Max 1MB önerilir, PNG/JPG)</Label>
               <Input 
                 id="imageFile" 
                 type="file" 
-                accept="image/*" 
+                accept="image/png, image/jpeg, image/jpg" 
                 onChange={handleFileChange} 
                 ref={fileInputRef}
                 className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
@@ -288,6 +318,7 @@ export default function AdminPage() {
               {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               Galeriye Ekle
             </Button>
+            {isUploading && <p className="text-sm text-muted-foreground">Resim yükleniyor, lütfen bekleyin...</p>}
           </form>
 
           <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4">Mevcut Galeri Resimleri</h3>
@@ -312,9 +343,11 @@ export default function AdminPage() {
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz?
-                                    (Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa geri alınamaz.)
+                                 <AlertDialogDescription>
+                                    "{image.caption}" başlıklı resmi galeriden silmek istediğinizden emin misiniz?
+                                    <br/><br/>
+                                    <strong className="text-destructive-foreground bg-destructive p-1 rounded-sm">UYARI:</strong> Bu işlem, Render.com projenizde kalıcı disk doğru yapılandırıldıysa ve ilgili JSON dosyası güncelleniyorsa geri alınamaz. Aksi takdirde, değişiklik bir sonraki dağıtımda veya sunucu yeniden başlatıldığında GitHub'daki dosya sürümüyle sıfırlanabilir.
+                                    Kalıcı silme için, değişikliği yerel projenizdeki `_gallery.json` dosyasında yapıp GitHub'a göndermeniz önerilir.
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -323,7 +356,7 @@ export default function AdminPage() {
                                     onClick={() => openDeleteConfirmation(image)}
                                     className="bg-destructive hover:bg-destructive/90"
                                 >
-                                    Evet, Kalıcı Olarak Sil
+                                    Evet, Sil (Geçici)
                                 </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>

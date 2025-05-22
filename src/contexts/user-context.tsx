@@ -7,13 +7,13 @@ import { ADMIN_PASSWORD } from '@/lib/constants';
 interface User {
   name: string;
   surname: string;
-  email?: string; // E-posta alanı eklendi (isteğe bağlı)
+  // email?: string; // E-posta alanı kaldırıldı
 }
 
 interface UserContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (name: string, surname: string, email?: string) => void; // Email parametresi eklendi
+  login: (name: string, surname: string) => void; // Email parametresi kaldırıldı
   logout: () => void;
   checkAdminPassword: (password: string) => boolean;
   showEntryForm: boolean;
@@ -35,7 +35,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     try {
       const storedUserData = localStorage.getItem(USER_DATA_KEY);
       if (storedUserData) {
-        const parsedUser = JSON.parse(storedUserData) as User; // User tipine cast edildi
+        const parsedUser = JSON.parse(storedUserData) as User;
         setUser(parsedUser);
         setShowEntryForm(false);
       } else {
@@ -48,11 +48,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(false);
   }, []);
 
-  const login = (name: string, surname: string, email?: string) => {
+  const login = (name: string, surname: string) => { // email parametresi kaldırıldı
     const newUser: User = { name, surname };
-    if (email && email.trim() !== '') {
-      newUser.email = email.trim();
-    }
+    // if (email && email.trim() !== '') { // email ile ilgili mantık kaldırıldı
+    //   newUser.email = email.trim();
+    // }
     setUser(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);

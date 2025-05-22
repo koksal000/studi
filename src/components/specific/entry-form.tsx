@@ -12,15 +12,13 @@ import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
-  const [email, setEmail] = useState(''); // E-posta için state eklendi
+  // const [email, setEmail] = useState(''); // E-posta için state kaldırıldı
   const { login, showEntryForm } = useUser();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (name.trim() && surname.trim()) {
-      // E-posta geçerliyse ve girilmişse login fonksiyonuna gönder
-      const emailToSend = email.trim() ? email.trim() : undefined;
-      login(name.trim(), surname.trim(), emailToSend);
+      login(name.trim(), surname.trim()); // email parametresi kaldırıldı
       
       // Increment entry count
       try {
@@ -83,17 +81,7 @@ export function EntryForm() {
                   placeholder="Soyadınızı girin"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="userEmail" className="text-neutral-200">E-posta Adresiniz (İsteğe Bağlı):</Label> 
-                <Input
-                  id="userEmail"
-                  type="email" // type="email" olarak güncellendi
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
-                  placeholder="E-posta adresinizi girin (isteğe bağlı)"
-                />
-              </div>
+              {/* E-posta giriş alanı kaldırıldı */}
               <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">
                 Giriş Yap
               </Button>

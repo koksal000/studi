@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -6,12 +7,13 @@ import { ADMIN_PASSWORD } from '@/lib/constants';
 interface User {
   name: string;
   surname: string;
+  email?: string; // E-posta alanı eklendi (isteğe bağlı)
 }
 
 interface UserContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (name: string, surname: string) => void;
+  login: (name: string, surname: string, email?: string) => void; // Email parametresi eklendi
   logout: () => void;
   checkAdminPassword: (password: string) => boolean;
   showEntryForm: boolean;
@@ -33,7 +35,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     try {
       const storedUserData = localStorage.getItem(USER_DATA_KEY);
       if (storedUserData) {
-        const parsedUser = JSON.parse(storedUserData);
+        const parsedUser = JSON.parse(storedUserData) as User; // User tipine cast edildi
         setUser(parsedUser);
         setShowEntryForm(false);
       } else {
@@ -41,13 +43,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       console.error("Failed to parse user data from localStorage", error);
-      setShowEntryForm(true); // Fallback to showing form if localStorage is corrupt
+      setShowEntryForm(true); 
     }
     setIsLoading(false);
   }, []);
 
-  const login = (name: string, surname: string) => {
-    const newUser = { name, surname };
+  const login = (name: string, surname: string, email?: string) => {
+    const newUser: User = { name, surname };
+    if (email && email.trim() !== '') {
+      newUser.email = email.trim();
+    }
     setUser(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);

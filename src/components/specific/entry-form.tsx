@@ -12,12 +12,16 @@ import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
+  const [email, setEmail] = useState(''); // E-posta için state eklendi
   const { login, showEntryForm } = useUser();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (name.trim() && surname.trim()) {
-      login(name.trim(), surname.trim());
+      // E-posta geçerliyse ve girilmişse login fonksiyonuna gönder
+      const emailToSend = email.trim() ? email.trim() : undefined;
+      login(name.trim(), surname.trim(), emailToSend);
+      
       // Increment entry count
       try {
         await fetch('/api/stats/entry-count', { method: 'POST' });
@@ -77,6 +81,17 @@ export function EntryForm() {
                   required
                   className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
                   placeholder="Soyadınızı girin"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="userEmail" className="text-neutral-200">E-posta Adresiniz (İsteğe Bağlı):</Label> 
+                <Input
+                  id="userEmail"
+                  type="email" // type="email" olarak güncellendi
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
+                  placeholder="E-posta adresinizi girin (isteğe bağlı)"
                 />
               </div>
               <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">

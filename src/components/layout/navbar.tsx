@@ -3,19 +3,19 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, Settings, X, Search as SearchIcon, Lock, Bell } from 'lucide-react'; // Bell eklendi
+import { Menu, Settings, X, Search as SearchIcon, Lock, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'; // Popover importları
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { SettingsDialog } from '@/components/specific/settings-dialog';
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
 import { NAVIGATION_LINKS, VILLAGE_NAME, ADMIN_PANEL_PATH } from '@/lib/constants';
 import { Input } from '@/components/ui/input';
-import { useAnnouncements } from '@/hooks/use-announcements'; // Yeni import
-import { useAnnouncementStatus } from '@/contexts/announcement-status-context'; // Yeni import
-import { AnnouncementPopoverContent } from '@/components/specific/announcement-popover-content'; // Yeni import
+import { useAnnouncements } from '@/hooks/use-announcements';
+import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
+import { AnnouncementPopoverContent } from '@/components/specific/announcement-popover-content';
 
 
 export function Navbar() {
@@ -28,7 +28,7 @@ export function Navbar() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isNotificationPopoverOpen, setIsNotificationPopoverOpen] = useState(false);
 
-  const { announcements, unreadCount } = useAnnouncements(); // unreadCount alındı
+  const { announcements, unreadCount } = useAnnouncements();
   const { setLastOpenedNotificationTimestamp } = useAnnouncementStatus();
 
   const handleSearch = (e: React.FormEvent) => {
@@ -86,8 +86,8 @@ export function Navbar() {
             ))}
           </nav>
          
-          <div className="flex items-center ml-auto md:ml-4 gap-1"> {/* ml-auto eklendi, md:ml-4 korundu, gap eklendi */}
-            <form onSubmit={handleSearch} className="relative hidden md:block"> {/* Sadece masaüstünde göster */}
+          <div className="flex items-center ml-auto md:ml-4 gap-1">
+            <form onSubmit={handleSearch} className="relative hidden md:block">
                 <Input 
                   type="search" 
                   placeholder="Sitede ara..." 
@@ -122,18 +122,18 @@ export function Navbar() {
               </PopoverContent>
             </Popover>
 
-            <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)} title="Ayarlar" className="hidden md:inline-flex"> {/* Sadece masaüstünde */}
+            <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)} title="Ayarlar" className="hidden md:inline-flex">
               <Settings className="h-5 w-5" />
               <span className="sr-only">Ayarlar</span>
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleAdminPanelAccess} title="Yönetici Paneli" className="text-destructive hover:bg-destructive/10 hover:text-destructive hidden md:inline-flex"> {/* Sadece masaüstünde */}
+            <Button variant="ghost" size="icon" onClick={handleAdminPanelAccess} title="Yönetici Paneli" className="text-destructive hover:bg-destructive/10 hover:text-destructive hidden md:inline-flex">
               <Lock className="h-5 w-5" />
               <span className="sr-only">Yönetici Paneli</span>
             </Button>
           </div>
 
 
-          <div className="md:hidden ml-2"> {/* Mobil menü için trigger'ı sağa yasla */}
+          <div className="md:hidden ml-2">
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -144,19 +144,32 @@ export function Navbar() {
               <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-background p-0">
                 <SheetHeader className="p-4 border-b">
                   <div className="flex items-center justify-between">
+                  <SheetTitle className="p-0 text-lg font-bold">{VILLAGE_NAME} Menüsü</SheetTitle>
                     <SheetClose asChild>
-                      <Link href="/" className="flex items-center space-x-2" onClick={() => setIsSheetOpen(false)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 text-primary">
-                          <path d="M12 2L1 9l3 11h16l3-11L12 2zm0 2.36L17.64 9H6.36L12 4.36zM4.58 10h14.84l-2.4 8H6.98l-2.4-8z"/>
-                          <path d="M10 11h4v6h-4z"/>
-                        </svg>
-                        <SheetTitle className="p-0 text-lg font-bold">{VILLAGE_NAME} Menüsü</SheetTitle>
-                      </Link>
+                       <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <X className="h-5 w-5" />
+                        <span className="sr-only">Menüyü Kapat</span>
+                      </Button>
                     </SheetClose>
                   </div>
                 </SheetHeader>
-                <div className="flex flex-col h-full">
-                  <nav className="flex-grow flex flex-col space-y-2 p-4">
+                <div className="flex flex-col h-[calc(100%-var(--sheet-header-height,65px))]"> {/* Adjust based on actual header height if needed */}
+                  <div className="p-4 border-b">
+                     <form onSubmit={handleSearch} className="relative">
+                        <Input 
+                          type="search" 
+                          placeholder="Sitede ara..." 
+                          className="h-9 pr-8"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <Button type="submit" variant="ghost" size="icon" className="absolute right-0 top-1/2 -translate-y-1/2 h-9 w-9" title="Ara">
+                          <SearchIcon className="h-4 w-4" />
+                           <span className="sr-only">Ara</span>
+                        </Button>
+                      </form>
+                  </div>
+                  <nav className="flex-grow flex flex-col space-y-2 p-4 overflow-y-auto">
                     {NAVIGATION_LINKS.map((link) => (
                       <SheetClose asChild key={link.href}>
                         <Link href={link.href}>
@@ -175,21 +188,6 @@ export function Navbar() {
                       Yönetici Paneli
                     </Button>
                   </nav>
-                   <div className="p-4 border-t">
-                     <form onSubmit={handleSearch} className="relative">
-                        <Input 
-                          type="search" 
-                          placeholder="Sitede ara..." 
-                          className="h-9 pr-8"
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        <Button type="submit" variant="ghost" size="icon" className="absolute right-0 top-1/2 -translate-y-1/2 h-9 w-9" title="Ara">
-                          <SearchIcon className="h-4 w-4" />
-                           <span className="sr-only">Ara</span>
-                        </Button>
-                      </form>
-                  </div>
                 </div>
               </SheetContent>
             </Sheet>

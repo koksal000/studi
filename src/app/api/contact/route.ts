@@ -23,19 +23,19 @@ let initialized = false;
 
 const loadContactMessagesFromFile = () => {
   try {
+    console.log(`[API/Contact] DATA_PATH: ${dataDir}`);
     console.log(`[API/Contact] Attempting to load messages from: ${CONTACT_MESSAGES_FILE_PATH}`);
     if (fs.existsSync(CONTACT_MESSAGES_FILE_PATH)) {
       const fileData = fs.readFileSync(CONTACT_MESSAGES_FILE_PATH, 'utf-8');
       if (fileData.trim() === '') {
-        console.log(`[API/Contact] File ${CONTACT_MESSAGES_FILE_PATH} is empty. Initializing with empty array.`);
         contactMessagesData = [];
       } else {
         contactMessagesData = (JSON.parse(fileData) as ContactMessage[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        console.log(`[API/Contact] Successfully loaded ${contactMessagesData.length} contact messages.`);
       }
+      console.log(`[API/Contact] Successfully loaded ${contactMessagesData.length} contact messages from file.`);
     } else {
-      console.log(`[API/Contact] File ${CONTACT_MESSAGES_FILE_PATH} not found. Initializing with empty array and attempting to create the file.`);
       contactMessagesData = [];
+      console.log(`[API/Contact] File ${CONTACT_MESSAGES_FILE_PATH} not found. Initializing with empty array and attempting to create the file.`);
       saveContactMessagesToFile(); // Attempt to create file
     }
   } catch (error) {
@@ -47,13 +47,13 @@ const loadContactMessagesFromFile = () => {
 const saveContactMessagesToFile = (): boolean => {
   try {
     const dir = path.dirname(CONTACT_MESSAGES_FILE_PATH);
-    if (!fs.existsSync(dir) && (process.env.DATA_PATH || process.env.NODE_ENV === 'development') ){ 
+    if (!fs.existsSync(dir) && process.env.DATA_PATH ){ 
       fs.mkdirSync(dir, { recursive: true });
       console.log(`[API/Contact] Created directory: ${dir}`);
     }
     const sortedData = [...contactMessagesData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(CONTACT_MESSAGES_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    // console.log(`[API/Contact] Contact messages data saved to ${CONTACT_MESSAGES_FILE_PATH}`);
+    console.log(`[API/Contact] Contact messages data saved to ${CONTACT_MESSAGES_FILE_PATH}`);
     return true;
   } catch (error) {
     console.error("[API/Contact] CRITICAL: Error saving contact messages to file:", error);
@@ -67,9 +67,6 @@ if (!initialized) {
 }
 
 export async function GET() {
-  if (!initialized || (contactMessagesData.length === 0 && fs.existsSync(CONTACT_MESSAGES_FILE_PATH) && fs.readFileSync(CONTACT_MESSAGES_FILE_PATH, 'utf-8').trim() !== '[]')) {
-    loadContactMessagesFromFile();
-  }
   return NextResponse.json([...contactMessagesData]);
 }
 
@@ -86,7 +83,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Invalid contact message payload. Missing required fields.' }, { status: 400 });
   }
 
-  loadContactMessagesFromFile();
   const tempMessages = [...contactMessagesData];
 
   if (!tempMessages.some(msg => msg.id === newMessage.id)) {
@@ -94,15 +90,15 @@ export async function POST(request: NextRequest) {
       tempMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
     
-  contactMessagesData = tempMessages; // Update in-memory for save
+  contactMessagesData = tempMessages; // Update in-memory
+
   if (saveContactMessagesToFile()) {
-    // contactMessagesData is already updated
     contactEmitter.emit('update', [...contactMessagesData]);
     console.log(`[API/Contact] Message ${newMessage.id} received and saved. Total: ${contactMessagesData.length}`);
     return NextResponse.json(newMessage, { status: 201 });
   } else {
-    loadContactMessagesFromFile(); // Revert in-memory change
-    console.error(`[API/Contact] Failed to save message ${newMessage.id}. Operation rolled back from memory.`);
-    return NextResponse.json({ message: "Sunucu hatası: İletişim mesajı kaydedilemedi." }, { status: 500 });
+    loadContactMessagesFromFile(); 
+    console.error(`[API/Contact] Failed to save message ${newMessage.id} to file. In-memory change reverted.`);
+    return NextResponse.json({ message: "Sunucu hatası: İletişim mesajı kalıcı olarak kaydedilemedi." }, { status: 500 });
   }
 }

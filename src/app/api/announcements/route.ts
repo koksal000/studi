@@ -6,6 +6,7 @@ import type { Announcement } from '@/hooks/use-announcements';
 import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
+import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants'; // Only for type reference if needed, not direct use
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
@@ -16,20 +17,20 @@ let initialized = false;
 
 const loadAnnouncementsFromFile = () => {
   try {
+    console.log(`[API/Announcements] DATA_PATH: ${dataDir}`);
     console.log(`[API/Announcements] Attempting to load announcements from: ${ANNOUNCEMENTS_FILE_PATH}`);
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
       const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
       if (fileData.trim() === '') {
-        console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} is empty. Initializing with empty array.`);
         announcementsData = [];
       } else {
         const parsedData = JSON.parse(fileData) as Announcement[];
         announcementsData = parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements.`);
       }
+      console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements from file.`);
     } else {
-      console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array and attempting to create the file.`);
       announcementsData = [];
+      console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array and attempting to create the file.`);
       saveAnnouncementsToFile(); // Attempt to create the file with an empty array
     }
   } catch (error) {
@@ -41,16 +42,18 @@ const loadAnnouncementsFromFile = () => {
 const saveAnnouncementsToFile = (): boolean => {
    try {
     const dir = path.dirname(ANNOUNCEMENTS_FILE_PATH);
-    if (!fs.existsSync(dir) && (process.env.DATA_PATH || process.env.NODE_ENV === 'development')){ 
+    if (!fs.existsSync(dir) && process.env.DATA_PATH){ // Only create dir if DATA_PATH is set
         fs.mkdirSync(dir, { recursive: true });
         console.log(`[API/Announcements] Created directory: ${dir}`);
     }
     const sortedData = [...announcementsData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    // console.log(`[API/Announcements] Announcement data saved to ${ANNOUNCEMENTS_FILE_PATH}`);
+    console.log(`[API/Announcements] Announcement data saved to ${ANNOUNCEMENTS_FILE_PATH}`);
     return true;
   } catch (error) {
     console.error("[API/Announcements] CRITICAL: Error saving announcements to file:", error);
+    // Do not alert the user here, this is a server-side issue.
+    // The calling function should handle the response to the client.
     return false;
   }
 };
@@ -61,11 +64,9 @@ if (!initialized) {
 }
 
 export async function GET() {
-  // Ensure data is loaded if it wasn't for some reason (e.g., another serverless instance)
-  // This can be removed if confident about `initialized` behavior in your deployment
-  if (!initialized || announcementsData.length === 0 && fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
-    loadAnnouncementsFromFile();
-  }
+  // No need to reload from file here as it's done on init and after every modification.
+  // However, for serverless environments where instances might differ, it might be safer.
+  // For now, relying on the single `initialized` load and `saveAnnouncementsToFile` after POST/DELETE.
   return NextResponse.json([...announcementsData]);
 }
 
@@ -86,29 +87,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: `Medya içeriği çok büyük. Maksimum boyut yaklaşık ${Math.round(MAX_ANNOUNCEMENT_BASE64_SIZE_API / (1024*1024*1.37))}MB olmalıdır.` }, { status: 413 });
   }
     
-  // Read current data from file to ensure we have the latest version
-  loadAnnouncementsFromFile(); 
-
-  const tempAnnouncements = [...announcementsData];
-  const existingIndex = tempAnnouncements.findIndex(ann => ann.id === newAnnouncement.id);
+  // Optimistically update in-memory data first
+  const currentAnnouncements = [...announcementsData];
+  const existingIndex = currentAnnouncements.findIndex(ann => ann.id === newAnnouncement.id);
   if (existingIndex !== -1) {
-      tempAnnouncements[existingIndex] = newAnnouncement; 
+      currentAnnouncements[existingIndex] = newAnnouncement; 
   } else {
-      tempAnnouncements.unshift(newAnnouncement); 
+      currentAnnouncements.unshift(newAnnouncement); 
   }
-  tempAnnouncements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  currentAnnouncements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
-  announcementsData = tempAnnouncements; // Temporarily update in-memory for save function
-  if (saveAnnouncementsToFile()) {
-    // announcementsData is already updated
+  announcementsData = currentAnnouncements; // Update in-memory
+
+  if (saveAnnouncementsToFile()) { // Attempt to save to file
     announcementEmitter.emit('update', [...announcementsData]);
     console.log(`[API/Announcements] Announcement ${newAnnouncement.id} processed and saved. Total: ${announcementsData.length}`);
     return NextResponse.json(newAnnouncement, { status: 201 });
   } else {
-    // Revert in-memory change if save failed
-    loadAnnouncementsFromFile(); 
-    console.error(`[API/Announcements] Failed to save announcement ${newAnnouncement.id}. Operation rolled back from memory.`);
-    return NextResponse.json({ message: "Sunucu hatası: Duyuru kaydedilemedi." }, { status: 500 });
+    // If saving to file fails, revert the in-memory change and inform the client
+    loadAnnouncementsFromFile(); // Re-load from the last known good state (or empty if file was corrupted)
+    console.error(`[API/Announcements] Failed to save announcement ${newAnnouncement.id} to file. In-memory change reverted.`);
+    return NextResponse.json({ message: "Sunucu hatası: Duyuru kalıcı olarak kaydedilemedi." }, { status: 500 });
   }
 }
 
@@ -120,24 +119,22 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Announcement ID is required for deletion' }, { status: 400 });
   }
 
-  loadAnnouncementsFromFile(); 
   const initialLength = announcementsData.length;
   const filteredAnnouncements = announcementsData.filter(ann => ann.id !== id);
 
   if (filteredAnnouncements.length < initialLength) {
-    announcementsData = filteredAnnouncements; // Update in-memory for save
-    if (saveAnnouncementsToFile()) {
-      // announcementsData is already updated
+    announcementsData = filteredAnnouncements; // Update in-memory
+    if (saveAnnouncementsToFile()) { // Attempt to save to file
       announcementEmitter.emit('update', [...announcementsData]);
       console.log(`[API/Announcements] Announcement ${id} deleted and saved. Total: ${announcementsData.length}`);
       return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
     } else {
-      loadAnnouncementsFromFile(); // Revert in-memory change
-      console.error(`[API/Announcements] Failed to save after deleting announcement ${id}. Operation rolled back from memory.`);
-      return NextResponse.json({ message: 'Sunucu hatası: Duyuru silindikten sonra değişiklikler kaydedilemedi.' }, { status: 500 });
+      // If saving to file fails, revert in-memory change
+      loadAnnouncementsFromFile();
+      console.error(`[API/Announcements] Failed to save after deleting announcement ${id} from file. In-memory change reverted.`);
+      return NextResponse.json({ message: 'Sunucu hatası: Duyuru silindikten sonra değişiklikler kalıcı olarak kaydedilemedi.' }, { status: 500 });
     }
   } else {
-    // announcementEmitter.emit('update', [...announcementsData]); // Not strictly necessary if not found
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }

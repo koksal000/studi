@@ -31,8 +31,8 @@ import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
 import { UserRequestsDialog } from '@/components/specific/user-requests-dialog';
 
-const MAX_RAW_FILE_SIZE = 3 * 1024 * 1024; // 3MB limit for original file
-const MAX_IMAGE_DATA_URI_LENGTH = 4 * 1024 * 1024; // Approx 4MB for base64 string (API limit might be lower)
+const MAX_RAW_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit for original file
+const MAX_IMAGE_DATA_URI_LENGTH = Math.floor(5 * 1024 * 1024 * 1.37 * 1.05); // Approx 7.2MB for 5MB raw image (base64 string + safety)
 
 export default function AdminPage() {
   const { user } = useUser();
@@ -99,7 +99,7 @@ export default function AdminPage() {
       if (file.size > MAX_RAW_FILE_SIZE) {
         toast({
           title: "Dosya Boyutu Çok Büyük",
-          description: `Lütfen ${MAX_RAW_FILE_SIZE / (1024*1024)}MB'den küçük bir resim dosyası seçin.`,
+          description: `Lütfen 5MB'den küçük bir resim dosyası seçin.`,
           variant: "destructive",
           duration: 7000,
         });
@@ -129,7 +129,7 @@ export default function AdminPage() {
         if (imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH) {
           toast({
             title: "Resim Verisi Çok Büyük",
-            description: `İşlenmiş resim verisi çok büyük (yaklaşık ${Math.round(imageDataUri.length / (1024*1024))}MB). Lütfen daha küçük boyutlu veya daha iyi sıkıştırılmış bir resim dosyası seçin.`,
+            description: `İşlenmiş resim verisi çok büyük (yaklaşık ${Math.round(imageDataUri.length / (1024*1024))}MB, ~5MB ham dosyadan fazla). Lütfen daha küçük boyutlu veya daha iyi sıkıştırılmış bir resim dosyası seçin.`,
             variant: "destructive",
             duration: 8000,
           });
@@ -183,7 +183,7 @@ export default function AdminPage() {
       await addGalleryImage(payload);
       toast({
         title: "Resim Galeriye Eklendi",
-        description: `"${newImageCaption.trim()}" başlıklı resim galeriye başarıyla eklendi. (Değişikliğin kalıcı olması için Render.com'da kalıcı disk yapılandırmanızın doğru olması gerekir.)`
+        description: `"${newImageCaption.trim()}" başlıklı resim galeriye başarıyla eklendi.`
       });
       setNewImageFile(null);
       setNewImageCaption('');
@@ -191,6 +191,7 @@ export default function AdminPage() {
       if(fileInputRef.current) fileInputRef.current.value = "";
     } catch (error: any) {
        console.error("AdminPage: Error calling addGalleryImage:", error);
+       // Error toast is now handled within useGallery hook if it's a known issue like quota or API error
        if (error.message && !error.message.includes("localStorage") && !error.message.includes("sunucu") && !error.message.includes("payload") && !error.message.includes("kota") && !error.message.includes("büyük")) {
          toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
@@ -211,7 +212,7 @@ export default function AdminPage() {
       await deleteGalleryImage(imageToDelete.id);
       toast({
         title: "Resim Silindi",
-        description: `"${imageToDelete.caption}" başlıklı resim galeriden başarıyla silindi. (Değişikliğin kalıcı olması için Render.com'da kalıcı disk yapılandırmanızın doğru olması gerekir.)`
+        description: `"${imageToDelete.caption}" başlıklı resim galeriden başarıyla silindi.`
       });
     } catch (error: any) {
       console.error("Error deleting image:", error);
@@ -305,14 +306,14 @@ export default function AdminPage() {
            <CardDescription>
             Sitede gösterilen galeri resimlerini yönetin. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklikler kalıcı olacaktır.)
             <br/>
-            <span className="text-xs text-muted-foreground">Not: Büyük boyutlu resimler yükleme süresini ve depolama alanını etkileyebilir. Tavsiye edilen maksimum dosya boyutu ~3MB'dir.</span>
+            <span className="text-xs text-muted-foreground">Not: Büyük boyutlu resimler yükleme süresini ve depolama alanını etkileyebilir. Tavsiye edilen maksimum dosya boyutu ~5MB'dir.</span>
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAddImageSubmit} className="mb-8 p-6 border rounded-lg shadow-sm space-y-4">
             <h3 className="text-lg font-semibold text-primary border-b pb-2">Yeni Resim Yükle</h3>
             <div className="space-y-1">
-              <Label htmlFor="imageFile">Resim Dosyası Seçin (Max ~3MB, PNG/JPG)</Label>
+              <Label htmlFor="imageFile">Resim Dosyası Seçin (Max ~5MB, PNG/JPG)</Label>
               <Input
                 id="imageFile"
                 type="file"
@@ -414,3 +415,6 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+    

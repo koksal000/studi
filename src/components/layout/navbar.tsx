@@ -3,9 +3,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, Settings, X, Search as SearchIcon, Lock, Bell } from 'lucide-react';
+import { Menu, Settings, X, Search as SearchIcon, Lock, Bell, TreePine } from 'lucide-react'; // Added TreePine
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet'; // Removed SheetClose from here
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
@@ -69,10 +69,7 @@ export function Navbar() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <Link href="/" className="mr-6 flex items-center space-x-2">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 text-primary">
-              <path d="M12 2L1 9l3 11h16l3-11L12 2zm0 2.36L17.64 9H6.36L12 4.36zM4.58 10h14.84l-2.4 8H6.98l-2.4-8z"/>
-              <path d="M10 11h4v6h-4z"/> 
-            </svg>
+            <TreePine className="h-6 w-6 text-primary" /> {/* Replaced SVG with TreePine icon */}
             <span className="font-bold sm:inline-block text-lg">
               {VILLAGE_NAME}
             </span>
@@ -144,10 +141,10 @@ export function Navbar() {
               <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-background p-0">
                 <SheetHeader className="p-4 border-b">
                   <SheetTitle className="text-lg font-bold">{VILLAGE_NAME} Menüsü</SheetTitle>
-                  {/* Redundant SheetClose button removed from here. SheetContent provides its own. */}
+                  {/* Removed the explicit SheetClose here as SheetContent provides its own */}
                 </SheetHeader>
                 <div className="flex flex-col h-[calc(100%-var(--sheet-header-height,65px))]">
-                  <div className="p-4 border-b">
+                  <div className="p-4 border-b"> {/* Search bar container */}
                      <form onSubmit={handleSearch} className="relative">
                         <Input 
                           type="search" 
@@ -164,13 +161,17 @@ export function Navbar() {
                   </div>
                   <nav className="flex-grow flex flex-col space-y-2 p-4 overflow-y-auto">
                     {NAVIGATION_LINKS.map((link) => (
-                      <SheetClose asChild key={link.href}>
+                      <Button 
+                        variant={pathname === link.href ? "secondary" : "ghost"} 
+                        className="w-full justify-start" 
+                        asChild 
+                        key={link.href}
+                        onClick={() => setIsSheetOpen(false)} // Close sheet on link click
+                      >
                         <Link href={link.href}>
-                          <Button variant={pathname === link.href ? "secondary" : "ghost"} className="w-full justify-start">
-                            {link.label}
-                          </Button>
+                          {link.label}
                         </Link>
-                      </SheetClose>
+                      </Button>
                     ))}
                      <Button variant="ghost" className="w-full justify-start" onClick={() => { setIsSheetOpen(false); setIsSettingsOpen(true); }}>
                       <Settings className="mr-2 h-5 w-5" />

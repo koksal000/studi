@@ -196,7 +196,6 @@ export default function AdminPage() {
       if(fileInputRef.current) fileInputRef.current.value = "";
     } catch (error: any) {
        console.error("AdminPage: Error calling addGalleryImage:", error);
-       // Toast messages are handled within useGallery hook for API/localStorage errors
        if (!error.message?.includes("localStorage") && !error.message?.includes("sunucu") && !error.message?.includes("payload") && !error.message?.includes("kota") && !error.message?.includes("büyük")) {
          toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
@@ -285,8 +284,7 @@ export default function AdminPage() {
             </Button>
           </CardTitle>
            <CardDescription>
-            Yeni duyurular ekleyin veya mevcut duyuruları yönetin.
-            Yapılan değişiklikler, Render.com projenizdeki kalıcı disk doğru yapılandırıldıysa kalıcı olacaktır.
+            Yeni duyurular ekleyin veya mevcut duyuruları yönetin. Yapılan değişiklikler (Render.com'da kalıcı disk doğru yapılandırıldıysa) kalıcı olacaktır.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -316,7 +314,7 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-6 w-6 text-primary" /> Galeri Yönetimi</CardTitle>
            <CardDescription>
-            Sitede gösterilen galeri resimlerini yönetin. Yapılan değişiklikler, Render.com projenizdeki kalıcı disk doğru yapılandırıldıysa kalıcı olacaktır.
+            Sitede gösterilen galeri resimlerini yönetin. Yapılan değişiklikler (Render.com'da kalıcı disk doğru yapılandırıldıysa) kalıcı olacaktır.
             <br/>
             <span className="text-xs text-muted-foreground">Not: Büyük boyutlu resimler yükleme süresini ve depolama alanını etkileyebilir. Tavsiye edilen maksimum dosya boyutu ~3MB'dir.</span>
           </CardDescription>
@@ -384,7 +382,7 @@ export default function AdminPage() {
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
                                  <AlertDialogDescription>
-                                    "{image.caption}" başlıklı resmi galeriden silmek istediğinizden emin misiniz? Bu işlem kalıcıdır.
+                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz?
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -427,3 +425,4 @@ export default function AdminPage() {
     </div>
   );
 }
+

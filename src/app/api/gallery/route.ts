@@ -54,14 +54,14 @@ const gallerySortFnInMemory = (a: GalleryImage, b: GalleryImage): number => {
 
 const loadGalleryFromFile = () => {
   try {
-    console.log(`[API/Gallery] DATA_PATH: ${dataDir}`);
+    console.log(`[API/Gallery] DATA_PATH used: ${dataDir}`);
     console.log(`[API/Gallery] Attempting to load gallery from: ${GALLERY_FILE_PATH}`);
     if (fs.existsSync(GALLERY_FILE_PATH)) {
       const fileData = fs.readFileSync(GALLERY_FILE_PATH, 'utf-8');
       if (fileData.trim() === '' || fileData.trim() === '[]') {
         galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
         console.log(`[API/Gallery] File ${GALLERY_FILE_PATH} is empty or '[]'. Initializing with ${galleryImagesData.length} seed images and attempting to create/save.`);
-        saveGalleryToFile(); // Save seeded data
+        saveGalleryToFile(); 
       } else {
         const parsedData = JSON.parse(fileData) as GalleryImage[];
         galleryImagesData = parsedData.sort(gallerySortFnInMemory);
@@ -83,7 +83,7 @@ const saveGalleryToFile = (): boolean => {
     const dir = path.dirname(GALLERY_FILE_PATH);
     if (!fs.existsSync(dir) && process.env.DATA_PATH){ 
         fs.mkdirSync(dir, { recursive: true });
-        console.log(`[API/Gallery] Created directory: ${dir}`);
+        console.log(`[API/Gallery] Created directory for data: ${dir}`);
     }
     const sortedData = [...galleryImagesData].sort(gallerySortFnInMemory);
     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(sortedData, null, 2));
@@ -125,17 +125,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: `Resim verisi çok büyük. Maksimum boyut yaklaşık ${Math.floor(MAX_BASE64_SIZE_API / (1024*1024))}MB olmalıdır (işlenmiş veri).` }, { status: 413 });
   }
 
-  const currentGallery = [...galleryImagesData];
-  const existingImageIndex = currentGallery.findIndex(img => img.id === newImage.id);
+  const currentGalleryInMemory = [...galleryImagesData];
+  const existingImageIndex = currentGalleryInMemory.findIndex(img => img.id === newImage.id);
 
   if (existingImageIndex !== -1) {
-    currentGallery[existingImageIndex] = newImage; 
+    currentGalleryInMemory[existingImageIndex] = newImage; 
   } else {
-    currentGallery.unshift(newImage); 
+    currentGalleryInMemory.unshift(newImage); 
   }
-  currentGallery.sort(gallerySortFnInMemory); 
+  currentGalleryInMemory.sort(gallerySortFnInMemory); 
   
-  galleryImagesData = currentGallery; // Update in-memory
+  galleryImagesData = currentGalleryInMemory; // Update in-memory first for SSE
 
   if (saveGalleryToFile()) {
     galleryEmitter.emit('update', [...galleryImagesData]);
@@ -143,8 +143,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(newImage, { status: 201 });
   } else {
     loadGalleryFromFile(); 
-    console.error(`[API/Gallery] Failed to save image ${newImage.id} to file. In-memory change reverted.`);
-    return NextResponse.json({ message: "Sunucu hatası: Galeri resmi kalıcı olarak kaydedilemedi." }, { status: 500 });
+    console.error(`[API/Gallery] Failed to save image ${newImage.id} to file. In-memory change has been reverted.`);
+    return NextResponse.json({ message: "Sunucu hatası: Galeri resmi kalıcı olarak kaydedilemedi. Değişiklik geri alındı." }, { status: 500 });
   }
 }
 
@@ -157,10 +157,10 @@ export async function DELETE(request: NextRequest) {
   }
     
   const initialLength = galleryImagesData.length;
-  const filteredGallery = galleryImagesData.filter(img => img.id !== id);
+  const filteredGalleryInMemory = galleryImagesData.filter(img => img.id !== id);
 
-  if (filteredGallery.length < initialLength) {
-    galleryImagesData = filteredGallery; // Update in-memory
+  if (filteredGalleryInMemory.length < initialLength) {
+    galleryImagesData = filteredGalleryInMemory; // Update in-memory first for SSE
     if (saveGalleryToFile()) {
       galleryEmitter.emit('update', [...galleryImagesData]);
       console.log(`[API/Gallery] Image ${id} deleted and saved. Total images: ${galleryImagesData.length}`);
@@ -168,9 +168,10 @@ export async function DELETE(request: NextRequest) {
     } else {
       loadGalleryFromFile();
       console.error(`[API/Gallery] Failed to save after deleting image ${id} from file. In-memory change reverted.`);
-      return NextResponse.json({ message: 'Sunucu hatası: Resim silindikten sonra değişiklikler kalıcı olarak kaydedilemedi.' }, { status: 500 });
+      return NextResponse.json({ message: 'Sunucu hatası: Resim silindikten sonra değişiklikler kalıcı olarak kaydedilemedi. Değişiklik geri alındı.' }, { status: 500 });
     }
   } else {
     return NextResponse.json({ message: 'Silinecek resim bulunamadı' }, { status: 404 });
   }
 }
+

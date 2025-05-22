@@ -68,6 +68,29 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
       );
     }
     if (announcement.mediaType?.startsWith('video/')) { // Catches 'video/mp4', 'video/url'
+      // Basic YouTube embed logic (can be improved with a proper library)
+      if (announcement.media.includes("youtube.com/watch?v=") || announcement.media.includes("youtu.be/")) {
+        const videoId = announcement.media.includes("youtu.be/") 
+          ? announcement.media.split("youtu.be/")[1].split("?")[0]
+          : new URL(announcement.media).searchParams.get("v");
+        if (videoId) {
+          return (
+            <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
+              <iframe
+                width="100%"
+                height="100%"
+                src={`https://www.youtube.com/embed/${videoId}`}
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full"
+              ></iframe>
+            </div>
+          );
+        }
+      }
+      // Fallback for other video URLs
       return (
         <video src={announcement.media} controls className="my-4 w-full rounded-md max-h-[400px]" />
       );
@@ -179,3 +202,4 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     </>
   );
 }
+

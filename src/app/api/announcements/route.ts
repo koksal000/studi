@@ -17,7 +17,7 @@ let initialized = false;
 
 const loadAnnouncementsFromFile = () => {
   try {
-    console.log(`[API/Announcements] DATA_PATH: ${dataDir}`);
+    console.log(`[API/Announcements] DATA_PATH used: ${dataDir}`);
     console.log(`[API/Announcements] Attempting to load announcements from: ${ANNOUNCEMENTS_FILE_PATH}`);
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
       const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
@@ -31,7 +31,7 @@ const loadAnnouncementsFromFile = () => {
     } else {
       announcementsData = [];
       console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array and attempting to create the file.`);
-      saveAnnouncementsToFile(); // Attempt to create the file with an empty array
+      saveAnnouncementsToFile(); 
     }
   } catch (error) {
     console.error("[API/Announcements] Error loading announcements from file:", error);
@@ -42,9 +42,9 @@ const loadAnnouncementsFromFile = () => {
 const saveAnnouncementsToFile = (): boolean => {
    try {
     const dir = path.dirname(ANNOUNCEMENTS_FILE_PATH);
-    if (!fs.existsSync(dir) && process.env.DATA_PATH){ // Only create dir if DATA_PATH is set
+    if (!fs.existsSync(dir) && process.env.DATA_PATH){ 
         fs.mkdirSync(dir, { recursive: true });
-        console.log(`[API/Announcements] Created directory: ${dir}`);
+        console.log(`[API/Announcements] Created directory for data: ${dir}`);
     }
     const sortedData = [...announcementsData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
@@ -52,8 +52,6 @@ const saveAnnouncementsToFile = (): boolean => {
     return true;
   } catch (error) {
     console.error("[API/Announcements] CRITICAL: Error saving announcements to file:", error);
-    // Do not alert the user here, this is a server-side issue.
-    // The calling function should handle the response to the client.
     return false;
   }
 };
@@ -64,9 +62,6 @@ if (!initialized) {
 }
 
 export async function GET() {
-  // No need to reload from file here as it's done on init and after every modification.
-  // However, for serverless environments where instances might differ, it might be safer.
-  // For now, relying on the single `initialized` load and `saveAnnouncementsToFile` after POST/DELETE.
   return NextResponse.json([...announcementsData]);
 }
 
@@ -87,27 +82,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: `Medya içeriği çok büyük. Maksimum boyut yaklaşık ${Math.round(MAX_ANNOUNCEMENT_BASE64_SIZE_API / (1024*1024*1.37))}MB olmalıdır.` }, { status: 413 });
   }
     
-  // Optimistically update in-memory data first
-  const currentAnnouncements = [...announcementsData];
-  const existingIndex = currentAnnouncements.findIndex(ann => ann.id === newAnnouncement.id);
+  const currentAnnouncementsInMemory = [...announcementsData];
+  const existingIndex = currentAnnouncementsInMemory.findIndex(ann => ann.id === newAnnouncement.id);
   if (existingIndex !== -1) {
-      currentAnnouncements[existingIndex] = newAnnouncement; 
+      currentAnnouncementsInMemory[existingIndex] = newAnnouncement; 
   } else {
-      currentAnnouncements.unshift(newAnnouncement); 
+      currentAnnouncementsInMemory.unshift(newAnnouncement); 
   }
-  currentAnnouncements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  currentAnnouncementsInMemory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
-  announcementsData = currentAnnouncements; // Update in-memory
+  announcementsData = currentAnnouncementsInMemory; // Update in-memory first for SSE
 
-  if (saveAnnouncementsToFile()) { // Attempt to save to file
+  if (saveAnnouncementsToFile()) { 
     announcementEmitter.emit('update', [...announcementsData]);
     console.log(`[API/Announcements] Announcement ${newAnnouncement.id} processed and saved. Total: ${announcementsData.length}`);
     return NextResponse.json(newAnnouncement, { status: 201 });
   } else {
-    // If saving to file fails, revert the in-memory change and inform the client
-    loadAnnouncementsFromFile(); // Re-load from the last known good state (or empty if file was corrupted)
-    console.error(`[API/Announcements] Failed to save announcement ${newAnnouncement.id} to file. In-memory change reverted.`);
-    return NextResponse.json({ message: "Sunucu hatası: Duyuru kalıcı olarak kaydedilemedi." }, { status: 500 });
+    // If saving to file fails, we revert the in-memory change to keep it consistent with the (failed) persisted state.
+    // This is crucial for environments where the file system might not be writable as expected (like Vercel free tier without persistent disk).
+    loadAnnouncementsFromFile(); // Re-load from the last known good state (or empty if file was corrupted/never saved)
+    console.error(`[API/Announcements] Failed to save announcement ${newAnnouncement.id} to file. In-memory change has been reverted.`);
+    return NextResponse.json({ message: "Sunucu hatası: Duyuru kalıcı olarak kaydedilemedi. Değişiklik geri alındı." }, { status: 500 });
   }
 }
 
@@ -120,21 +115,21 @@ export async function DELETE(request: NextRequest) {
   }
 
   const initialLength = announcementsData.length;
-  const filteredAnnouncements = announcementsData.filter(ann => ann.id !== id);
+  const filteredAnnouncementsInMemory = announcementsData.filter(ann => ann.id !== id);
 
-  if (filteredAnnouncements.length < initialLength) {
-    announcementsData = filteredAnnouncements; // Update in-memory
-    if (saveAnnouncementsToFile()) { // Attempt to save to file
+  if (filteredAnnouncementsInMemory.length < initialLength) {
+    announcementsData = filteredAnnouncementsInMemory; // Update in-memory first for SSE
+    if (saveAnnouncementsToFile()) { 
       announcementEmitter.emit('update', [...announcementsData]);
       console.log(`[API/Announcements] Announcement ${id} deleted and saved. Total: ${announcementsData.length}`);
       return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
     } else {
-      // If saving to file fails, revert in-memory change
       loadAnnouncementsFromFile();
       console.error(`[API/Announcements] Failed to save after deleting announcement ${id} from file. In-memory change reverted.`);
-      return NextResponse.json({ message: 'Sunucu hatası: Duyuru silindikten sonra değişiklikler kalıcı olarak kaydedilemedi.' }, { status: 500 });
+      return NextResponse.json({ message: 'Sunucu hatası: Duyuru silindikten sonra değişiklikler kalıcı olarak kaydedilemedi. Değişiklik geri alındı.' }, { status: 500 });
     }
   } else {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
+

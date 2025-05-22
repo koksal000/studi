@@ -26,14 +26,14 @@ interface AddAnnouncementDialogProps {
 
 type MediaType = 'image' | 'video' | 'url' | null;
 
-const MAX_IMAGE_RAW_SIZE_MB = 10; // 10MB for images (raw file)
-const MAX_VIDEO_RAW_SIZE_MB = 100; // 100MB for videos (raw file)
+const MAX_IMAGE_RAW_SIZE_MB = 5; // 5MB for images (raw file)
+const MAX_VIDEO_RAW_SIZE_MB = 25; // 25MB for videos (raw file)
 
 // Practical limit for converting a video to base64 data URI directly in the browser
-const MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB = 7; // e.g., 7MB raw video
+const MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB = 7; // 7MB raw video practical limit for conversion
 
 // Base64 can be ~37% larger than raw binary. These are for the *data URI string length*.
-const MAX_IMAGE_DATA_URI_LENGTH = Math.floor(MAX_IMAGE_RAW_SIZE_MB * 1024 * 1024 * 1.37); // Approx 13.7MB for 10MB raw image
+const MAX_IMAGE_DATA_URI_LENGTH = Math.floor(MAX_IMAGE_RAW_SIZE_MB * 1024 * 1024 * 1.37); // Approx 6.9MB for 5MB raw image
 const MAX_VIDEO_DATA_URI_LENGTH = Math.floor(MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB * 1024 * 1024 * 1.37); // Approx 9.6MB for 7MB raw video
 
 
@@ -45,6 +45,7 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
   const [selectedLocalMediaType, setSelectedLocalMediaType] = useState<MediaType>(null);
   const [mediaUrlInput, setMediaUrlInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showLargeVideoWarning, setShowLargeVideoWarning] = useState(false);
 
   const { addAnnouncement } = useAnnouncements();
   const { user } = useUser();
@@ -60,6 +61,7 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
       setSelectedLocalMediaType(null);
       setMediaUrlInput('');
       setIsProcessing(false);
+      setShowLargeVideoWarning(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -68,18 +70,19 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    setShowLargeVideoWarning(false); // Reset warning
     if (file) {
       const selectedType = selectedLocalMediaType;
       let maxRawSizeMB = 0;
-      let maxDataUriLengthForCheck = 0; // For the base64 string length check after reading
+      let maxDataUriLengthForCheck = 0;
       let practicalConversionLimitMB = Infinity;
 
       if (selectedType === 'image') {
         maxRawSizeMB = MAX_IMAGE_RAW_SIZE_MB;
         maxDataUriLengthForCheck = MAX_IMAGE_DATA_URI_LENGTH;
       } else if (selectedType === 'video') {
-        maxRawSizeMB = MAX_VIDEO_RAW_SIZE_MB;
-        practicalConversionLimitMB = MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB;
+        maxRawSizeMB = MAX_VIDEO_RAW_SIZE_MB; // User can select up to 25MB raw
+        practicalConversionLimitMB = MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB; // But we'll only try to convert if <= 7MB raw
         maxDataUriLengthForCheck = MAX_VIDEO_DATA_URI_LENGTH; // This check applies if conversion is attempted
       } else {
         toast({ title: "Medya Türü Seçilmedi", description: "Lütfen önce bir medya türü (resim/video) seçin.", variant: "destructive" });
@@ -101,18 +104,15 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
       }
 
       if (selectedType === 'video' && file.size > practicalConversionLimitMB * 1024 * 1024) {
-        toast({
-          title: "Büyük Video Dosyası",
-          description: `Bu video dosyası (${(file.size / (1024*1024)).toFixed(1)}MB) doğrudan tarayıcıda işlenip yüklenemez. Lütfen ${practicalConversionLimitMB}MB'den küçük bir dosya seçin veya videoyu bir platforma (örn: YouTube) yükleyip URL olarak ekleyin.`,
-          variant: "warning",
-          duration: 10000,
-        });
-        if (fileInputRef.current) fileInputRef.current.value = "";
+        // Video is larger than our practical conversion limit, but within the overall raw limit (e.g., 8MB to 25MB)
+        setShowLargeVideoWarning(true);
         setMediaDataUri(null); // Do not attempt to read as data URI
-        setMediaFileType(null);
-        return; // Stop processing for large videos intended for data URI
+        setMediaFileType(file.type); // Keep file type for info, but data URI will be null
+        // User should be guided to use URL input instead
+        return;
       }
-
+      
+      // Proceed with reading if it's an image or a video within practical conversion limits
       setIsProcessing(true);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -125,10 +125,10 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
         }
 
         if (result.length > maxDataUriLengthForCheck) {
-          const currentLimitMB = selectedType === 'image' ? MAX_IMAGE_RAW_SIZE_MB : MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB;
+          const currentRawLimitMB = selectedType === 'image' ? MAX_IMAGE_RAW_SIZE_MB : MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB;
           toast({
             title: "Medya Verisi Çok Büyük",
-            description: `İşlenmiş medya verisi çok büyük. Lütfen daha küçük boyutlu bir dosya seçin (Maksimum ~${currentLimitMB}MB ham dosya, bu dosya için tavsiye edilir).`,
+            description: `İşlenmiş medya verisi çok büyük. Lütfen daha küçük boyutlu bir dosya seçin (Maksimum ~${currentRawLimitMB}MB ham dosya).`,
             variant: "destructive",
             duration: 8000,
           });
@@ -154,6 +154,7 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
     setMediaDataUri(null);
     setMediaFileType(null);
     setMediaUrlInput('');
+    setShowLargeVideoWarning(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -169,6 +170,11 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
       toast({ title: 'Eksik Bilgi', description: 'Lütfen başlık ve içerik alanlarını doldurun.', variant: 'destructive' });
       return;
     }
+    if (showLargeVideoWarning && selectedLocalMediaType === 'video' && !mediaUrlInput.trim()) {
+        toast({ title: "Büyük Video Dosyası", description: `Seçilen video dosyası doğrudan yüklenemez. Lütfen URL olarak ekleyin veya daha küçük bir video seçin.`, variant: "warning" });
+        return;
+    }
+
 
     let finalMedia: string | null = null;
     let finalMediaType: string | null = null;
@@ -189,7 +195,7 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
             toast({ title: "Geçersiz Yüklenmiş Medya", description: "Yüklenen dosya verisi hatalı görünüyor. Lütfen dosyayı tekrar seçin.", variant: "destructive" });
             return;
         }
-        // Double check Data URI length against practical limits before sending to API
+        
         if (mediaFileType.startsWith('image/') && mediaDataUri.length > MAX_IMAGE_DATA_URI_LENGTH) {
              toast({ title: "Resim Verisi Çok Büyük", description: `Resim dosyası (işlenmiş veri) API limitlerini aşıyor. Maksimum ~${MAX_IMAGE_RAW_SIZE_MB}MB ham dosya.`, variant: "destructive" });
              return;
@@ -200,9 +206,9 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
         }
         finalMedia = mediaDataUri;
         finalMediaType = mediaFileType;
-    } else if ((selectedLocalMediaType === 'image' || selectedLocalMediaType === 'video') && !mediaDataUri) {
-        // This case might occur if a large video was selected but not converted to data URI
-        toast({ title: "Medya Yüklenmedi", description: `Seçilen ${selectedLocalMediaType === 'image' ? 'resim' : 'video'} dosyası işlenemedi. Lütfen tekrar deneyin veya farklı bir dosya/yöntem seçin.`, variant: "destructive" });
+    } else if (selectedLocalMediaType === 'video' && showLargeVideoWarning && !mediaUrlInput.trim()) {
+        // This condition is now explicitly handled above, but as a safeguard
+        toast({ title: "Medya Seçimi Gerekli", description: "Büyük video dosyası için lütfen URL girin veya daha küçük bir dosya seçin.", variant: "destructive"});
         return;
     }
 
@@ -210,12 +216,9 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
     setIsProcessing(true);
     try {
       await addAnnouncement({ title, content, media: finalMedia, mediaType: finalMediaType });
-      // Success toast and closing dialog are now handled within useAnnouncements hook on successful API response
       onOpenChange(false); 
     } catch (error: any) {
       console.error("AddAnnouncementDialog handleSubmit error:", error);
-      // Error toasts are primarily handled by the useAnnouncements hook or API response.
-      // This is a fallback if the hook itself throws before/after API call.
       if (error.message && !error.message.includes("sunucu") && !error.message.includes("quota") && !error.message.includes("büyük")) {
         toast({
           title: 'Duyuru Eklenemedi',
@@ -234,17 +237,27 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
 
   const getFileUploadButtonText = () => {
     if (selectedLocalMediaType === 'image') return `Resim Seç (Max ${MAX_IMAGE_RAW_SIZE_MB}MB)`;
-    // For video, even if raw file limit is 100MB, the practical conversion limit is lower.
-    // The button text can reflect the raw limit, but the subsequent checks will guide the user.
-    if (selectedLocalMediaType === 'video') return `Video Seç (Max ${MAX_VIDEO_RAW_SIZE_MB}MB, doğrudan yükleme ~${MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB}MB)`;
+    if (selectedLocalMediaType === 'video') return `Video Seç (Max ${MAX_VIDEO_RAW_SIZE_MB}MB)`;
     return 'Dosya Seç';
   };
-
+  
   const getSelectedFileAcceptType = () => {
     if (selectedLocalMediaType === 'image') return "image/*";
     if (selectedLocalMediaType === 'video') return "video/*";
     return "";
   }
+
+  const isSubmitDisabled = () => {
+    if (isProcessing || !title.trim() || !content.trim()) return true;
+    if (selectedLocalMediaType === 'url' && !mediaUrlInput.trim()) return true;
+    if (selectedLocalMediaType === 'image' && !mediaDataUri) return true;
+    if (selectedLocalMediaType === 'video') {
+        if (showLargeVideoWarning && !mediaUrlInput.trim()) return true; // Must provide URL if video is too large for data URI
+        if (!showLargeVideoWarning && !mediaDataUri) return true; // Must have data URI if video is small enough
+    }
+    return false;
+  }
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -322,10 +335,14 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
                   ref={fileInputRef}
                   disabled={isProcessing}
                 />
-                {mediaDataUri && mediaFileType?.startsWith(selectedLocalMediaType + '/') && <p className="text-xs mt-1 text-muted-foreground">{selectedLocalMediaType === 'image' ? 'Resim' : 'Video'} seçildi ve yüklenebilir.</p>}
-                 {/* Message for when a large video is selected but not converted */}
-                 {selectedLocalMediaType === 'video' && !mediaDataUri && fileInputRef.current?.files && fileInputRef.current.files.length > 0 && fileInputRef.current.files[0].size > MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB * 1024 * 1024 && (
-                    <p className="text-xs mt-1 text-amber-600">Bu video çok büyük. URL olarak eklemeyi veya daha küçük bir dosya seçmeyi deneyin.</p>
+                {mediaDataUri && mediaFileType?.startsWith(selectedLocalMediaType + '/') && (
+                    <p className="text-xs mt-1 text-muted-foreground">{selectedLocalMediaType === 'image' ? 'Resim' : 'Video'} seçildi ve yüklenebilir.</p>
+                )}
+                 {selectedLocalMediaType === 'video' && showLargeVideoWarning && (
+                    <p className="text-xs mt-1 text-amber-600">
+                      Bu video dosyası (Max {MAX_VIDEO_RAW_SIZE_MB}MB) doğrudan yüklenemez (pratik limit ~{MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB}MB). 
+                      Lütfen URL olarak ekleyin veya daha küçük bir dosya seçin.
+                    </p>
                  )}
               </div>
             </div>
@@ -362,19 +379,7 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange }: AddAnnouncementD
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isProcessing}>
               İptal
             </Button>
-            <Button
-              type="submit"
-              disabled={
-                isProcessing || 
-                !title.trim() || 
-                !content.trim() || 
-                (selectedLocalMediaType === 'url' && !mediaUrlInput.trim()) ||
-                (selectedLocalMediaType === 'image' && !mediaDataUri) || // For image, data URI must be present
-                (selectedLocalMediaType === 'video' && !mediaDataUri && // For video, if a file was selected but couldn't be converted due to size, data URI will be null
-                    (!fileInputRef.current?.files || fileInputRef.current.files.length === 0 || fileInputRef.current.files[0].size <= MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB * 1024 * 1024 )
-                ) 
-              }
-            >
+            <Button type="submit" disabled={isSubmitDisabled()}>
               {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Yayınla
             </Button>

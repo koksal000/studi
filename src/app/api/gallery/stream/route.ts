@@ -1,95 +1,121 @@
 
 // src/app/api/gallery/stream/route.ts
 import { NextResponse } from 'next/server';
-import type { GalleryImage } from '../route'; // Assuming GalleryImage is exported from ../route
+import type { GalleryImage } from '../route'; 
 import galleryEmitter from '@/lib/gallery-emitter';
+import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants'; // Import for fallback
 
 export const dynamic = 'force-dynamic';
+
+const gallerySortFnStream = (a: GalleryImage, b: GalleryImage): number => {
+  const aIsSeed = a.id.startsWith('seed_');
+  const bIsSeed = b.id.startsWith('seed_');
+
+  if (aIsSeed && !bIsSeed) return -1;
+  if (!aIsSeed && bIsSeed) return 1;
+  
+  const extractNumericPart = (id: string) => {
+    const match = id.match(/\d+$/); 
+    return match ? parseInt(match[0]) : null;
+  };
+
+  const numA = extractNumericPart(a.id);
+  const numB = extractNumericPart(b.id);
+
+  if (numA !== null && numB !== null) {
+    if (a.id.startsWith('gal_') && b.id.startsWith('gal_')) {
+      return numB - numA; 
+    }
+     if (a.id.startsWith('seed_') && b.id.startsWith('seed_')) {
+      return numA - numB; 
+    }
+  }
+  
+  if (a.id.startsWith('gal_') && b.id.startsWith('seed_')) return -1; 
+  if (a.id.startsWith('seed_') && b.id.startsWith('gal_')) return 1;
+  
+  return a.id.localeCompare(b.id);
+};
+
 
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
 
-  // Removed Vercel-specific warning about NEXT_PUBLIC_APP_URL as user is deploying to Render
-  // if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
-  //   console.warn(
-  //     '[SSE Gallery Stream] WARNING: NEXT_PUBLIC_APP_URL is not set or is misconfigured for production. '+
-  //     'The SSE stream may fail to fetch initial data if it relies on this URL to call its own API. '+
-  //     'Current appUrl for internal fetch:', appUrl
-  //   );
-  // }
+  if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
+    console.warn(
+      '[SSE Galeri Akışı] UYARI: NEXT_PUBLIC_APP_URL üretim için ayarlanmamış veya yanlış yapılandırılmış. '+
+      'Bu URL kendi API\'sini çağırmak için kullanılıyorsa, SSE akışı ilk veriyi çekmede başarısız olabilir. '+
+      'Mevcut appUrl (dahili fetch için):', appUrl
+    );
+  }
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       const sendUpdate = (data: GalleryImage[]) => {
         try {
-          // Check if controller is still usable before enqueuing
           if (controller.desiredSize === null || controller.desiredSize <= 0) {
-            // console.warn("[SSE Gallery] Controller is not in a state to enqueue (stream likely closing or closed). Aborting sendUpdate and removing listener.");
-            galleryEmitter.off('update', sendUpdate); // Clean up listener
+            galleryEmitter.off('update', sendUpdate); 
             return;
           }
-          const sortedData = [...data].sort((a,b) => {
-            if (a.id.startsWith('seed_') && !b.id.startsWith('seed_')) return -1;
-            if (!a.id.startsWith('seed_') && b.id.startsWith('seed_')) return 1;
-            // Fallback sort by id if both are seed or both are not seed
-            // If you want user-uploaded images to appear first (after seeds), you might need a timestamp
-            // For now, this keeps seeds first, then sorts by id.
-            const idA = a.id.replace(/^(seed_|gal_)/, '');
-            const idB = b.id.replace(/^(seed_|gal_)/, '');
-            if (isNaN(parseInt(idA)) || isNaN(parseInt(idB))) { // if ids are not purely numeric after prefix removal
-                return a.id.localeCompare(b.id);
-            }
-            return parseInt(idB) - parseInt(idA); // Sort by numeric part of ID descending for non-seeds
-          });
+          const sortedData = [...data].sort(gallerySortFnStream);
           controller.enqueue(`data: ${JSON.stringify(sortedData)}\n\n`);
         } catch (e: any) {
-            console.error("[SSE Gallery] Error enqueuing data to stream:", e.message, e.stack);
+            console.error("[SSE Galeri] Veri kuyruğa eklenirken akış hatası:", e.message);
             try {
               if (controller.desiredSize !== null && controller.desiredSize > 0) { 
-                controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
+                controller.error(new Error(`SSE akış hatası (enqueue): ${e.message}`));
               }
             } catch (closeErr) {
-                 console.error("[SSE Gallery] Error trying to signal controller error after enqueue failure:", closeErr);
+                 console.error("[SSE Galeri] Kuyruk hatası sonrası controller hatası sinyali verilirken hata:", closeErr);
             }
-            galleryEmitter.off('update', sendUpdate);
+            galleryEmitter.off('update', sendUpdate); 
         }
       };
 
-      fetch(new URL('/api/gallery', appUrl), { cache: 'no-store' })
-        .then(res => {
-            if (!res.ok) {
-                const errorMsg = `SSE Gallery Stream: Failed to fetch initial gallery images from ${res.url}: ${res.status} ${res.statusText}`;
-                console.error(errorMsg);
-                throw new Error(errorMsg);
+      try {
+        const response = await fetch(new URL('/api/gallery', appUrl), { cache: 'no-store' });
+        if (!response.ok) {
+            const errorBody = await response.text().catch(() => "Bilinmeyen sunucu hatası");
+            const errorMsg = `SSE Galeri Akışı: İlk galeri resimleri ${response.url} adresinden alınamadı: ${response.status} ${response.statusText}. Gövde: ${errorBody}`;
+            console.error(errorMsg);
+            // Fallback to static seeds if API fails to provide initial data
+            sendUpdate([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnStream));
+            if (controller.desiredSize !== null && controller.desiredSize > 0) {
+              controller.error(new Error(errorMsg + " Statik veriler kullanıldı.")); // Signal error but send static
             }
-            return res.json();
-        })
-        .then((initialGalleryImages: GalleryImage[]) => {
-            if (initialGalleryImages && Array.isArray(initialGalleryImages)) {
+            // Do not return here, continue to set up listener for future updates if API recovers
+        } else {
+            const initialGalleryImages: GalleryImage[] = await response.json();
+             if (initialGalleryImages && Array.isArray(initialGalleryImages) && initialGalleryImages.length > 0) {
                  sendUpdate(initialGalleryImages);
-            } else if (!initialGalleryImages) {
-                 sendUpdate([]);
+            } else { // API returned empty or invalid, use static seeds
+                 console.warn("[SSE Galeri] API'den boş veya geçersiz galeri verisi alındı, statik tohumlama verileri kullanılıyor.");
+                 sendUpdate([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnStream));
             }
-        }).catch(e => {
-            console.error("SSE Gallery: Error during initial images fetch or processing:", e.message);
-            try {
-              if (controller.desiredSize !== null && controller.desiredSize > 0) { 
-                controller.error(new Error(`Failed to initialize gallery stream: Could not fetch initial data. Server error: ${e.message}`));
-              }
-            } catch (closeError) {
-              console.error("SSE Gallery: Error trying to signal controller error after fetch failure:", closeError);
+        }
+      } catch(e: any) {
+          const fetchErrorMsg = `SSE Galeri Akışı: İlk galeri resimlerini alırken veya işlerken hata: ${e.message}`;
+          console.error(fetchErrorMsg, e); 
+          sendUpdate([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnStream)); // Fallback in case of fetch error
+          try {
+            if (controller.desiredSize !== null && controller.desiredSize > 0) { 
+              controller.error(new Error(fetchErrorMsg + " Statik veriler kullanıldı."));
             }
-            galleryEmitter.off('update', sendUpdate);
-        });
-
+          } catch (closeError) {
+            console.error("SSE Galeri Akışı: Fetch hatası sonrası controller hatası sinyali verilirken hata:", closeError);
+          }
+          // Do not remove listener, let it try for future updates
+      }
 
       galleryEmitter.on('update', sendUpdate);
 
       controller.signal.addEventListener('abort', () => {
-        // console.log("SSE gallery client disconnected (abort signal). Removing listener.");
         galleryEmitter.off('update', sendUpdate);
       });
     },
+     cancel() {
+        // As above, sendUpdate handles its own cleanup.
+    }
   });
 
   return new NextResponse(stream, {

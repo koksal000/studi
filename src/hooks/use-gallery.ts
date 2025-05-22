@@ -40,14 +40,17 @@ const gallerySortFn = (a: GalleryImage, b: GalleryImage): number => {
     if (a.id.startsWith('gal_') && b.id.startsWith('gal_')) {
       return numB - numA;
     }
-    return numA - numB;
+     if (a.id.startsWith('seed_') && b.id.startsWith('seed_')) {
+      return numA - numB;
+    }
   }
 
-  if (a.id.startsWith('gal_') && !b.id.startsWith('gal_')) return -1;
-  if (!a.id.startsWith('gal_') && b.id.startsWith('gal_')) return 1;
-
-  return b.id.localeCompare(a.id);
+  if (a.id.startsWith('gal_') && b.id.startsWith('seed_')) return -1;
+  if (a.id.startsWith('seed_') && b.id.startsWith('gal_')) return 1;
+  
+  return a.id.localeCompare(b.id); // Fallback for non-standard IDs or if both are seed/gal and numeric parts are equal
 };
+
 
 export function useGallery() {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
@@ -75,14 +78,12 @@ export function useGallery() {
     es.onmessage = (event) => {
       try {
         const updatedGalleryFromServer: GalleryImage[] = JSON.parse(event.data);
-        const sortedData = [...updatedGalleryFromServer].sort(gallerySortFn);
+        let finalDataToShow = [...updatedGalleryFromServer].sort(gallerySortFn);
         
-        if (!initialDataLoadedRef.current && sortedData.length === 0) {
-          // API'den boş veri geldiyse ve ilk yüklemeyse, statik verilerle tohumla
-          setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
-        } else {
-          setGalleryImages(sortedData);
+        if (!initialDataLoadedRef.current && finalDataToShow.length === 0) {
+            finalDataToShow = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn);
         }
+        setGalleryImages(finalDataToShow);
 
         if (!initialDataLoadedRef.current) {
           setIsLoading(false);
@@ -91,7 +92,7 @@ export function useGallery() {
       } catch (error) {
         console.error("Error processing gallery SSE message:", error);
         if (!initialDataLoadedRef.current) {
-          setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn)); // Hata durumunda da tohumla
+          setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn)); 
           setIsLoading(false);
           initialDataLoadedRef.current = true;
         }
@@ -102,20 +103,16 @@ export function useGallery() {
       const target = errorEvent.target as EventSource;
       const readyState = target?.readyState;
       const eventType = errorEvent.type || 'unknown event type';
-
-      if (readyState === EventSource.CLOSED) {
+       if (readyState === EventSource.CLOSED) {
         console.warn(
-          `[SSE Gallery] Connection closed by server or network error. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
+          `[SSE Gallery] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
         );
-      } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
-        console.warn(`[SSE Gallery] Initial connection attempt failed or stream unavailable. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will retry. Full Event:`, errorEvent);
       } else {
-        console.error(
+         console.error(
           `[SSE Gallery] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
         );
       }
       if (!initialDataLoadedRef.current) {
-        // SSE bağlantı hatası durumunda da varsayılan resimleri göster
         setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
         setIsLoading(false);
         initialDataLoadedRef.current = true;
@@ -150,7 +147,6 @@ export function useGallery() {
       hint: payload.hint || 'uploaded image',
     };
 
-    // API'ye gönder, SSE üzerinden güncelleme gelecek
     try {
       const response = await fetch('/api/gallery', {
         method: 'POST',
@@ -160,21 +156,17 @@ export function useGallery() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        let errorMessage = errorData.message || 'Resim sunucuya iletilemedi';
-
-        if (response.status === 413) {
-          errorMessage = "Resim yüklenemedi çünkü dosya boyutu sunucu limitlerini aşıyor. Lütfen daha küçük bir resim seçin.";
-        }
-        toast({ title: "Yükleme Başarısız", description: errorMessage, variant: "destructive" });
-        throw new Error(errorMessage);
+        toast({ title: "Yükleme Başarısız", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
+        throw new Error(errorData.message || 'Resim sunucuya iletilemedi');
       }
-      // Başarılı API yanıtı sonrası bir şey yapmaya gerek yok, SSE güncelleyecek
+      // UI will update via SSE
     } catch (error: any) {
       console.error("Failed to send new gallery image to server:", error);
-      if (!error.message?.includes("sunucuya iletilemedi") && !error.message?.includes("sunucu limitlerini aşıyor")) {
+      // Toast is already shown if response was not ok
+      if (error.message && !error.message.includes("sunucuya iletilemedi") && !error.message.includes("limitlerini aşıyor")) {
         toast({ title: "Resim Yüklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
-      throw error;
+      throw error; // Re-throw for the calling component
     }
   }, [user, toast]);
 
@@ -191,13 +183,14 @@ export function useGallery() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
+        toast({ title: "Resim Silinemedi", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
         throw new Error(errorData.message || 'Resim silme bilgisi sunucuya iletilemedi');
       }
-       // Başarılı API yanıtı sonrası bir şey yapmaya gerek yok, SSE güncelleyecek
+      // UI will update via SSE
     } catch (error: any) {
       console.error("Failed to notify server about deleted gallery image:", error);
-      toast({ title: "Resim Silinemedi", description: error.message || "Resim silme bilgisi diğer kullanıcılara iletilirken bir sorun oluştu.", variant: "destructive" });
-      throw error;
+      toast({ title: "Resim Silinemedi", description: error.message || "Resim silme işlemi sırasında bir sorun oluştu.", variant: "destructive" });
+      throw error; // Re-throw
     }
   }, [user, toast]);
 

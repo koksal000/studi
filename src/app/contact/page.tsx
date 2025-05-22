@@ -22,9 +22,10 @@ export default function ContactPage() {
   const { addContactMessage } = useContactMessages();
 
   useEffect(() => {
-    if (user) {
-      // Keep email if already entered, reset others if needed or keep for convenience
-      // setFormData({ email: formData.email, subject: '', message: '' });
+    if (user && user.email) { // Assuming user object might have an email
+       setFormData(prev => ({ ...prev, email: user.email || '' }));
+    } else if (user) {
+       setFormData(prev => ({ ...prev, email: '' })); // Clear email if user has no email
     }
   }, [user]);
 
@@ -42,30 +43,35 @@ export default function ContactPage() {
       });
       return;
     }
+    if (!formData.email.trim() || !formData.subject.trim() || !formData.message.trim()) {
+      toast({
+        title: "Eksik Bilgi",
+        description: "Lütfen tüm alanları doldurun.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsSubmitting(true);
     
     try {
       const payload = {
-        name: `${user.name} ${user.surname}`,
+        name: `${user.name} ${user.surname}`, // Name comes from logged-in user
         email: formData.email,
         subject: formData.subject,
         message: formData.message,
       };
 
-      await addContactMessage(payload);
+      await addContactMessage(payload); // This now only sends to API
 
       toast({
         title: "Mesajınız Gönderildi!",
         description: "En kısa sürede sizinle iletişime geçeceğiz.",
       });
-      setFormData({ email: '', subject: '', message: '' }); 
+      setFormData({ email: user.email || '', subject: '', message: '' }); // Reset subject and message, keep email if user has one
     } catch (error: any) {
       console.error("Form Submission Error:", error);
-      toast({
-        title: "Gönderim Başarısız",
-        description: error.message || "Mesajınız gönderilirken bir sorun oluştu. Lütfen tekrar deneyin.",
-        variant: "destructive",
-      });
+      // Error toast is now handled within addContactMessage or by the API response
+      // No need to show a generic one here unless the hook re-throws and we want to catch it specifically
     } finally {
       setIsSubmitting(false);
     }

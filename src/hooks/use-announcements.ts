@@ -25,12 +25,8 @@ export type NewAnnouncementPayload = {
   mediaType?: string | null;
 };
 
-const MAX_ANNOUNCEMENT_DATA_URI_LENGTH_HOOK = Math.floor(5 * 1024 * 1024 * 1.37);
-
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const announcementsRef = useRef(announcements);
-
   const { user } = useUser();
   const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -38,11 +34,10 @@ export function useAnnouncements() {
 
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Initialize to true
-  const initialDataLoadedRef = useRef(false); // To track if initial data is loaded
+  const [isLoading, setIsLoading] = useState(true); 
+  const initialDataLoadedRef = useRef(false); 
 
   useEffect(() => {
-    announcementsRef.current = announcements;
     if (lastOpenedNotificationTimestamp) {
       const newUnreadCount = announcements.filter(
         (ann) => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp
@@ -67,11 +62,11 @@ export function useAnnouncements() {
       try {
         const notification = new Notification(title, {
           body: body,
-          icon: '/images/logo.png',
+          icon: '/images/logo.png', // Ensure you have a logo here
         });
         notification.onclick = (event) => {
           event.preventDefault();
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL || '/announcements'; // Redirect to announcements
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/'; 
           window.open(appUrl, '_blank');
           if (window.focus) window.focus();
           notification.close();
@@ -80,8 +75,8 @@ export function useAnnouncements() {
         console.error("[SSE Announcements] Notification error message:", err.message);
         console.error("[SSE Announcements] Notification error name:", err.name);
         toast({
-          title: "Bildirim Hatası",
-          description: `Tarayıcı bildirimi gösterilemedi (${err.name}). Tarayıcı ayarlarınızı veya sayfa odağını kontrol edin.`,
+          title: "Tarayıcı Bildirimi Hatası",
+          description: `Tarayıcı bildirimi gösterilemedi: ${err.message}. Tarayıcı ayarlarınızı veya sayfa odağını kontrol edin.`,
           variant: "warning",
           duration: 7000,
         });
@@ -93,40 +88,41 @@ export function useAnnouncements() {
 
 
   useEffect(() => {
-    // setIsLoading(true); // Already initialized by useState
     initialDataLoadedRef.current = false; // Reset for new connection attempts
+    setIsLoading(true); // Set loading true at the start of effect
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
-    const newEventSource = new EventSource('/api/announcements/stream');
-    eventSourceRef.current = newEventSource;
+    const es = new EventSource('/api/announcements/stream');
+    eventSourceRef.current = es;
 
-    newEventSource.onopen = () => {
+    es.onopen = () => {
       // console.log('[SSE Announcements] Connection opened.');
     };
 
-    newEventSource.onmessage = (event) => {
+    es.onmessage = (event) => {
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-        updatedAnnouncementsFromServer.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        const previousAnnouncements = announcements; // Capture current state before setting
+        const isNewDataDifferent = JSON.stringify(previousAnnouncements) !== JSON.stringify(updatedAnnouncementsFromServer);
 
-        const currentLatestId = announcementsRef.current.length > 0 ? announcementsRef.current[0].id : null;
-        const serverLatestId = updatedAnnouncementsFromServer.length > 0 ? updatedAnnouncementsFromServer[0].id : null;
+        if (isNewDataDifferent) {
+           setAnnouncements(updatedAnnouncementsFromServer);
+        }
 
-        setAnnouncements(updatedAnnouncementsFromServer);
-
-        if (updatedAnnouncementsFromServer.length > 0 && initialDataLoadedRef.current) { // Check initialDataLoadedRef to only show for subsequent new items
+        if (updatedAnnouncementsFromServer.length > 0 && initialDataLoadedRef.current && isNewDataDifferent) { 
             const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
-            const isNew = !announcementsRef.current.some(ann => ann.id === latestServerAnnouncement.id) ||
-                          (currentLatestId !== serverLatestId && new Date(latestServerAnnouncement.date) > new Date(announcementsRef.current.find(a => a.id === latestServerAnnouncement.id)?.date || 0).getTime());
-
-            if (isNew && (!user || (latestServerAnnouncement.authorId && user && latestServerAnnouncement.authorId !== user.name + user.surname))) {
+            const isTrulyNew = !previousAnnouncements.some(ann => ann.id === latestServerAnnouncement.id) || 
+                               (new Date(latestServerAnnouncement.date) > new Date(previousAnnouncements.find(a => a.id === latestServerAnnouncement.id)?.date || 0).getTime());
+            
+            if (isTrulyNew && (!user || (latestServerAnnouncement.authorId && user && latestServerAnnouncement.authorId !== user.name + user.surname))) {
                  showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
             }
         }
-
+        
         if (!initialDataLoadedRef.current) {
           setIsLoading(false);
           initialDataLoadedRef.current = true;
@@ -141,17 +137,15 @@ export function useAnnouncements() {
       }
     };
 
-    newEventSource.onerror = (errorEvent: Event) => {
+    es.onerror = (errorEvent: Event) => {
       const target = errorEvent.target as EventSource;
       const readyState = target?.readyState;
       const eventType = errorEvent.type || 'unknown event type';
-
+      
       if (readyState === EventSource.CLOSED) {
         console.warn(
-          `[SSE Announcements] Connection closed by server or network error. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
+          `[SSE Announcements] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
         );
-      } else if (readyState === EventSource.CONNECTING && eventType === 'error') {
-         console.warn(`[SSE Announcements] Initial connection attempt failed or stream unavailable. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will retry. Full Event:`, errorEvent);
       } else {
         console.error(
           `[SSE Announcements] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
@@ -169,7 +163,8 @@ export function useAnnouncements() {
         eventSourceRef.current = null;
       }
     };
-  }, [showNotification, user]); // Removed isLoading from dependencies
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showNotification, user]); 
 
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
     if (!user) {
@@ -180,12 +175,8 @@ export function useAnnouncements() {
         toast({ title: "Eksik Bilgi", description: "Başlık ve içerik boş bırakılamaz.", variant: "destructive" });
         return Promise.reject(new Error("Title and content are required."));
     }
-    if (payload.media && (payload.media.startsWith("data:image/") || payload.media.startsWith("data:video/")) && payload.media.length > MAX_ANNOUNCEMENT_DATA_URI_LENGTH_HOOK) {
-        toast({ title: "Medya Dosyası Çok Büyük", description: `Medya içeriği çok büyük. Lütfen daha küçük bir dosya kullanın (yaklaşık ${Math.round(MAX_ANNOUNCEMENT_DATA_URI_LENGTH_HOOK / (1024*1024*1.37))}MB).`, variant: "destructive", duration: 7000 });
-        return Promise.reject(new Error("Media data URI too large."));
-    }
-
-    const newAnnouncement: Announcement = {
+    
+    const newAnnouncementData: Announcement = {
       id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       title: payload.title,
       content: payload.content,
@@ -200,26 +191,19 @@ export function useAnnouncements() {
       const response = await fetch('/api/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAnnouncement),
+        body: JSON.stringify(newAnnouncementData),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        let errorMessage = errorData.message || 'Duyuru sunucuya iletilemedi';
-        if (response.status === 413) {
-            errorMessage = "Duyuru yüklenemedi çünkü medya içeriği sunucu limitlerini aşıyor.";
-        }
-        toast({ title: "Duyuru Gönderilemedi", description: errorMessage, variant: "destructive" });
-        throw new Error(errorMessage);
+        toast({ title: "Duyuru Gönderilemedi", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
+        throw new Error(errorData.message || 'Duyuru sunucuya iletilemedi');
       }
-      // UI will update via SSE
+      // UI güncellenmesi SSE üzerinden olacak
     } catch (error: any) {
       console.error("[Announcements] Failed to send new announcement to server:", error);
-      // Toast is already shown if response was not ok or if it's another fetch error
-      if (!error.message?.includes("sunucuya iletilemedi") && !error.message?.includes("sunucu limitlerini aşıyor")) {
-        toast({ title: "Duyuru Eklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
-      }
-      throw error;
+      toast({ title: "Duyuru Eklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
+      throw error; // Re-throw error for the calling component to handle if needed
     }
   }, [user, toast]);
 
@@ -236,19 +220,20 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
+        toast({ title: "Duyuru Silinemedi", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
         throw new Error(errorData.message || 'Duyuru silme bilgisi sunucuya iletilemedi');
       }
-      // UI will update via SSE
+      // UI güncellenmesi SSE üzerinden olacak
     } catch (error: any) {
       console.error("[Announcements] Failed to notify server about deleted announcement:", error);
-      toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silme bilgisi diğer kullanıcılara iletilirken bir sorun oluştu.", variant: "destructive" });
-      throw error;
+      toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silme işlemi sırasında bir sorun oluştu.", variant: "destructive" });
+      throw error; // Re-throw error
     }
   }, [user, toast]);
 
   const getAnnouncementById = useCallback((id: string): Announcement | undefined => {
-    return announcementsRef.current.find(ann => ann.id === id);
-  }, []); // announcementsRef.current means this callback doesn't need announcements in deps
+    return announcements.find(ann => ann.id === id);
+  }, [announcements]);
 
   return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading, unreadCount };
 }

@@ -16,18 +16,21 @@ let initialized = false;
 
 const loadAnnouncementsFromFile = () => {
   try {
+    console.log(`[API/Announcements] Attempting to load announcements from: ${ANNOUNCEMENTS_FILE_PATH}`);
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
       const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
-      const parsedData = JSON.parse(fileData) as Announcement[];
-      announcementsData = parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements from ${ANNOUNCEMENTS_FILE_PATH}`);
-    } else {
-      console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Starting with empty array.`);
-      announcementsData = [];
-      // Attempt to create the file on first run if it doesn't exist with Render persistent disk
-      if (process.env.DATA_PATH) {
-          saveAnnouncementsToFile();
+      if (fileData.trim() === '') {
+        console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} is empty. Initializing with empty array.`);
+        announcementsData = [];
+      } else {
+        const parsedData = JSON.parse(fileData) as Announcement[];
+        announcementsData = parsedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements.`);
       }
+    } else {
+      console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array and attempting to create the file.`);
+      announcementsData = [];
+      saveAnnouncementsToFile(); // Attempt to create the file with an empty array
     }
   } catch (error) {
     console.error("[API/Announcements] Error loading announcements from file:", error);
@@ -35,17 +38,20 @@ const loadAnnouncementsFromFile = () => {
   }
 };
 
-const saveAnnouncementsToFile = () => {
+const saveAnnouncementsToFile = (): boolean => {
    try {
     const dir = path.dirname(ANNOUNCEMENTS_FILE_PATH);
-    if (!fs.existsSync(dir) && process.env.DATA_PATH){ // Only attempt mkdir if DATA_PATH is set (for Render)
+    if (!fs.existsSync(dir) && (process.env.DATA_PATH || process.env.NODE_ENV === 'development')){ 
         fs.mkdirSync(dir, { recursive: true });
+        console.log(`[API/Announcements] Created directory: ${dir}`);
     }
     const sortedData = [...announcementsData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log(`[API/Announcements] Announcement data saved to ${ANNOUNCEMENTS_FILE_PATH}`);
+    // console.log(`[API/Announcements] Announcement data saved to ${ANNOUNCEMENTS_FILE_PATH}`);
+    return true;
   } catch (error) {
-    console.error("[API/Announcements] Error saving announcements to file (this is expected on Vercel, but not on Render with persistent disk):", error);
+    console.error("[API/Announcements] CRITICAL: Error saving announcements to file:", error);
+    return false;
   }
 };
 
@@ -55,68 +61,83 @@ if (!initialized) {
 }
 
 export async function GET() {
+  // Ensure data is loaded if it wasn't for some reason (e.g., another serverless instance)
+  // This can be removed if confident about `initialized` behavior in your deployment
+  if (!initialized || announcementsData.length === 0 && fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
+    loadAnnouncementsFromFile();
+  }
   return NextResponse.json([...announcementsData]);
 }
 
 export async function POST(request: NextRequest) {
+  let newAnnouncement: Announcement;
   try {
-    const newAnnouncement: Announcement = await request.json();
+    newAnnouncement = await request.json();
+  } catch (error) {
+    console.error("[API/Announcements] POST Error: Invalid JSON payload.", error);
+    return NextResponse.json({ message: "Invalid JSON payload." }, { status: 400 });
+  }
 
-    if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
-      return NextResponse.json({ message: 'Invalid announcement payload. Missing required fields.' }, { status: 400 });
-    }
+  if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
+    return NextResponse.json({ message: 'Invalid announcement payload. Missing required fields.' }, { status: 400 });
+  }
 
-    if (newAnnouncement.media && (newAnnouncement.media.startsWith("data:image/") || newAnnouncement.media.startsWith("data:video/")) && newAnnouncement.media.length > MAX_ANNOUNCEMENT_BASE64_SIZE_API) {
-        return NextResponse.json({ message: `Medya içeriği çok büyük. Maksimum boyut yaklaşık ${Math.round(MAX_ANNOUNCEMENT_BASE64_SIZE_API / (1024*1024*1.37))}MB olmalıdır.` }, { status: 413 });
-    }
+  if (newAnnouncement.media && (newAnnouncement.media.startsWith("data:image/") || newAnnouncement.media.startsWith("data:video/")) && newAnnouncement.media.length > MAX_ANNOUNCEMENT_BASE64_SIZE_API) {
+      return NextResponse.json({ message: `Medya içeriği çok büyük. Maksimum boyut yaklaşık ${Math.round(MAX_ANNOUNCEMENT_BASE64_SIZE_API / (1024*1024*1.37))}MB olmalıdır.` }, { status: 413 });
+  }
     
-    const existingIndex = announcementsData.findIndex(ann => ann.id === newAnnouncement.id);
-    if (existingIndex !== -1) {
-        announcementsData[existingIndex] = newAnnouncement; 
-    } else {
-        announcementsData.unshift(newAnnouncement); 
-    }
-    
-    announcementsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    saveAnnouncementsToFile(); 
+  // Read current data from file to ensure we have the latest version
+  loadAnnouncementsFromFile(); 
+
+  const tempAnnouncements = [...announcementsData];
+  const existingIndex = tempAnnouncements.findIndex(ann => ann.id === newAnnouncement.id);
+  if (existingIndex !== -1) {
+      tempAnnouncements[existingIndex] = newAnnouncement; 
+  } else {
+      tempAnnouncements.unshift(newAnnouncement); 
+  }
+  tempAnnouncements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+  announcementsData = tempAnnouncements; // Temporarily update in-memory for save function
+  if (saveAnnouncementsToFile()) {
+    // announcementsData is already updated
     announcementEmitter.emit('update', [...announcementsData]);
+    console.log(`[API/Announcements] Announcement ${newAnnouncement.id} processed and saved. Total: ${announcementsData.length}`);
     return NextResponse.json(newAnnouncement, { status: 201 });
-  } catch (error: any) {
-    if (error.type === 'entity.too.large') { 
-        console.error("[API/Announcements] POST Error: Payload too large.");
-        return NextResponse.json({ message: `Duyuru verisi çok büyük. Sunucu limiti aşıldı.` }, { status: 413 });
-    }
-    console.error("[API/Announcements] Error creating announcement (POST):", error);
-    if (error instanceof SyntaxError) { 
-      return NextResponse.json({ message: "Invalid JSON payload. Medya verisi doğru formatta olmayabilir veya çok büyük olabilir." }, { status: 400 });
-    }
-    return NextResponse.json({ message: "Internal server error while creating announcement." }, { status: 500 });
+  } else {
+    // Revert in-memory change if save failed
+    loadAnnouncementsFromFile(); 
+    console.error(`[API/Announcements] Failed to save announcement ${newAnnouncement.id}. Operation rolled back from memory.`);
+    return NextResponse.json({ message: "Sunucu hatası: Duyuru kaydedilemedi." }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
 
-    if (!id) {
-      return NextResponse.json({ message: 'Announcement ID is required for deletion' }, { status: 400 });
-    }
+  if (!id) {
+    return NextResponse.json({ message: 'Announcement ID is required for deletion' }, { status: 400 });
+  }
 
-    const initialLength = announcementsData.length;
-    announcementsData = announcementsData.filter(ann => ann.id !== id);
+  loadAnnouncementsFromFile(); 
+  const initialLength = announcementsData.length;
+  const filteredAnnouncements = announcementsData.filter(ann => ann.id !== id);
 
-    if (announcementsData.length < initialLength) {
-      saveAnnouncementsToFile();
+  if (filteredAnnouncements.length < initialLength) {
+    announcementsData = filteredAnnouncements; // Update in-memory for save
+    if (saveAnnouncementsToFile()) {
+      // announcementsData is already updated
       announcementEmitter.emit('update', [...announcementsData]);
-      return NextResponse.json({ message: 'Announcement deleted successfully' }, { status: 200 });
+      console.log(`[API/Announcements] Announcement ${id} deleted and saved. Total: ${announcementsData.length}`);
+      return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
     } else {
-      announcementEmitter.emit('update', [...announcementsData]); // Emit even if not found to sync clients
-      return NextResponse.json({ message: 'Announcement not found' }, { status: 404 });
+      loadAnnouncementsFromFile(); // Revert in-memory change
+      console.error(`[API/Announcements] Failed to save after deleting announcement ${id}. Operation rolled back from memory.`);
+      return NextResponse.json({ message: 'Sunucu hatası: Duyuru silindikten sonra değişiklikler kaydedilemedi.' }, { status: 500 });
     }
-  } catch (error) {
-    console.error("[API/Announcements] Error deleting announcement (DELETE):", error);
-    return NextResponse.json({ message: "Internal server error while deleting announcement." }, { status: 500 });
+  } else {
+    // announcementEmitter.emit('update', [...announcementsData]); // Not strictly necessary if not found
+    return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }

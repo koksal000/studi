@@ -9,73 +9,77 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
 
-  // Removed Vercel-specific warning about NEXT_PUBLIC_APP_URL as user is deploying to Render
-  // if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
-  //   console.warn(
-  //     '[SSE Contact Stream] WARNING: NEXT_PUBLIC_APP_URL is not set or is misconfigured for production. '+
-  //     'The SSE stream may fail to fetch initial data if it relies on this URL to call its own API. '+
-  //     'Current appUrl for internal fetch:', appUrl
-  //   );
-  // }
+  if (process.env.NODE_ENV === 'production' && appUrl.startsWith('http://localhost')) {
+    console.warn(
+      '[SSE İletişim Akışı] UYARI: NEXT_PUBLIC_APP_URL üretim için ayarlanmamış veya yanlış yapılandırılmış. '+
+      'Bu URL kendi API\'sini çağırmak için kullanılıyorsa, SSE akışı ilk veriyi çekmede başarısız olabilir. '+
+      'Mevcut appUrl (dahili fetch için):', appUrl
+    );
+  }
   
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       const sendUpdate = (data: ContactMessage[]) => {
         try {
            if (controller.desiredSize === null || controller.desiredSize <= 0) {
-            // console.warn("[SSE Contact] Controller is not in a state to enqueue. Aborting sendUpdate and removing listener.");
             contactEmitter.off('update', sendUpdate);
             return;
           }
           const sortedData = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
           controller.enqueue(`data: ${JSON.stringify(sortedData)}\n\n`);
         } catch (e: any) {
-            console.error("[SSE Contact] Error enqueuing data to stream:", e.message, e.stack);
+            console.error("[SSE İletişim] Veri kuyruğa eklenirken akış hatası:", e.message);
             try {
               if (controller.desiredSize !== null && controller.desiredSize > 0) { 
-                controller.error(new Error(`SSE stream error while enqueuing data: ${e.message}`));
+                controller.error(new Error(`SSE akış hatası (enqueue): ${e.message}`));
               }
             } catch (closeErr) {
-              console.error("[SSE Contact] Error trying to signal controller error after enqueue failure:", closeErr);
+              console.error("[SSE İletişim] Kuyruk hatası sonrası controller hatası sinyali verilirken hata:", closeErr);
             }
             contactEmitter.off('update', sendUpdate); 
         }
       };
 
-      fetch(new URL('/api/contact', appUrl), { cache: 'no-store' })
-        .then(res => {
-            if (!res.ok) {
-                const errorMsg = `SSE Contact Stream: Failed to fetch initial contact messages from ${res.url}: ${res.status} ${res.statusText}`;
-                console.error(errorMsg);
-                throw new Error(errorMsg);
+      try {
+        const response = await fetch(new URL('/api/contact', appUrl), { cache: 'no-store' });
+        if (!response.ok) {
+            const errorBody = await response.text().catch(() => "Bilinmeyen sunucu hatası");
+            const errorMsg = `SSE İletişim Akışı: İlk iletişim mesajları ${response.url} adresinden alınamadı: ${response.status} ${response.statusText}. Gövde: ${errorBody}`;
+            console.error(errorMsg);
+            if (controller.desiredSize !== null && controller.desiredSize > 0) {
+                controller.error(new Error(errorMsg));
             }
-            return res.json();
-        })
-        .then((initialMessages: ContactMessage[]) => {
-            if (initialMessages && Array.isArray(initialMessages)) {
-                 sendUpdate(initialMessages);
-            } else if (!initialMessages) {
-                 sendUpdate([]); 
-            }
-        }).catch(e => {
-            console.error("SSE Contact: Error during initial messages fetch or processing:", e.message);
-            try {
-              if (controller.desiredSize !== null && controller.desiredSize > 0) { 
-                controller.error(new Error(`Failed to initialize contact messages stream: Could not fetch initial data. Server error: ${e.message}`));
-              }
-            } catch (closeError) {
-              console.error("SSE Contact: Error trying to signal controller error after fetch failure:", closeError);
-            }
-            contactEmitter.off('update', sendUpdate); 
-        });
+            return; 
+        }
+        const initialMessages: ContactMessage[] = await response.json();
+        if (initialMessages && Array.isArray(initialMessages)) {
+             sendUpdate(initialMessages);
+        } else if (!initialMessages) {
+             sendUpdate([]); 
+        }
+      } catch(e: any) {
+        const fetchErrorMsg = `SSE İletişim Akışı: İlk iletişim mesajlarını alırken veya işlerken hata: ${e.message}`;
+        console.error(fetchErrorMsg, e);
+        try {
+          if (controller.desiredSize !== null && controller.desiredSize > 0) { 
+            controller.error(new Error(fetchErrorMsg));
+          }
+        } catch (closeError) {
+          console.error("SSE İletişim Akışı: Fetch hatası sonrası controller hatası sinyali verilirken hata:", closeError);
+        }
+        contactEmitter.off('update', sendUpdate);
+        return; 
+      }
 
       contactEmitter.on('update', sendUpdate);
 
       controller.signal.addEventListener('abort', () => {
-        // console.log("SSE contact messages client disconnected (abort signal). Removing listener.");
         contactEmitter.off('update', sendUpdate);
       });
     },
+    cancel() {
+      // As above
+    }
   });
 
   return new NextResponse(stream, {

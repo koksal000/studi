@@ -143,17 +143,10 @@ export function Navbar() {
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-background p-0">
                 <SheetHeader className="p-4 border-b">
-                  <div className="flex items-center justify-between">
-                  <SheetTitle className="p-0 text-lg font-bold">{VILLAGE_NAME} Menüsü</SheetTitle>
-                    <SheetClose asChild>
-                       <Button variant="ghost" size="icon" className="h-7 w-7">
-                        <X className="h-5 w-5" />
-                        <span className="sr-only">Menüyü Kapat</span>
-                      </Button>
-                    </SheetClose>
-                  </div>
+                  <SheetTitle className="text-lg font-bold">{VILLAGE_NAME} Menüsü</SheetTitle>
+                  {/* Redundant SheetClose button removed from here. SheetContent provides its own. */}
                 </SheetHeader>
-                <div className="flex flex-col h-[calc(100%-var(--sheet-header-height,65px))]"> {/* Adjust based on actual header height if needed */}
+                <div className="flex flex-col h-[calc(100%-var(--sheet-header-height,65px))]">
                   <div className="p-4 border-b">
                      <form onSubmit={handleSearch} className="relative">
                         <Input 

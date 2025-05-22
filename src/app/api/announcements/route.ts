@@ -11,9 +11,9 @@ import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
 
-// Approx base64 size for 10MB image, and 5MB video (raw)
-const MAX_IMAGE_PAYLOAD_SIZE_API = Math.floor(10 * 1024 * 1024 * 1.37); 
-const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(5 * 1024 * 1024 * 1.37); 
+// Approx base64 size for 10MB image, and 7MB video (raw) used for practical Data URI conversion limit
+const MAX_IMAGE_PAYLOAD_SIZE_API = Math.floor(10 * 1024 * 1024 * 1.37); // ~13.7MB for 10MB raw image
+const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(7 * 1024 * 1024 * 1.37);  // ~9.6MB for 7MB raw video (practical limit for base64)
 
 let announcementsData: Announcement[] = [];
 let initialized = false;
@@ -32,7 +32,7 @@ const loadAnnouncementsFromFile = () => {
       console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements from file.`);
     } else {
       announcementsData = [];
-      console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array and attempting to create the file.`);
+      console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array and attempting to create/save the file.`);
       saveAnnouncementsToFile(); 
     }
   } catch (error) {
@@ -82,15 +82,18 @@ export async function POST(request: NextRequest) {
 
   if (newAnnouncement.media && newAnnouncement.media.startsWith("data:")) {
       if (newAnnouncement.mediaType?.startsWith("image/") && newAnnouncement.media.length > MAX_IMAGE_PAYLOAD_SIZE_API) {
-          return NextResponse.json({ message: `Resim içeriği çok büyük. Maksimum boyut yaklaşık ${MAX_IMAGE_RAW_SIZE_MB}MB olmalıdır.` }, { status: 413 });
+          const limitMB = (MAX_IMAGE_PAYLOAD_SIZE_API / (1.37 * 1024 * 1024)).toFixed(0);
+          return NextResponse.json({ message: `Resim içeriği çok büyük. Maksimum boyut yaklaşık ${limitMB}MB ham dosya olmalıdır.` }, { status: 413 });
       }
       if (newAnnouncement.mediaType?.startsWith("video/") && newAnnouncement.media.length > MAX_VIDEO_PAYLOAD_SIZE_API) {
-          return NextResponse.json({ message: `Video içeriği çok büyük. Doğrudan yükleme için maksimum boyut yaklaşık ${MAX_VIDEO_DATA_URI_CONVERSION_LIMIT_RAW_MB}MB olmalıdır. Daha büyük videolar için URL kullanın.` }, { status: 413 });
+           const limitMB = (MAX_VIDEO_PAYLOAD_SIZE_API / (1.37 * 1024 * 1024)).toFixed(0);
+          return NextResponse.json({ message: `Video içeriği çok büyük. Doğrudan yükleme için maksimum boyut yaklaşık ${limitMB}MB ham dosya olmalıdır. Daha büyük videolar için URL kullanın.` }, { status: 413 });
       }
   }
     
-  const currentDataFromFile = [...announcementsData]; // Use current in-memory state as proxy for "file"
+  const currentDataFromFile = [...announcementsData]; 
   const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);
+  
   if (existingIndex !== -1) {
       currentDataFromFile[existingIndex] = newAnnouncement; 
   } else {
@@ -98,20 +101,15 @@ export async function POST(request: NextRequest) {
   }
   currentDataFromFile.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
-  announcementsData = currentDataFromFile; // Update in-memory for SSE
+  announcementsData = currentDataFromFile; 
 
   if (saveAnnouncementsToFile()) { 
     announcementEmitter.emit('update', [...announcementsData]);
     console.log(`[API/Announcements] Announcement ${newAnnouncement.id} processed and saved. Total: ${announcementsData.length}`);
     return NextResponse.json(newAnnouncement, { status: 201 });
   } else {
-    // Attempt to revert in-memory change if save failed, though this is complex
-    // Best to rely on next startup to reload from the last known good file state.
-    // For now, we'll just log the severe error.
-    // To be more robust, we'd ideally not update announcementsData until save is confirmed
-    // or implement a transactional save.
-    loadAnnouncementsFromFile(); // Revert to last saved state
-    announcementEmitter.emit('update', [...announcementsData]); // Notify clients of reverted state
+    loadAnnouncementsFromFile(); 
+    announcementEmitter.emit('update', [...announcementsData]); 
     console.error(`[API/Announcements] Failed to save announcement ${newAnnouncement.id} to file. In-memory change attempted to be reverted.`);
     return NextResponse.json({ message: "Sunucu hatası: Duyuru kalıcı olarak kaydedilemedi." }, { status: 500 });
   }
@@ -129,13 +127,13 @@ export async function DELETE(request: NextRequest) {
   const filteredAnnouncements = currentDataFromFile.filter(ann => ann.id !== id);
 
   if (filteredAnnouncements.length < currentDataFromFile.length) {
-    announcementsData = filteredAnnouncements; // Update in-memory for SSE
+    announcementsData = filteredAnnouncements; 
     if (saveAnnouncementsToFile()) { 
       announcementEmitter.emit('update', [...announcementsData]);
       console.log(`[API/Announcements] Announcement ${id} deleted and saved. Total: ${announcementsData.length}`);
       return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
     } else {
-      loadAnnouncementsFromFile(); // Revert
+      loadAnnouncementsFromFile(); 
       announcementEmitter.emit('update', [...announcementsData]);
       console.error(`[API/Announcements] Failed to save after deleting announcement ${id} from file. In-memory change reverted.`);
       return NextResponse.json({ message: 'Sunucu hatası: Duyuru silindikten sonra değişiklikler kalıcı olarak kaydedilemedi.' }, { status: 500 });

@@ -1,3 +1,4 @@
+
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # Dependencies
@@ -8,7 +9,7 @@
 # Testing
 /coverage
 
-# Next.js
+# Next.js build
 /.next/
 /out/
 
@@ -19,32 +20,33 @@
 .DS_Store
 *.pem
 
-# Logs
-logs
-*.log
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Local .env file
-# .env # Keep .env for DATA_PATH, but .env*.local should be ignored
-.env*.local 
+# Local Environment Variables
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Data files - These should be committed to GitHub if GitHub is the source of truth.
-# If you uncomment these, they will NOT be tracked by Git.
-# For the "Git as a database" approach on Render free tier, ensure these files
-# _announcements.json, _gallery.json, _contact_messages.json
-# ARE present in your Git repository and NOT listed (uncommented) below.
-#
-# _announcements.json
-# _gallery.json
-# _contact_messages.json
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
 
-# Folders
-.firebase
-.vscode
-*.tsbuildinfo
-.eslintcache
-firebase-debug.log
-genkit.state
+# Compilation cache
+.turbo
+
+# Data files managed by persistent disk on Render (or similar)
+# These should NOT be in Git if they are dynamically updated by the live application.
+# If they are meant to be seed data included in the repo, then they should NOT be in .gitignore.
+_announcements.json
+_gallery.json
+_contact_messages.json
+_entry_stats.json

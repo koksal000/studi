@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, AlertCircle } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -50,8 +50,34 @@ export default function AdminPage() {
 
   const [isDeleteImageAdminPasswordDialogOpen, setIsDeleteImageAdminPasswordDialogOpen] = useState(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
+  const [totalEntryCount, setTotalEntryCount] = useState<number | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchEntryStats = async () => {
+      setStatsLoading(true);
+      try {
+        const response = await fetch('/api/stats/entry-count');
+        if (response.ok) {
+          const data = await response.json();
+          setTotalEntryCount(data.entryCount);
+        } else {
+          console.error("Failed to fetch entry stats");
+          setTotalEntryCount(0); // Fallback
+        }
+      } catch (error) {
+        console.error("Error fetching entry stats:", error);
+        setTotalEntryCount(0); // Fallback
+      }
+      setStatsLoading(false);
+    };
+
+    if (user) { // Only fetch if user is logged in (admin)
+      fetchEntryStats();
+    }
+  }, [user]);
 
 
   if (!user) {
@@ -135,6 +161,7 @@ export default function AdminPage() {
       return;
     }
     if (!newImagePreview || typeof newImagePreview !== 'string' || !newImagePreview.startsWith('data:image/')) {
+      console.error("handleAddImageSubmit: newImagePreview is invalid or missing.", {preview: newImagePreview?.substring(0,30)});
       toast({
         title: "Geçersiz Resim Verisi",
         description: "Resim yüklenemiyor. Lütfen geçerli bir resim dosyası seçin ve önizlemenin doğru yüklendiğinden emin olun.",
@@ -150,13 +177,13 @@ export default function AdminPage() {
         imageDataUri: newImagePreview,
         caption: newImageCaption.trim(),
         alt: newImageCaption.trim() || "Yüklenen galeri resmi",
-        hint: "custom upload", // data-ai-hint için varsayılan bir değer
+        hint: "custom upload", 
       };
 
       await addGalleryImage(payload);
       toast({
         title: "Resim Galeriye Eklendi",
-        description: `"${newImageCaption.trim()}" başlıklı resim galeriye başarıyla eklendi.`
+        description: `"${newImageCaption.trim()}" başlıklı resim galeriye başarıyla eklendi. (Değişikliğin kalıcı olması için Render.com'da kalıcı disk yapılandırmanızın doğru olması gerekir.)`
       });
       setNewImageFile(null);
       setNewImageCaption('');
@@ -164,8 +191,6 @@ export default function AdminPage() {
       if(fileInputRef.current) fileInputRef.current.value = "";
     } catch (error: any) {
        console.error("AdminPage: Error calling addGalleryImage:", error);
-        // Hata mesajı zaten hook içinde veya API yanıtıyla gösteriliyor olabilir,
-        // burada sadece beklenmedik genel hatalar için bir fallback.
        if (error.message && !error.message.includes("localStorage") && !error.message.includes("sunucu") && !error.message.includes("payload") && !error.message.includes("kota") && !error.message.includes("büyük")) {
          toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
@@ -186,7 +211,7 @@ export default function AdminPage() {
       await deleteGalleryImage(imageToDelete.id);
       toast({
         title: "Resim Silindi",
-        description: `"${imageToDelete.caption}" başlıklı resim galeriden başarıyla silindi.`
+        description: `"${imageToDelete.caption}" başlıklı resim galeriden başarıyla silindi. (Değişikliğin kalıcı olması için Render.com'da kalıcı disk yapılandırmanızın doğru olması gerekir.)`
       });
     } catch (error: any) {
       console.error("Error deleting image:", error);
@@ -220,23 +245,16 @@ export default function AdminPage() {
              <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-medium flex items-center">
-                  <Users className="mr-2 h-5 w-5 text-primary" /> Kullanıcı İstatistikleri (Bilgilendirme)
+                  <Activity className="mr-2 h-5 w-5 text-primary" /> Site Giriş Sayısı
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-start">
-                    <AlertCircle className="h-4 w-4 mr-2 mt-0.5 text-amber-500 flex-shrink-0" />
-                    <p>
-                    Toplam benzersiz kullanıcı sayısı (giriş formu ile siteye girenler) merkezi bir veritabanı olmadığı için mevcut sistemle takip edilememektedir. Kullanıcı bilgileri sadece kendi tarayıcılarında (`localStorage`) saklanmaktadır.
-                    </p>
-                </div>
-                <div className="flex items-start">
-                    <AlertCircle className="h-4 w-4 mr-2 mt-0.5 text-amber-500 flex-shrink-0" />
-                     <p>
-                    Anlık aktif kullanıcı sayısı da, sunucusuz mimaride (örn: Render.com ücretsiz katmanı) tüm aktif bağlantıları merkezi olarak saymak için ek altyapı (örn: Redis) gerektirdiğinden güvenilir bir şekilde gösterilememektedir.
-                    </p>
-                </div>
-                 <p className="text-xs pt-2">Bu tür kapsamlı istatistikler için harici bir veritabanı ve analiz aracı entegrasyonu önerilir.</p>
+                {statsLoading ? (
+                  <div className="flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Yükleniyor...</div>
+                ) : (
+                  <p className="text-2xl font-bold text-primary">{totalEntryCount !== null ? totalEntryCount : "Veri yok"}</p>
+                )}
+                 <p className="text-xs pt-1">Bu sayı, kullanıcıların siteye giriş formunu kullanarak kaç kez giriş yaptığını gösterir.</p>
               </CardContent>
             </Card>
           </div>
@@ -255,7 +273,7 @@ export default function AdminPage() {
             </Button>
           </CardTitle>
            <CardDescription>
-            Yeni duyurular ekleyin veya mevcut duyuruları yönetin. Yapılan değişiklikler (Render.com'da kalıcı disk doğru yapılandırıldıysa) kalıcı olacaktır.
+            Yeni duyurular ekleyin veya mevcut duyuruları yönetin. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklikler kalıcı olacaktır.)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -285,7 +303,7 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-6 w-6 text-primary" /> Galeri Yönetimi</CardTitle>
            <CardDescription>
-            Sitede gösterilen galeri resimlerini yönetin. Yapılan değişiklikler (Render.com'da kalıcı disk doğru yapılandırıldıysa) kalıcı olacaktır.
+            Sitede gösterilen galeri resimlerini yönetin. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklikler kalıcı olacaktır.)
             <br/>
             <span className="text-xs text-muted-foreground">Not: Büyük boyutlu resimler yükleme süresini ve depolama alanını etkileyebilir. Tavsiye edilen maksimum dosya boyutu ~3MB'dir.</span>
           </CardDescription>
@@ -353,8 +371,7 @@ export default function AdminPage() {
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
                                  <AlertDialogDescription>
-                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz?
-                                    (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)
+                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz? (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -397,6 +414,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-
-    

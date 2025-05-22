@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -30,7 +30,6 @@ import {
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
 import { UserRequestsDialog } from '@/components/specific/user-requests-dialog';
-import type { ContactMessage } from '@/app/api/contact/route';
 
 const MAX_RAW_FILE_SIZE = 3 * 1024 * 1024; // 3MB limit for original file
 const MAX_IMAGE_DATA_URI_LENGTH = 4 * 1024 * 1024; // Approx 4MB for base64 string (API limit might be lower)
@@ -52,35 +51,7 @@ export default function AdminPage() {
   const [isDeleteImageAdminPasswordDialogOpen, setIsDeleteImageAdminPasswordDialogOpen] = useState(false);
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
 
-  const [uniqueContactCount, setUniqueContactCount] = useState<number | null>(null);
-  const [isContactCountLoading, setIsContactCountLoading] = useState(true);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const fetchUniqueContacts = async () => {
-      setIsContactCountLoading(true);
-      try {
-        const response = await fetch('/api/contact');
-        if (!response.ok) {
-          throw new Error('İletişim mesajları alınamadı');
-        }
-        const messages: ContactMessage[] = await response.json();
-        const uniqueEmails = new Set(messages.map(msg => msg.email.toLowerCase()));
-        setUniqueContactCount(uniqueEmails.size);
-      } catch (error) {
-        console.error("Error fetching unique contacts:", error);
-        toast({ title: "Hata", description: "İletişim istatistikleri alınamadı.", variant: "destructive" });
-        setUniqueContactCount(0);
-      } finally {
-        setIsContactCountLoading(false);
-      }
-    };
-
-    if (user) {
-      fetchUniqueContacts();
-    }
-  }, [user, toast]);
 
 
   if (!user) {
@@ -114,7 +85,7 @@ export default function AdminPage() {
 
       setNewImageFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const imageDataUri = reader.result as string;
 
         if (!imageDataUri || typeof imageDataUri !== 'string' || !imageDataUri.startsWith('data:image/')) {
@@ -128,7 +99,7 @@ export default function AdminPage() {
             setNewImagePreview(null);
             return;
         }
-
+        
         if (imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH) {
           toast({
             title: "Resim Verisi Çok Büyük",
@@ -159,22 +130,19 @@ export default function AdminPage() {
   const handleAddImageSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!newImagePreview || !newImageCaption.trim()) {
+    if (!newImageFile || !newImageCaption.trim()) {
       toast({ title: "Eksik Bilgi", description: "Lütfen bir resim seçin ve başlık girin.", variant: "destructive" });
-      console.error("handleAddImageSubmit: newImagePreview or newImageCaption is missing.", {preview: !!newImagePreview, caption: newImageCaption});
       return;
     }
-    if (typeof newImagePreview !== 'string' || !newImagePreview.startsWith('data:image/')) {
+    if (!newImagePreview || typeof newImagePreview !== 'string' || !newImagePreview.startsWith('data:image/')) {
       toast({
         title: "Geçersiz Resim Verisi",
         description: "Resim yüklenemiyor. Lütfen geçerli bir resim dosyası seçin ve önizlemenin doğru yüklendiğinden emin olun.",
         variant: "destructive"
       });
-      if(fileInputRef.current) fileInputRef.current.value = "";
-      setNewImageFile(null);
-      setNewImagePreview(null);
       return;
     }
+    
 
     setIsUploading(true);
     try {
@@ -182,7 +150,7 @@ export default function AdminPage() {
         imageDataUri: newImagePreview,
         caption: newImageCaption.trim(),
         alt: newImageCaption.trim() || "Yüklenen galeri resmi",
-        hint: "custom upload",
+        hint: "custom upload", // data-ai-hint için varsayılan bir değer
       };
 
       await addGalleryImage(payload);
@@ -196,7 +164,9 @@ export default function AdminPage() {
       if(fileInputRef.current) fileInputRef.current.value = "";
     } catch (error: any) {
        console.error("AdminPage: Error calling addGalleryImage:", error);
-       if (!error.message?.includes("localStorage") && !error.message?.includes("sunucu") && !error.message?.includes("payload") && !error.message?.includes("kota") && !error.message?.includes("büyük")) {
+        // Hata mesajı zaten hook içinde veya API yanıtıyla gösteriliyor olabilir,
+        // burada sadece beklenmedik genel hatalar için bir fallback.
+       if (error.message && !error.message.includes("localStorage") && !error.message.includes("sunucu") && !error.message.includes("payload") && !error.message.includes("kota") && !error.message.includes("büyük")) {
          toast({ title: "Resim Eklenemedi", description: error.message || "Resim eklenirken beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
     } finally {
@@ -247,25 +217,26 @@ export default function AdminPage() {
                 <p className="text-muted-foreground">{user.name} {user.surname}</p>
               </div>
             </div>
-            <Card>
+             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-medium flex items-center">
-                  <Users className="mr-2 h-5 w-5 text-primary" /> İletişim İstatistikleri
+                  <Users className="mr-2 h-5 w-5 text-primary" /> Kullanıcı İstatistikleri (Bilgilendirme)
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                {isContactCountLoading ? (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Yükleniyor...
-                  </div>
-                ) : (
-                  <p className="text-2xl font-bold">
-                    {uniqueContactCount !== null ? uniqueContactCount : 'N/A'}
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  İletişim formuyla ulaşan benzersiz kişi sayısı.
-                </p>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-start">
+                    <AlertCircle className="h-4 w-4 mr-2 mt-0.5 text-amber-500 flex-shrink-0" />
+                    <p>
+                    Toplam benzersiz kullanıcı sayısı (giriş formu ile siteye girenler) merkezi bir veritabanı olmadığı için mevcut sistemle takip edilememektedir. Kullanıcı bilgileri sadece kendi tarayıcılarında (`localStorage`) saklanmaktadır.
+                    </p>
+                </div>
+                <div className="flex items-start">
+                    <AlertCircle className="h-4 w-4 mr-2 mt-0.5 text-amber-500 flex-shrink-0" />
+                     <p>
+                    Anlık aktif kullanıcı sayısı da, sunucusuz mimaride (örn: Render.com ücretsiz katmanı) tüm aktif bağlantıları merkezi olarak saymak için ek altyapı (örn: Redis) gerektirdiğinden güvenilir bir şekilde gösterilememektedir.
+                    </p>
+                </div>
+                 <p className="text-xs pt-2">Bu tür kapsamlı istatistikler için harici bir veritabanı ve analiz aracı entegrasyonu önerilir.</p>
               </CardContent>
             </Card>
           </div>
@@ -383,6 +354,7 @@ export default function AdminPage() {
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
                                  <AlertDialogDescription>
                                     "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz?
+                                    (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -426,3 +398,5 @@ export default function AdminPage() {
   );
 }
 
+
+    

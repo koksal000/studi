@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getAppState, setAppState } from '@/lib/idb';
+// Removed idb imports
 
 interface AnnouncementStatusContextType {
   lastOpenedNotificationTimestamp: number | null;
@@ -12,46 +12,53 @@ interface AnnouncementStatusContextType {
 
 const AnnouncementStatusContext = createContext<AnnouncementStatusContextType | undefined>(undefined);
 
-const LAST_OPENED_KEY_IDB = 'lastOpenedNotificationTimestamp';
+const LAST_OPENED_KEY_LOCALSTORAGE = 'lastOpenedNotificationTimestamp'; // localStorage key
 
 export const AnnouncementStatusProvider = ({ children }: { children: ReactNode }) => {
   const [lastOpenedNotificationTimestamp, setLastOpenedState] = useState<number | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
 
   useEffect(() => {
-    const loadTimestamp = async () => {
-      setIsStatusLoading(true);
-      try {
-        const storedTimestamp = await getAppState<number>(LAST_OPENED_KEY_IDB);
-        if (storedTimestamp !== undefined) { // Check for undefined as value could be 0
+    setIsStatusLoading(true);
+    try {
+      const storedTimestampString = localStorage.getItem(LAST_OPENED_KEY_LOCALSTORAGE);
+      if (storedTimestampString !== null) {
+        const storedTimestamp = parseInt(storedTimestampString, 10);
+        if (!isNaN(storedTimestamp)) {
           setLastOpenedState(storedTimestamp);
         } else {
-          setLastOpenedState(null); 
+          setLastOpenedState(null);
+          localStorage.removeItem(LAST_OPENED_KEY_LOCALSTORAGE); // Clear corrupted data
         }
-      } catch (error) {
-        console.error("Failed to load lastOpenedNotificationTimestamp from IndexedDB", error);
-        setLastOpenedState(null);
-      } finally {
-        setIsStatusLoading(false);
+      } else {
+        setLastOpenedState(null); 
       }
-    };
-    loadTimestamp();
+    } catch (error) {
+      console.error("Failed to load lastOpenedNotificationTimestamp from localStorage", error);
+      localStorage.removeItem(LAST_OPENED_KEY_LOCALSTORAGE); // Clear potentially corrupted data
+      setLastOpenedState(null);
+    } finally {
+      setIsStatusLoading(false);
+    }
   }, []);
 
-  const updateLastOpenedNotificationTimestamp = async (timestamp: number) => {
-    await setAppState<number>(LAST_OPENED_KEY_IDB, timestamp);
-    setLastOpenedState(timestamp);
+  const updateLastOpenedNotificationTimestamp = (timestamp: number) => {
+    try {
+      localStorage.setItem(LAST_OPENED_KEY_LOCALSTORAGE, timestamp.toString());
+      setLastOpenedState(timestamp);
+    } catch (error) {
+      console.error("Failed to save lastOpenedNotificationTimestamp to localStorage", error);
+      // Optionally, handle quota exceeded or other storage errors
+    }
   };
 
-  // Wait for status to load before rendering children, or show a global loader
-  // This simple example just renders children once loading is done.
-  // You might combine this with UserProvider's loader or have a separate one.
-  if (isStatusLoading) {
-    // You could return a loader here if this context's loading is critical path
-    // For now, we assume UserProvider's loader covers the initial app load.
-    // If this context loads significantly slower, this might need adjustment.
+  // UserProvider's loader should cover the initial app load.
+  // This context's loading is very fast with localStorage.
+  if (isStatusLoading && typeof window === 'undefined') { 
+    // Avoid rendering children until status loaded on server, though localStorage is client-side.
+    // This might be more relevant if this context was truly async.
+    // For localStorage, it's mostly to prevent flicker if state changes immediately.
   }
-
 
   return (
     <AnnouncementStatusContext.Provider 

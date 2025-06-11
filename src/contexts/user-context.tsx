@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ADMIN_PASSWORD } from '@/lib/constants';
-import { getUserProfile, setUserProfile, deleteUserProfile } from '@/lib/idb';
+// Removed idb imports
 
 interface User {
   name: string;
@@ -13,58 +13,55 @@ interface User {
 interface UserContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (name: string, surname: string) => Promise<void>;
-  logout: () => Promise<void>;
+  login: (name: string, surname: string) => void; // Email parameter removed previously
+  logout: () => void;
   checkAdminPassword: (password: string) => boolean;
   showEntryForm: boolean;
   setShowEntryForm: (show: boolean) => void;
-  isUserLoading: boolean; // Renamed from isLoading to avoid conflict if other contexts use it
+  isUserLoading: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
-
-// USER_DATA_KEY is no longer needed as we use 'currentUser' as fixed key in IndexedDB
+const USER_DATA_KEY = 'camlicaKoyuUser'; // localStorage key
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isUserLoading, setIsUserLoading] = useState(true); // Start true until DB check is done
-  const [showEntryForm, setShowEntryForm] = useState(false); // Default to false, useEffect will show if no user
+  const [isUserLoading, setIsUserLoading] = useState(true);
+  const [showEntryForm, setShowEntryForm] = useState(false);
 
 
   useEffect(() => {
-    const loadUser = async () => {
-      setIsUserLoading(true);
-      try {
-        const storedUser = await getUserProfile();
-        if (storedUser) {
-          setUserState({ name: storedUser.name, surname: storedUser.surname });
-          setShowEntryForm(false);
-        } else {
-          setShowEntryForm(true);
-        }
-      } catch (error) {
-        console.error("Failed to load user data from IndexedDB", error);
-        setShowEntryForm(true); 
-      } finally {
-        setIsUserLoading(false);
+    setIsUserLoading(true);
+    try {
+      const storedUserString = localStorage.getItem(USER_DATA_KEY);
+      if (storedUserString) {
+        const storedUser = JSON.parse(storedUserString) as User;
+        setUserState({ name: storedUser.name, surname: storedUser.surname });
+        setShowEntryForm(false);
+      } else {
+        setShowEntryForm(true);
       }
-    };
-
-    loadUser();
+    } catch (error) {
+      console.error("Failed to load user data from localStorage", error);
+      localStorage.removeItem(USER_DATA_KEY); // Clear corrupted data
+      setShowEntryForm(true); 
+    } finally {
+      setIsUserLoading(false);
+    }
   }, []);
 
-  const login = async (name: string, surname: string) => {
+  const login = (name: string, surname: string) => { // Email parameter removed
     const newUser: User = { name, surname };
     setUserState(newUser);
-    await setUserProfile(name, surname);
+    localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);
   };
 
-  const logout = async () => {
+  const logout = () => {
     setUserState(null);
     setIsAdmin(false);
-    await deleteUserProfile();
+    localStorage.removeItem(USER_DATA_KEY);
     setShowEntryForm(true);
   };
 
@@ -77,7 +74,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
   
-  if (isUserLoading) { // Use the context-specific loading state
+  if (isUserLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
@@ -100,3 +97,4 @@ export const useUser = (): UserContextType => {
   }
   return context;
 };
+

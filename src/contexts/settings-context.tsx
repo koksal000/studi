@@ -3,27 +3,26 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-// Toast importu kaldırıldı, çünkü bildirim tercihleri kaldırıldı.
 
 interface SettingsContextType {
   currentTheme: string | undefined;
   setAppTheme: (theme: string) => void;
-  siteNotificationsPreference: boolean; // Yeni eklendi
-  setSiteNotificationsPreference: (enabled: boolean) => void; // Yeni eklendi
+  siteNotificationsPreference: boolean;
+  setSiteNotificationsPreference: (enabled: boolean) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-const SITE_NOTIFICATIONS_KEY = 'camlicaKoyuSiteNotificationsEnabled'; // Yeni key
+const SITE_NOTIFICATIONS_KEY = 'camlicaKoyuSiteNotificationsEnabled';
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { theme, setTheme } = useTheme();
-  const [isLoading, setIsLoading] = useState(true);
-  const [siteNotificationsPreference, setSiteNotificationsPreferenceState] = useState(true); // Default true
+  const [isLoading, setIsLoading] = useState(true); // Remains true until theme AND preference loaded
+  const [siteNotificationsPreference, setSiteNotificationsPreferenceState] = useState(true);
 
   useEffect(() => {
-    setIsLoading(true);
-    // Load site notifications preference
+    setIsLoading(true); // Start loading
+    // Load site notifications preference from localStorage
     const storedPreference = localStorage.getItem(SITE_NOTIFICATIONS_KEY);
     if (storedPreference !== null) {
       setSiteNotificationsPreferenceState(storedPreference === 'true');
@@ -32,11 +31,9 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem(SITE_NOTIFICATIONS_KEY, 'true');
       setSiteNotificationsPreferenceState(true);
     }
-
-    // Request notification permission on load if not already set and preference is true
-    // This has been moved to useAnnouncements hook to be triggered when the hook is actually used
-    // to avoid permission prompt on every page load if user hasn't visited announcements or similar.
-
+    // Note: Theme loading is handled by next-themes internally.
+    // We set isLoading to false once our localStorage access is done.
+    // A more robust solution might wait for next-themes to report its status if needed.
     setIsLoading(false); 
   }, []); 
 
@@ -53,20 +50,26 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
           console.log("Site notification permission granted by user.");
         } else {
           console.log("Site notification permission denied by user.");
-          // Optionally inform user that notifications won't work if denied
         }
       });
     }
   };
 
-
-  if (isLoading) { // Bu, tema ve bildirim tercihi yüklenene kadar bekler
+  if (isLoading && typeof window !== 'undefined') { 
+     // Only show loader on client-side if still loading; theme is client-side.
+     // This helps prevent layout shifts or unstyled content during initial load.
      return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
+   if (typeof window === 'undefined' && isLoading) {
+    // On the server, if still "loading" (though localStorage won't be accessed), return null or basic structure to avoid errors.
+    // This case might not be hit often if isLoading is quickly set to false on client.
+    return null;
+  }
+
 
   return (
     <SettingsContext.Provider value={{ 

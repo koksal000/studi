@@ -29,8 +29,7 @@ export function useAnnouncements() {
   const { user } = useUser();
   const { lastOpenedNotificationTimestamp, setLastOpenedNotificationTimestamp: updateLastOpenedTimestamp, isStatusLoading } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
-  // useSettings'ten siteNotificationsPreference'ı alıyoruz
-  const { currentTheme, setAppTheme, siteNotificationsPreference } = useSettings() ?? { siteNotificationsPreference: true };
+  const { siteNotificationsPreference } = useSettings() ?? { siteNotificationsPreference: true };
 
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -40,7 +39,7 @@ export function useAnnouncements() {
 
   useEffect(() => {
     announcementsRef.current = announcements; 
-    if (isStatusLoading) return; // Wait for timestamp to load from IDB
+    if (isStatusLoading) return; // Wait for timestamp to load from localStorage
 
     if (lastOpenedNotificationTimestamp === null && announcements.length > 0 && initialDataLoadedRef.current) {
       updateLastOpenedTimestamp(Date.now());
@@ -66,11 +65,6 @@ export function useAnnouncements() {
         console.log("[SSE Announcements] Browser notification skipped: Browser permission not granted. Current status:", Notification.permission);
         return;
       }
-      // Check if document is visible logic was removed - it was causing notifications not to show
-      // if (document.visibilityState !== 'visible') {
-      //   console.log("[SSE Announcements] Document not visible, skipping foreground browser notification.");
-      //   return;
-      // }
 
       try {
         const notification = new Notification(title, {
@@ -81,7 +75,7 @@ export function useAnnouncements() {
           event.preventDefault();
           const appUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : 'http://localhost:9002');
           if (typeof window !== "undefined") {
-            window.open(appUrl + '/announcements', '_blank'); // Duyurular sayfasına yönlendir
+            window.open(appUrl + '/announcements', '_blank'); 
             if (window.focus) window.focus();
           }
           notification.close();
@@ -136,17 +130,17 @@ export function useAnnouncements() {
       
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-        // console.log('[SSE Announcements] Received full update via SSE:', updatedAnnouncementsFromServer.length, 'items.');
         
         const previousAnnouncements = announcementsRef.current;
         setAnnouncements(updatedAnnouncementsFromServer);
 
+        // This logic ensures that a notification is shown only for genuinely new announcements
+        // and not for those added by the current user themselves.
         if (updatedAnnouncementsFromServer.length > 0) {
             const latestServerAnnouncement = updatedAnnouncementsFromServer[0]; 
             const isTrulyNew = !previousAnnouncements.some(ann => ann.id === latestServerAnnouncement.id) ||
                                (new Date(latestServerAnnouncement.date).getTime() > new Date(previousAnnouncements.find(a => a.id === latestServerAnnouncement.id)?.date || 0).getTime());
             
-            // Kullanıcının kendi eklediği duyuru için bildirim gösterme
             const isAuthorSelf = user && (latestServerAnnouncement.authorId === `${user.name} ${user.surname}` || latestServerAnnouncement.author === `${user.name} ${user.surname}`);
 
             if (isTrulyNew && !isAuthorSelf) {

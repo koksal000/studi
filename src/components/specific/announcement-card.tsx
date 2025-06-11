@@ -24,7 +24,7 @@ import {
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
 import { useState, useRef, type FormEvent } from 'react';
 import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog';
-import { CommentItem } from './comment-item'; // Assuming CommentItem will be created
+import { CommentItem } from './comment-item';
 
 interface AnnouncementCardProps {
   announcement: Announcement;
@@ -106,12 +106,28 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     try {
       await addCommentToAnnouncement(announcement.id, commentText);
       setCommentText('');
-      setShowCommentInput(false); // Optionally hide input after submit
+      setShowCommentInput(false); 
     } catch (error) {
       // Error already toasted in hook
     } finally {
       setIsSubmittingComment(false);
     }
+  };
+
+  const renderAuthorInfo = () => {
+    if (announcement.authorId === "ADMIN_ACCOUNT") {
+      return (
+        <span className="flex items-center">
+          <Image src="https://files.catbox.moe/4dmtuq.png" alt="Yönetim Hesabı Logosu" width={24} height={24} className="mr-1.5 rounded-sm" />
+          {announcement.author}
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center">
+        <UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}
+      </span>
+    );
   };
 
   const renderMedia = () => {
@@ -148,7 +164,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe src={`https://player.vimeo.com/video/${videoId}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="Vimeo video player" className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
     if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
-      return <div className="my-4 p-3 bg-muted rounded-md"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center break-all"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</a></div>;
+      return <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center break-all w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</a></div>;
     }
     return null;
   };
@@ -169,7 +185,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
           <CardTitle className={isCompact ? "text-xl" : "text-2xl"}>{announcement.title}</CardTitle>
           <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center mt-1">
             <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
-            <span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>
+            {renderAuthorInfo()}
             {isCompact && announcement.media && <span className="flex items-center">{getCompactMediaIndicator()}</span>}
             {!isCompact && announcement.media && announcement.mediaType === 'url/link' && <span className="flex items-center"><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya Bağlantısı</span>}
           </div>

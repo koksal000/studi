@@ -22,10 +22,10 @@ export default function ContactPage() {
   const { addContactMessage } = useContactMessages();
 
   useEffect(() => {
-    if (user && user.email) { // Assuming user object might have an email
+    if (user && user.email) { 
        setFormData(prev => ({ ...prev, email: user.email || '' }));
     } else if (user) {
-       setFormData(prev => ({ ...prev, email: '' })); // Clear email if user has no email
+       setFormData(prev => ({ ...prev, email: '' })); 
     }
   }, [user]);
 
@@ -55,23 +55,21 @@ export default function ContactPage() {
     
     try {
       const payload = {
-        name: `${user.name} ${user.surname}`, // Name comes from logged-in user
+        name: `${user.name} ${user.surname}`, 
         email: formData.email,
         subject: formData.subject,
         message: formData.message,
       };
 
-      await addContactMessage(payload); // This now only sends to API
+      await addContactMessage(payload); 
 
       toast({
         title: "Mesajınız Gönderildi!",
         description: "En kısa sürede sizinle iletişime geçeceğiz.",
       });
-      setFormData({ email: user.email || '', subject: '', message: '' }); // Reset subject and message, keep email if user has one
+      setFormData({ email: user.email || '', subject: '', message: '' }); 
     } catch (error: any) {
       console.error("Form Submission Error:", error);
-      // Error toast is now handled within addContactMessage or by the API response
-      // No need to show a generic one here unless the hook re-throws and we want to catch it specifically
     } finally {
       setIsSubmitting(false);
     }
@@ -139,7 +137,8 @@ export default function ContactPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6 p-6 border rounded-lg shadow-sm bg-card">
-            <h3 className="text-xl font-semibold text-primary mb-4 border-b pb-2">Bize Mesaj Gönderin</h3>
+            <h3 className="text-xl font-semibold text-primary mb-2 border-b pb-2">Bize Mesaj Gönderin</h3>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">Gönderdiğiniz mesajlar kimseyle paylaşılmayacak olup, yalnızca site yöneticisine iletilerek taleplerinizin işleme alınması amacıyla kullanılacaktır.</p>
             <div className="space-y-2">
               <Label htmlFor="email" className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground"/> E-posta Adresiniz</Label>
               <Input id="email" type="email" placeholder="ornek@eposta.com" value={formData.email} onChange={handleChange} required disabled={isSubmitting} />

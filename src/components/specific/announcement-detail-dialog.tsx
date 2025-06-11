@@ -5,13 +5,13 @@ import type { Announcement, Comment } from '@/hooks/use-announcements';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import Image from 'next/image';
 import { UserCircle, CalendarDays, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2 } from 'lucide-react';
-import { useState, useRef, type FormEvent, useEffect } from 'react'; // Added useEffect here
+import { useState, useRef, type FormEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
-import { CommentItem } from './comment-item'; // Assuming CommentItem will be created
+import { CommentItem } from './comment-item';
 
 interface AnnouncementDetailDialogProps {
   isOpen: boolean;
@@ -24,12 +24,10 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   const { getAnnouncementById, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   
-  // Use local state for announcement to reflect updates from the hook
   const [announcement, setAnnouncement] = useState<Announcement | null>(initialAnnouncement);
   
   useEffect(() => {
     if (initialAnnouncement) {
-      // Fetch the latest version of the announcement when dialog opens or initialAnnouncement changes
       const updatedAnn = getAnnouncementById(initialAnnouncement.id);
       setAnnouncement(updatedAnn || initialAnnouncement);
     }
@@ -41,7 +39,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   const [isMuted, setIsMuted] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [showCommentInput, setShowCommentInput] = useState(false); // Separate state for dialog
+  const [showCommentInput, setShowCommentInput] = useState(false); 
 
   if (!announcement) return null;
 
@@ -52,6 +50,22 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
+  const renderAuthorInfoDialog = () => {
+    if (announcement.authorId === "ADMIN_ACCOUNT") {
+      return (
+        <span className="flex items-center">
+          <Image src="https://files.catbox.moe/4dmtuq.png" alt="Yönetim Hesabı Logosu" width={24} height={24} className="mr-1.5 rounded-sm" />
+          {announcement.author}
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center">
+        <UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}
+      </span>
+    );
+  };
+
   const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); } else { videoRef.current.pause(); setIsPlaying(false); }}};
   const toggleMute = () => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
 
@@ -59,7 +73,6 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); return; }
     try {
       await toggleAnnouncementLike(announcement.id);
-      // Optimistic update or rely on SSE, for now, fetch latest
       const updatedAnn = getAnnouncementById(announcement.id);
       if(updatedAnn) setAnnouncement(updatedAnn);
     } catch (error) {/* Hook toasts */}
@@ -74,7 +87,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
       await addCommentToAnnouncement(announcement.id, commentText);
       setCommentText('');
       setShowCommentInput(false);
-      const updatedAnn = getAnnouncementById(announcement.id); // Fetch latest after comment
+      const updatedAnn = getAnnouncementById(announcement.id); 
       if(updatedAnn) setAnnouncement(updatedAnn);
     } catch (error) {/* Hook toasts */} 
     finally { setIsSubmittingComment(false); }
@@ -111,7 +124,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe src={`https://player.vimeo.com/video/${videoId}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="Vimeo video player" className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
     if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
-        return <div className="my-4 p-3 bg-muted rounded-md"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center break-all"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</a></div>;
+        return <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center break-all w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</a></div>;
     }
     return null;
   };
@@ -125,7 +138,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
             <div className="text-muted-foreground">
               <div className="flex flex-wrap gap-x-3 gap-y-1 items-center mt-1 text-muted-foreground">
                 <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
-                <span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>
+                {renderAuthorInfoDialog()}
               </div>
             </div>
           </DialogDescription>
@@ -170,4 +183,3 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     </Dialog>
   );
 }
-

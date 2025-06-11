@@ -3,9 +3,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
-// import { useToast } from '@/hooks/use-toast'; // Toasts for SSE errors removed previously
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
-import { useSettings } from '@/contexts/settings-context';
+import { useSettings } from '@/contexts/settings-context'; // siteNotificationsPreference için
 
 export interface Announcement {
   id: string;
@@ -13,9 +12,9 @@ export interface Announcement {
   content: string;
   date: string; // ISO string
   author: string;
-  authorId?: string; // PeerJS ID of the author or user's name
-  media?: string | null; // Base64 data URI or external URL
-  mediaType?: string | null; // e.g., 'image/png', 'video/mp4', 'image/url', 'video/url', 'url/link'
+  authorId?: string; 
+  media?: string | null; 
+  mediaType?: string | null; 
 }
 
 export interface NewAnnouncementPayload {
@@ -28,11 +27,12 @@ export interface NewAnnouncementPayload {
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const { user } = useUser();
-  const { lastOpenedNotificationTimestamp, setLastOpenedNotificationTimestamp } = useAnnouncementStatus();
+  const { lastOpenedNotificationTimestamp, setLastOpenedNotificationTimestamp: updateLastOpenedTimestamp, isStatusLoading } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
-  const { siteNotificationsPreference } = useSettings();
+  // useSettings'ten siteNotificationsPreference'ı alıyoruz
+  const { currentTheme, setAppTheme, siteNotificationsPreference } = useSettings() ?? { siteNotificationsPreference: true };
 
-  // const { toast } = useToast(); // Toasts for SSE errors removed previously
+
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const initialDataLoadedRef = useRef(false); 
@@ -40,8 +40,10 @@ export function useAnnouncements() {
 
   useEffect(() => {
     announcementsRef.current = announcements; 
+    if (isStatusLoading) return; // Wait for timestamp to load from IDB
+
     if (lastOpenedNotificationTimestamp === null && announcements.length > 0 && initialDataLoadedRef.current) {
-      setLastOpenedNotificationTimestamp(Date.now());
+      updateLastOpenedTimestamp(Date.now());
       setUnreadCount(0);
     } else if (lastOpenedNotificationTimestamp) {
       const newUnreadCount = announcements.filter(
@@ -51,7 +53,7 @@ export function useAnnouncements() {
     } else {
       setUnreadCount(announcements.length > 0 && initialDataLoadedRef.current ? announcements.length : 0);
     }
-  }, [announcements, lastOpenedNotificationTimestamp, setLastOpenedNotificationTimestamp]);
+  }, [announcements, lastOpenedNotificationTimestamp, updateLastOpenedTimestamp, isStatusLoading]);
 
 
   const showNotification = useCallback((title: string, body: string) => {
@@ -59,31 +61,36 @@ export function useAnnouncements() {
       console.log("[SSE Announcements] Browser notification skipped: User preference is off.");
       return;
     }
-    if (Notification.permission !== 'granted') {
-      console.log("[SSE Announcements] Browser notification skipped: Browser permission not granted. Current status:", Notification.permission);
-      return;
-    }
-    if (document.visibilityState !== 'visible') {
-      console.log("[SSE Announcements] Document not visible, skipping foreground browser notification.");
-      return;
-    }
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission !== 'granted') {
+        console.log("[SSE Announcements] Browser notification skipped: Browser permission not granted. Current status:", Notification.permission);
+        return;
+      }
+      // Check if document is visible logic was removed - it was causing notifications not to show
+      // if (document.visibilityState !== 'visible') {
+      //   console.log("[SSE Announcements] Document not visible, skipping foreground browser notification.");
+      //   return;
+      // }
 
-    try {
-      const notification = new Notification(title, {
-        body: body,
-        icon: '/images/logo.png', // Ensure this path is correct in your public folder
-      });
-      notification.onclick = (event) => {
-        event.preventDefault();
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://studi-ldexx24gi-koksals-projects-00474b3b.vercel.app/';
-        window.open(appUrl, '_blank');
-        if (window.focus) window.focus();
-        notification.close();
-      };
-    } catch (err: any) {
-      console.error("[SSE Announcements] Browser notification construction error:", err);
-      // Toast for this specific error was removed per user request to avoid "illegal constructor" toasts.
-      // If an alternative UI feedback is needed, it can be added here.
+      try {
+        const notification = new Notification(title, {
+          body: body,
+          icon: '/images/logo.png', 
+        });
+        notification.onclick = (event) => {
+          event.preventDefault();
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : 'http://localhost:9002');
+          if (typeof window !== "undefined") {
+            window.open(appUrl + '/announcements', '_blank'); // Duyurular sayfasına yönlendir
+            if (window.focus) window.focus();
+          }
+          notification.close();
+        };
+      } catch (err: any) {
+        console.error("[SSE Announcements] Browser notification construction error:", err);
+      }
+    } else {
+        console.log("[SSE Announcements] Browser notification skipped: Notifications API not available.");
     }
   }, [siteNotificationsPreference]);
 
@@ -91,26 +98,23 @@ export function useAnnouncements() {
     initialDataLoadedRef.current = false;
     setIsLoading(true);
 
-    // Fetch initial announcements
     fetch('/api/announcements')
       .then(res => {
         if (!res.ok) {
           console.error(`[Announcements] Failed to fetch initial announcements: ${res.status} ${res.statusText}`);
-          // Do not set error state here, let SSE attempt to connect
-          return []; // Return empty array on fetch error to avoid breaking JSON.parse
+          return []; 
         }
         return res.json();
       })
       .then((data: Announcement[]) => {
-        // console.log('[Announcements] Fetched initial data:', data.length, 'items');
-        setAnnouncements(data); // Set initial data, SSE will provide further updates
+        setAnnouncements(data); 
       })
       .catch(err => {
         console.error("[Announcements] Error fetching or parsing initial announcements:", err);
-        setAnnouncements([]); // Set to empty on error
+        setAnnouncements([]); 
       })
       .finally(() => {
-        // setIsLoading(false) will be handled by the first SSE message or error
+        // setIsLoading will be handled by SSE or error
       });
     
     if (eventSourceRef.current) {
@@ -132,21 +136,20 @@ export function useAnnouncements() {
       
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-        // The entire list of announcements is received from the server.
-        // Setting this state will cause components consuming this hook (like Navbar/AnnouncementPopover)
-        // to re-render with the new list, effectively removing any deleted announcements.
-        // console.log('[SSE Announcements] Received full update via SSE:', updatedAnnouncementsFromServer.length, 'items. Notification popover will be updated with this list.');
+        // console.log('[SSE Announcements] Received full update via SSE:', updatedAnnouncementsFromServer.length, 'items.');
         
         const previousAnnouncements = announcementsRef.current;
         setAnnouncements(updatedAnnouncementsFromServer);
 
-        // Show browser notification for genuinely new announcements
         if (updatedAnnouncementsFromServer.length > 0) {
-            const latestServerAnnouncement = updatedAnnouncementsFromServer[0]; // Assumes newest is first
+            const latestServerAnnouncement = updatedAnnouncementsFromServer[0]; 
             const isTrulyNew = !previousAnnouncements.some(ann => ann.id === latestServerAnnouncement.id) ||
                                (new Date(latestServerAnnouncement.date).getTime() > new Date(previousAnnouncements.find(a => a.id === latestServerAnnouncement.id)?.date || 0).getTime());
+            
+            // Kullanıcının kendi eklediği duyuru için bildirim gösterme
+            const isAuthorSelf = user && (latestServerAnnouncement.authorId === `${user.name} ${user.surname}` || latestServerAnnouncement.author === `${user.name} ${user.surname}`);
 
-            if (isTrulyNew && (latestServerAnnouncement.authorId !== (user ? `${user.name} ${user.surname}` : ''))) {
+            if (isTrulyNew && !isAuthorSelf) {
                  showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
             }
         }
@@ -158,24 +161,23 @@ export function useAnnouncements() {
     newEventSource.onerror = (errorEvent: Event) => {
       const target = errorEvent.target as EventSource;
       if (eventSourceRef.current !== target) {
-        // console.log("[SSE Announcements] Error from an old EventSource instance, ignoring.");
         return; 
       }
       const readyState = target?.readyState;
       const eventType = errorEvent.type || 'unknown event type';
       
-      if (readyState === EventSource.CONNECTING) { // readyState: 0
+      if (readyState === EventSource.CONNECTING) { 
         console.warn(
-          `[SSE Announcements] Initial connection failed or attempting to reconnect. EventSource readyState: ${readyState}, Event Type: ${eventType}. Full Event:`, errorEvent,
+          `[SSE Announcements] Initial connection failed or attempting to reconnect. EventSource readyState: ${readyState}, Event Type: ${eventType}.`,
           "This might be due to NEXT_PUBLIC_APP_URL not being set correctly in your deployment environment, or the stream API endpoint having issues."
         );
-      } else if (readyState === EventSource.CLOSED) { // readyState: 2
+      } else if (readyState === EventSource.CLOSED) { 
          console.warn(
-          `[SSE Announcements] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
+          `[SSE Announcements] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect.`
         );
-      } else { // Typically readyState: 1 (OPEN) but an error occurred
+      } else { 
         console.error(
-          `[SSE Announcements] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
+          `[SSE Announcements] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}.`
         );
       }
 
@@ -187,21 +189,18 @@ export function useAnnouncements() {
 
     return () => {
       if (newEventSource) {
-        // console.log('[SSE Announcements] Closing EventSource connection.');
         newEventSource.close();
       }
       eventSourceRef.current = null;
     };
-  }, [showNotification, user, setLastOpenedNotificationTimestamp]); 
+  }, [showNotification, user, updateLastOpenedTimestamp]); 
 
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
     if (!user) {
-      // toast({ title: "Giriş Gerekli", description: "Duyuru eklemek için giriş yapmalısınız.", variant: "destructive" });
       console.error("Add announcement failed: User not logged in");
       throw new Error("User not logged in");
     }
      if (!payload.title?.trim() || !payload.content?.trim()) {
-        // toast({ title: "Eksik Bilgi", description: "Başlık ve içerik boş bırakılamaz.", variant: "destructive" });
         console.error("Add announcement failed: Title and content are required.");
         throw new Error("Title and content are required.");
     }
@@ -214,7 +213,7 @@ export function useAnnouncements() {
       mediaType: payload.mediaType || null,
       date: new Date().toISOString(),
       author: `${user.name} ${user.surname}`,
-      authorId: `${user.name} ${user.surname}`, // Using combined name as authorId for simplicity
+      authorId: `${user.name} ${user.surname}`, 
     };
 
     try {
@@ -226,22 +225,17 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        // toast({ title: "Duyuru Gönderilemedi", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
         console.error("Failed to send new announcement to server:", errorData.message);
         throw new Error(errorData.message || 'Duyuru sunucuya iletilemedi');
       }
-      // UI update will happen via SSE from the server broadcasting the change to all clients
-      // console.log('[Announcements] Successfully sent new announcement to server.');
     } catch (error: any) {
       console.error("[Announcements] Error in addAnnouncement:", error);
-      // toast({ title: "Duyuru Eklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
       throw error;
     }
   }, [user]);
 
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user) {
-      // toast({ title: "Giriş Gerekli", description: "Duyuru silmek için giriş yapmalısınız.", variant: "destructive" });
       console.error("Delete announcement failed: User not logged in");
       throw new Error("User not logged in");
     }
@@ -253,15 +247,11 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        // toast({ title: "Duyuru Silinemedi", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
         console.error("Failed to delete announcement on server:", errorData.message);
         throw new Error(errorData.message || 'Duyuru silme bilgisi sunucuya iletilemedi');
       }
-      // UI update will happen via SSE
-      // console.log(`[Announcements] Successfully sent delete request for announcement ${id} to server.`);
     } catch (error: any) {
       console.error("[Announcements] Error in deleteAnnouncement:", error);
-      // toast({ title: "Duyuru Silinemedi", description: error.message || "Duyuru silme işlemi sırasında bir sorun oluştu.", variant: "destructive" });
       throw error;
     }
   }, [user]);
@@ -269,9 +259,7 @@ export function useAnnouncements() {
 
   const getAnnouncementById = useCallback((id: string): Announcement | undefined => {
     return announcementsRef.current.find(ann => ann.id === id);
-  }, []); // announcementsRef.current will always be up-to-date
+  }, []); 
 
   return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading, unreadCount };
 }
-
-    

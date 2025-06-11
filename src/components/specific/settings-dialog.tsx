@@ -6,11 +6,13 @@ import { useUser } from '@/contexts/user-context';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-// Switch importu kaldırıldı
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Switch } from "@/components/ui/switch"; // Switch eklendi
 import { useToast } from '@/hooks/use-toast';
-import { Moon, Sun, Laptop } from 'lucide-react';
+import { Moon, Sun, Laptop, Bell, BellOff } from 'lucide-react'; // Bell ikonları eklendi
 import { VILLAGE_NAME } from '@/lib/constants';
+import { useEffect, useState } from 'react'; // useState eklendi
+
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -18,12 +20,30 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
-  // notificationsEnabled ve setNotificationsPreference kaldırıldı
-  const { currentTheme, setAppTheme } = useSettings();
+  const { 
+    currentTheme, 
+    setAppTheme, 
+    siteNotificationsPreference, 
+    setSiteNotificationsPreference 
+  } = useSettings();
   const { user, logout } = useUser();
   const { toast } = useToast();
 
+  // Local state for the switch to immediately reflect changes
+  const [localNotificationsEnabled, setLocalNotificationsEnabled] = useState(siteNotificationsPreference);
+
+  useEffect(() => {
+    // Sync local state if the context value changes (e.g., on initial load)
+    setLocalNotificationsEnabled(siteNotificationsPreference);
+  }, [siteNotificationsPreference]);
+
+  const handleNotificationSwitchChange = (checked: boolean) => {
+    setLocalNotificationsEnabled(checked); // Update local state immediately
+    // The actual preference is set in context on save
+  };
+
   const handleSaveSettings = () => {
+    setSiteNotificationsPreference(localNotificationsEnabled); // Save the local state to context
     toast({
       title: "Ayarlar Kaydedildi",
       description: "Tercihleriniz güncellendi.",
@@ -31,7 +51,6 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
     onOpenChange(false);
   };
 
-  // handleNotificationSwitchChange fonksiyonu kaldırıldı
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -39,14 +58,14 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle>Site Ayarları</DialogTitle>
           <DialogDescription>
-            Site görünümünü buradan yönetebilirsiniz.
+            Site görünümünü ve bildirim tercihlerini buradan yönetebilirsiniz.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4">
           <div className="space-y-3">
             <Label className="text-base font-medium">Tema Seçimi</Label>
             <RadioGroup
-              defaultValue={currentTheme || "system"}
+              value={currentTheme || "system"} // value prop'u eklendi
               onValueChange={(value) => setAppTheme(value)}
               className="flex space-x-2 sm:space-x-0 sm:grid sm:grid-cols-3 gap-2"
             >
@@ -68,7 +87,26 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
             </RadioGroup>
           </div>
 
-          {/* Bildirim Ayarları bölümü kaldırıldı */}
+          <div className="space-y-3">
+            <Label className="text-base font-medium">Site Bildirimleri</Label>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center space-x-2">
+                {localNotificationsEnabled ? <Bell className="h-5 w-5 text-primary" /> : <BellOff className="h-5 w-5 text-muted-foreground" />}
+                <span className="text-sm">
+                  Yeni duyurular için tarayıcı bildirimlerini {localNotificationsEnabled ? 'açık' : 'kapalı'}.
+                </span>
+              </div>
+              <Switch
+                id="site-notifications-switch"
+                checked={localNotificationsEnabled}
+                onCheckedChange={handleNotificationSwitchChange}
+                aria-label="Site bildirimlerini aç/kapat"
+              />
+            </div>
+             <p className="text-xs text-muted-foreground px-1">
+                Tarayıcı bildirimleri, site açıkken yeni duyurular geldiğinde küçük bir uyarı gösterir. Tarayıcınızdan ayrıca izin vermeniz gerekebilir.
+            </p>
+          </div>
           
           {user && (
             <div className="space-y-3">

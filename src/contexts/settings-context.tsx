@@ -3,37 +3,64 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { useToast } from '@/hooks/use-toast'; 
+// Toast importu kaldırıldı, çünkü bildirim tercihleri kaldırıldı.
 
 interface SettingsContextType {
-  // notificationsEnabled ve setNotificationsPreference kaldırıldı
   currentTheme: string | undefined;
   setAppTheme: (theme: string) => void;
+  siteNotificationsPreference: boolean; // Yeni eklendi
+  setSiteNotificationsPreference: (enabled: boolean) => void; // Yeni eklendi
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-// NOTIFICATIONS_ENABLED_KEY kaldırıldı
+const SITE_NOTIFICATIONS_KEY = 'camlicaKoyuSiteNotificationsEnabled'; // Yeni key
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
-  // notificationsEnabled ve setNotificationsEnabledState kaldırıldı
   const { theme, setTheme } = useTheme();
-  const [isLoading, setIsLoading] = useState(true); // Bu hala tema için gerekli olabilir.
-  // const { toast } = useToast(); // Artık kullanılmıyor olabilir, eğer sadece bildirimler içinse
+  const [isLoading, setIsLoading] = useState(true);
+  const [siteNotificationsPreference, setSiteNotificationsPreferenceState] = useState(true); // Default true
 
   useEffect(() => {
-    // Sadece tema yüklenmesi için veya diğer başlangıç ayarları için kalabilir.
-    // Bildirim izni ile ilgili mantık kaldırıldı.
+    setIsLoading(true);
+    // Load site notifications preference
+    const storedPreference = localStorage.getItem(SITE_NOTIFICATIONS_KEY);
+    if (storedPreference !== null) {
+      setSiteNotificationsPreferenceState(storedPreference === 'true');
+    } else {
+      // If not set, default to true and save it
+      localStorage.setItem(SITE_NOTIFICATIONS_KEY, 'true');
+      setSiteNotificationsPreferenceState(true);
+    }
+
+    // Request notification permission on load if not already set and preference is true
+    // This has been moved to useAnnouncements hook to be triggered when the hook is actually used
+    // to avoid permission prompt on every page load if user hasn't visited announcements or similar.
+
     setIsLoading(false); 
   }, []); 
-
-  // setNotificationsPreference fonksiyonu kaldırıldı
 
   const setAppTheme = (newTheme: string) => {
     setTheme(newTheme);
   };
 
-  if (isLoading) {
+  const setSiteNotificationsPreference = (enabled: boolean) => {
+    localStorage.setItem(SITE_NOTIFICATIONS_KEY, enabled.toString());
+    setSiteNotificationsPreferenceState(enabled);
+    if (enabled && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          console.log("Site notification permission granted by user.");
+        } else {
+          console.log("Site notification permission denied by user.");
+          // Optionally inform user that notifications won't work if denied
+        }
+      });
+    }
+  };
+
+
+  if (isLoading) { // Bu, tema ve bildirim tercihi yüklenene kadar bekler
      return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
@@ -42,7 +69,12 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <SettingsContext.Provider value={{ currentTheme: theme, setAppTheme }}>
+    <SettingsContext.Provider value={{ 
+      currentTheme: theme, 
+      setAppTheme,
+      siteNotificationsPreference, 
+      setSiteNotificationsPreference 
+    }}>
       {children}
     </SettingsContext.Provider>
   );

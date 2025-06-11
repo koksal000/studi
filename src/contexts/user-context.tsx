@@ -3,65 +3,68 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ADMIN_PASSWORD } from '@/lib/constants';
+import { getUserProfile, setUserProfile, deleteUserProfile } from '@/lib/idb';
 
 interface User {
   name: string;
   surname: string;
-  // email?: string; // E-posta alanı kaldırıldı
 }
 
 interface UserContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (name: string, surname: string) => void; // Email parametresi kaldırıldı
-  logout: () => void;
+  login: (name: string, surname: string) => Promise<void>;
+  logout: () => Promise<void>;
   checkAdminPassword: (password: string) => boolean;
   showEntryForm: boolean;
   setShowEntryForm: (show: boolean) => void;
+  isUserLoading: boolean; // Renamed from isLoading to avoid conflict if other contexts use it
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-const USER_DATA_KEY = 'camlicaKoyuUserData';
+// USER_DATA_KEY is no longer needed as we use 'currentUser' as fixed key in IndexedDB
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showEntryForm, setShowEntryForm] = useState(false);
+  const [isUserLoading, setIsUserLoading] = useState(true); // Start true until DB check is done
+  const [showEntryForm, setShowEntryForm] = useState(false); // Default to false, useEffect will show if no user
 
 
   useEffect(() => {
-    try {
-      const storedUserData = localStorage.getItem(USER_DATA_KEY);
-      if (storedUserData) {
-        const parsedUser = JSON.parse(storedUserData) as User;
-        setUser(parsedUser);
-        setShowEntryForm(false);
-      } else {
-        setShowEntryForm(true);
+    const loadUser = async () => {
+      setIsUserLoading(true);
+      try {
+        const storedUser = await getUserProfile();
+        if (storedUser) {
+          setUserState({ name: storedUser.name, surname: storedUser.surname });
+          setShowEntryForm(false);
+        } else {
+          setShowEntryForm(true);
+        }
+      } catch (error) {
+        console.error("Failed to load user data from IndexedDB", error);
+        setShowEntryForm(true); 
+      } finally {
+        setIsUserLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to parse user data from localStorage", error);
-      setShowEntryForm(true); 
-    }
-    setIsLoading(false);
+    };
+
+    loadUser();
   }, []);
 
-  const login = (name: string, surname: string) => { // email parametresi kaldırıldı
+  const login = async (name: string, surname: string) => {
     const newUser: User = { name, surname };
-    // if (email && email.trim() !== '') { // email ile ilgili mantık kaldırıldı
-    //   newUser.email = email.trim();
-    // }
-    setUser(newUser);
-    localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
+    setUserState(newUser);
+    await setUserProfile(name, surname);
     setShowEntryForm(false);
   };
 
-  const logout = () => {
-    setUser(null);
+  const logout = async () => {
+    setUserState(null);
     setIsAdmin(false);
-    localStorage.removeItem(USER_DATA_KEY);
+    await deleteUserProfile();
     setShowEntryForm(true);
   };
 
@@ -74,7 +77,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
   
-  if (isLoading) {
+  if (isUserLoading) { // Use the context-specific loading state
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary"></div>
@@ -84,7 +87,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <UserContext.Provider value={{ user, isAdmin, login, logout, checkAdminPassword, showEntryForm, setShowEntryForm }}>
+    <UserContext.Provider value={{ user, isAdmin, login, logout, checkAdminPassword, showEntryForm, setShowEntryForm, isUserLoading }}>
       {children}
     </UserContext.Provider>
   );

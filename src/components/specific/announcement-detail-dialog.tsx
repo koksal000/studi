@@ -5,7 +5,7 @@ import type { Announcement, Comment } from '@/hooks/use-announcements';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import Image from 'next/image';
 import { UserCircle, CalendarDays, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2 } from 'lucide-react';
-import { useState, useRef, type FormEvent } from 'react';
+import { useState, useRef, type FormEvent, useEffect } from 'react'; // Added useEffect here
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useUser } from '@/contexts/user-context';
@@ -170,3 +170,4 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     </Dialog>
   );
 }
+

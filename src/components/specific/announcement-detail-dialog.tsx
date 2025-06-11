@@ -27,9 +27,13 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   const [announcement, setAnnouncement] = useState<Announcement | null>(initialAnnouncement);
   
   useEffect(() => {
-    if (initialAnnouncement) {
+    if (initialAnnouncement && isOpen) { // Also check isOpen to refetch when dialog becomes visible
       const updatedAnn = getAnnouncementById(initialAnnouncement.id);
       setAnnouncement(updatedAnn || initialAnnouncement);
+    } else if (!isOpen) {
+      // Reset state or specific parts if needed when dialog closes
+      setShowCommentInput(false);
+      setCommentText('');
     }
   }, [initialAnnouncement, getAnnouncementById, isOpen]);
 
@@ -124,7 +128,21 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe src={`https://player.vimeo.com/video/${videoId}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="Vimeo video player" className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
     if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
-        return <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center break-all w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</a></div>;
+        return (
+          <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden">
+            <a 
+              href={announcement.media} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-primary hover:underline flex items-center w-full"
+            >
+              <Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>
+              <span className="truncate"> {/* Added truncate here */}
+                {announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}
+              </span>
+            </a>
+          </div>
+        );
     }
     return null;
   };

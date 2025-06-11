@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Announcement, Comment } from '@/hooks/use-announcements';
+import type { Announcement } from '@/hooks/use-announcements';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -163,8 +163,22 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
       const videoId = videoIdMatch ? videoIdMatch[1] : null;
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe src={`https://player.vimeo.com/video/${videoId}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="Vimeo video player" className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
-    if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
-      return <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center break-all w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</a></div>;
+     if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
+      return (
+        <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden">
+          <a 
+            href={announcement.media} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-primary hover:underline flex items-center w-full"
+          >
+            <Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>
+            <span className="truncate">
+              {announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}
+            </span>
+          </a>
+        </div>
+      );
     }
     return null;
   };
@@ -187,7 +201,11 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
             <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
             {renderAuthorInfo()}
             {isCompact && announcement.media && <span className="flex items-center">{getCompactMediaIndicator()}</span>}
-            {!isCompact && announcement.media && announcement.mediaType === 'url/link' && <span className="flex items-center"><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya Bağlantısı</span>}
+            {!isCompact && announcement.media && (announcement.mediaType === 'url/link' || announcement.mediaType === 'video/url') && 
+             !/\.(jpeg|jpg|gif|png|webp|mp4|webm|ogg)(\?|$)/i.test(announcement.media) && 
+             !/youtu\.?be/i.test(announcement.media) && !/vimeo\.com/i.test(announcement.media) &&
+             <span className="flex items-center"><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya Bağlantısı</span>
+            }
           </div>
         </CardHeader>
         <CardContent>

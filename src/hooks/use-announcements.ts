@@ -11,20 +11,23 @@ export interface Like {
   userId: string; // user.name + " " + user.surname for now
 }
 
+export interface Reply {
+  id: string;
+  authorName: string; // user.name + " " + user.surname
+  authorId: string; // user.name + " " + user.surname for association
+  text: string;
+  date: string; // ISO string
+  replyingToCommentAuthorName: string; // Name of the author of the comment being replied to
+}
+
 export interface Comment {
   id: string;
   authorName: string; // user.name + " " + user.surname
-  authorId: string; // user.name + " " + user.surname
+  authorId: string; // user.name + " " + user.surname for association
   text: string;
   date: string; // ISO string
-  // likes?: Like[]; // For future comment liking
-  // replies?: Reply[]; // For future replies
+  replies?: Reply[];
 }
-
-// export interface Reply extends Comment {
-//   replyingToCommentId: string;
-//   replyingToAuthorName?: string;
-// }
 
 export interface Announcement {
   id:string;
@@ -51,16 +54,23 @@ interface ToggleLikePayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
   announcementId: string;
   userId: string;
-  userName: string; // for author field if needed, though not directly used for like entity
+  userName: string;
 }
 
 interface AddCommentPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date'>; // API will generate id and date
+  comment: Omit<Comment, 'id' | 'date' | 'replies'>;
 }
 
-type AnnouncementApiPayload = ToggleLikePayload | AddCommentPayload | Announcement; // Announcement for POST new
+interface AddReplyPayload {
+  action: "ADD_REPLY_TO_COMMENT";
+  announcementId: string;
+  commentId: string;
+  reply: Omit<Reply, 'id' | 'date'>;
+}
+
+type AnnouncementApiPayload = ToggleLikePayload | AddCommentPayload | AddReplyPayload | Announcement;
 
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -105,7 +115,7 @@ export function useAnnouncements() {
       try {
         const notification = new Notification(title, {
           body: body,
-          icon: '/images/logo.png',
+          icon: '/images/logo.png', // Make sure this path is correct
         });
         notification.onclick = (event) => {
           event.preventDefault();
@@ -179,7 +189,6 @@ export function useAnnouncements() {
                  showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
             }
         } else if (updatedAnnouncementsFromServer.length > previousAnnouncements.length && updatedAnnouncementsFromServer.length > 0) {
-            // This handles the very first announcement or if prevAnnouncements was empty
             const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
             const isAuthorSelf = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
             if (!isAuthorSelf) {
@@ -192,8 +201,6 @@ export function useAnnouncements() {
     };
 
     newEventSource.onerror = (errorEvent: Event) => {
-      // console.error('[SSE Announcements] Connection error:', errorEvent);
-      // Existing error handling logic...
        const target = errorEvent.target as EventSource;
       if (eventSourceRef.current !== target) {
         return; 
@@ -241,7 +248,6 @@ export function useAnnouncements() {
         toast({ title: "İşlem Başarısız", description: errorData.message || 'Sunucu hatası.', variant: "destructive" });
         throw new Error(errorData.message || 'Sunucu hatası.');
       }
-      // UI will update via SSE
     } catch (error) {
       console.error("[Announcements] API request error:", error);
       if (!(error instanceof Error && error.message.includes('Sunucu hatası'))) {
@@ -267,12 +273,11 @@ export function useAnnouncements() {
       likes: [],
       comments: [],
     };
-    await sendApiRequest(newAnnouncementData); // This is a full Announcement object, API will treat it as add new.
+    await sendApiRequest(newAnnouncementData);
   }, [user, isAdmin, sendApiRequest]);
 
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user) throw new Error("User not logged in");
-    // No optimistic UI update here, SSE will handle
     try {
       const response = await fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
       if (!response.ok) {
@@ -295,7 +300,7 @@ export function useAnnouncements() {
     await sendApiRequest({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId });
   }, [user, sendApiRequest, toast]);
 
-  const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
+  const addCommentToAnnouncementHook = useCallback(async (announcementId: string, text: string) => {
     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Yorum yapmak için giriş yapmalısınız.", variant: "destructive"});
       return;
@@ -305,9 +310,9 @@ export function useAnnouncements() {
       return;
     }
     const authorName = `${user.name} ${user.surname}`;
-    const authorId = authorName; // Using name as ID for now
+    const authorId = authorName;
 
-    const commentPayload: Omit<Comment, 'id' | 'date'> = {
+    const commentPayload: Omit<Comment, 'id' | 'date' | 'replies'> = {
       authorName,
       authorId,
       text,
@@ -315,9 +320,41 @@ export function useAnnouncements() {
     await sendApiRequest({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: commentPayload });
   }, [user, sendApiRequest, toast]);
 
+  const addReplyToCommentHook = useCallback(async (announcementId: string, commentId: string, text: string, replyingToCommentAuthorName: string) => {
+    if (!user) {
+      toast({ title: "Giriş Gerekli", description: "Yanıtlamak için giriş yapmalısınız.", variant: "destructive"});
+      return;
+    }
+     if (!text.trim()) {
+      toast({ title: "Yanıt Boş Olamaz", description: "Lütfen bir yanıt yazın.", variant: "destructive"});
+      return;
+    }
+    const authorName = `${user.name} ${user.surname}`;
+    const authorId = authorName;
+
+    const replyPayload: Omit<Reply, 'id' | 'date'> = {
+        authorName,
+        authorId,
+        text,
+        replyingToCommentAuthorName,
+    };
+    await sendApiRequest({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: replyPayload });
+  }, [user, sendApiRequest, toast]);
+
+
   const getAnnouncementById = useCallback((id: string): Announcement | undefined => {
     return announcementsRef.current.find(ann => ann.id === id);
   }, []);
 
-  return { announcements, addAnnouncement, deleteAnnouncement, getAnnouncementById, isLoading, unreadCount, toggleAnnouncementLike, addCommentToAnnouncement };
+  return { 
+    announcements, 
+    addAnnouncement, 
+    deleteAnnouncement, 
+    getAnnouncementById, 
+    isLoading, 
+    unreadCount, 
+    toggleAnnouncementLike, 
+    addCommentToAnnouncement: addCommentToAnnouncementHook,
+    addReplyToComment: addReplyToCommentHook
+  };
 }

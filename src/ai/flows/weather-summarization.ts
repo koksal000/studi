@@ -239,12 +239,40 @@ const summarizeWeatherFlow = ai.defineFlow(
       } : undefined,
     };
 
-    const {output} = await formatOpenMeteoDataPrompt(promptInputData);
-    if (!output) {
-        throw new Error("Hava durumu özetleme prompt'u bir çıktı döndürmedi.");
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 2000; // 2 seconds
+    let attempts = 0;
+
+    while (attempts < MAX_RETRIES) {
+      try {
+        const {output} = await formatOpenMeteoDataPrompt(promptInputData);
+        if (!output) {
+            throw new Error("Hava durumu özetleme prompt'u bir çıktı döndürmedi.");
+        }
+        // Success
+        return { ...output, currentWeatherCode: apiResponseData.current.weathercode };
+      } catch (e: any) {
+        attempts++;
+        const errorMessage = e.message || "";
+        const isServiceUnavailable = errorMessage.includes("503") && errorMessage.includes("Service Unavailable");
+        const isEmptyOutput = errorMessage.includes("Hava durumu özetleme prompt'u bir çıktı döndürmedi.");
+
+        if ((isServiceUnavailable || isEmptyOutput) && attempts < MAX_RETRIES) {
+          console.warn(`[WeatherSummarization] AI Model error (Attempt ${attempts}/${MAX_RETRIES}): ${errorMessage}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        } else {
+          console.error("[WeatherSummarization] Error calling formatOpenMeteoDataPrompt after all retries or for non-retryable error:", e);
+          if (isServiceUnavailable) {
+            throw new Error("Hava durumu modeli şu anda aşırı yoğun. Lütfen daha sonra tekrar deneyin.");
+          }
+          throw new Error(errorMessage || "Hava durumu özeti oluşturulurken bilinmeyen bir hata oluştu.");
+        }
+      }
     }
-    // Ensure current weather code is passed through
-    return { ...output, currentWeatherCode: apiResponseData.current.weathercode };
+    // Should not be reached if the loop logic is correct, but as a fallback:
+    throw new Error("Hava durumu özeti maksimum deneme sayısına ulaşıldıktan sonra oluşturulamadı.");
   }
 );
 
+
+    

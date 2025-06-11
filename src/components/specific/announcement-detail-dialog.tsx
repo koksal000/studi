@@ -16,24 +16,21 @@ import { CommentItem } from './comment-item';
 interface AnnouncementDetailDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  announcement: Announcement | null; // Make it nullable
+  announcement: Announcement | null; 
 }
 
 export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: initialAnnouncement }: AnnouncementDetailDialogProps) {
-  const { user } = useUser();
+  const { user, isAdmin } = useUser();
   const { getAnnouncementById, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   
-  // Use a local state for the announcement being displayed in the dialog
   const [announcement, setAnnouncement] = useState<Announcement | null>(initialAnnouncement);
   
   useEffect(() => {
     if (initialAnnouncement && isOpen) {
-      // Fetch the latest version of the announcement when dialog opens or initialAnnouncement changes
       const updatedAnn = getAnnouncementById(initialAnnouncement.id);
-      setAnnouncement(updatedAnn || initialAnnouncement); // Use updated if found, else initial
+      setAnnouncement(updatedAnn || initialAnnouncement); 
     } else if (!isOpen) {
-      // Reset state or specific parts if needed when dialog closes
       setShowCommentInput(false);
       setCommentText('');
     }
@@ -47,9 +44,17 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false); 
 
-  if (!announcement) return null; // If no announcement, render nothing
+  const handleDialogClose = (openState: boolean) => {
+    if (!openState && videoRef.current) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+    onOpenChange(openState);
+  };
 
-  const currentUserIdentifier = user ? `${user.name} ${user.surname}` : null;
+  if (!announcement) return null; 
+
+  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
   const hasLiked = announcement.likes && announcement.likes.some(like => like.userId === currentUserIdentifier);
 
   const formattedDate = new Date(announcement.date).toLocaleDateString('tr-TR', {
@@ -75,8 +80,6 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); return; }
     try {
       await toggleAnnouncementLike(announcement.id);
-      // The useAnnouncements hook will update the global state,
-      // and the useEffect above will update the local 'announcement' state for this dialog.
     } catch (error) {/* Hook toasts */}
   };
 
@@ -89,19 +92,20 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
       await addCommentToAnnouncement(announcement.id, commentText);
       setCommentText('');
       setShowCommentInput(false);
-      // Global state updates via hook, useEffect re-fetches for dialog
     } catch (error) {/* Hook toasts */} 
     finally { setIsSubmittingComment(false); }
   };
   
-  const handleCommentOrReplyDeletedInDialog = () => {
-    // Force re-fetch of announcement data to update comment/reply counts and lists
-    const updatedAnn = getAnnouncementById(announcement.id);
-    if (updatedAnn) {
-      setAnnouncement(updatedAnn);
-    } else {
-      // If the whole announcement was somehow deleted while dialog is open
-      onOpenChange(false); // Close dialog
+  const handleCommentOrReplyActionInDialog = () => {
+    // This forces a re-fetch of the announcement data for the dialog
+    if (announcement) {
+        const updatedAnn = getAnnouncementById(announcement.id);
+        if (updatedAnn) {
+            setAnnouncement(updatedAnn);
+        } else {
+            // Announcement was deleted, close dialog
+            onOpenChange(false);
+        }
     }
   };
 
@@ -142,7 +146,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { onOpenChange(open); if (!open && videoRef.current) { videoRef.current.pause(); setIsPlaying(false); } }}>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0">
         <DialogHeader className="p-4 sm:p-6 pb-3 border-b flex-shrink-0">
           <DialogTitle className="text-xl sm:text-2xl">{announcement.title}</DialogTitle>
@@ -165,7 +169,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
                 <ThumbsUp className={`mr-2 h-4 w-4 ${hasLiked ? '' : 'text-primary'}`} />
                 {hasLiked ? "Beğenildi" : "Beğen"} ({announcement.likes?.length || 0})
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowCommentInput(!showCommentInput)} disabled={!user}>
+              <Button variant="outline" size="sm" onClick={() => setShowCommentInput(!showCommentInput)} disabled={!user || isSubmittingComment}>
                 <MessageCircle className="mr-2 h-4 w-4 text-primary" />
                 Yorum Yap ({announcement.comments?.length || 0})
               </Button>
@@ -185,7 +189,12 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
               <div className="space-y-3 mt-4">
                 <h4 className="text-md font-semibold text-primary">Yorumlar ({announcement.comments.length})</h4>
                 {announcement.comments.map(comment => (
-                  <CommentItem key={comment.id} comment={comment} announcementId={announcement.id} onCommentDeleted={handleCommentOrReplyDeletedInDialog} />
+                  <CommentItem 
+                    key={comment.id} 
+                    comment={comment} 
+                    announcementId={announcement.id} 
+                    onCommentOrReplyAction={handleCommentOrReplyActionInDialog}
+                  />
                 ))}
               </div>
             )}
@@ -195,3 +204,5 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     </Dialog>
   );
 }
+
+    

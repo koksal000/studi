@@ -29,28 +29,30 @@ import { CommentItem } from './comment-item';
 interface AnnouncementCardProps {
   announcement: Announcement;
   isCompact?: boolean;
-  allowDelete?: boolean; // Prop to control if the main announcement delete button is shown (for admin page)
+  allowDelete?: boolean; 
 }
 
 export function AnnouncementCard({ announcement: initialAnnouncement, isCompact = false, allowDelete = false }: AnnouncementCardProps) {
-  const { user } = useUser();
+  const { user, isAdmin } = useUser(); // isAdmin'ı da alıyoruz
   const { deleteAnnouncement: removeAnnouncement, toggleAnnouncementLike, addCommentToAnnouncement, getAnnouncementById } = useAnnouncements();
   const { toast } = useToast();
   
   const [announcement, setAnnouncement] = useState<Announcement>(initialAnnouncement);
+  
   useEffect(() => {
-    // Listen for updates to this specific announcement from the hook
     const updatedAnn = getAnnouncementById(initialAnnouncement.id);
     if (updatedAnn) {
       setAnnouncement(updatedAnn);
     } else {
-      // If the announcement was deleted (e.g., by another user/tab), it might become null.
-      // Handle this case, e.g., by rendering nothing or a "deleted" message.
-      // For now, let's assume it won't be null if we are rendering it.
-      // Fallback to initial if somehow not found (should not happen if list is up-to-date)
-      setAnnouncement(initialAnnouncement);
+      // If deleted from another source, it might become null.
+      // A robust solution might involve removing this card from the list in the parent.
+      // For now, we can make it disappear or show a "deleted" message.
+      // If initialAnnouncement.id is still valid, but data is gone, it implies deletion.
+      // If initialAnnouncement itself is the source of truth (e.g., from a map),
+      // then this effect primarily syncs likes/comments from the global hook.
+      setAnnouncement(initialAnnouncement); // Or handle as deleted
     }
-  }, [getAnnouncementById, initialAnnouncement]);
+  }, [initialAnnouncement, getAnnouncementById]);
 
 
   const [isAdminPasswordDialogOpenForAnnDelete, setIsAdminPasswordDialogOpenForAnnDelete] = useState(false);
@@ -62,20 +64,30 @@ export function AnnouncementCard({ announcement: initialAnnouncement, isCompact 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isDeletingAnnouncement, setIsDeletingAnnouncement] = useState(false);
 
-  const currentUserIdentifier = user ? `${user.name} ${user.surname}` : null;
+  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
   const hasLiked = announcement.likes && announcement.likes.some(like => like.userId === currentUserIdentifier);
 
-  // Only admin can delete the main announcement (via admin page, where allowDelete=true)
-  const canAttemptDeleteAnnouncement = !!user && allowDelete; 
+  const canAttemptDeleteAnnouncement = !!user && isAdmin && allowDelete; 
 
-  const performDeleteAnnouncement = () => {
-    removeAnnouncement(announcement.id);
-    toast({
-      title: "Duyuru Silindi",
-      description: `"${announcement.title}" başlıklı duyuru başarıyla silindi.`,
-    });
-    setIsAdminPasswordDialogOpenForAnnDelete(false);
+  const performDeleteAnnouncement = async () => {
+    setIsDeletingAnnouncement(true);
+    try {
+      await removeAnnouncement(announcement.id);
+      toast({
+        title: "Duyuru Silindi",
+        description: `"${announcement.title}" başlıklı duyuru başarıyla silindi.`,
+      });
+      // The component might unmount if the parent list updates.
+    } catch (error: any) {
+      if (!error.message?.includes("Admin privileges required")) {
+        toast({ title: "Silme Başarısız", description: error.message || "Duyuru silinirken bir sorun oluştu.", variant: "destructive"});
+      }
+    } finally {
+      setIsDeletingAnnouncement(false);
+      setIsAdminPasswordDialogOpenForAnnDelete(false);
+    }
   };
 
   const formattedDate = new Date(announcement.date).toLocaleDateString('tr-TR', {
@@ -103,8 +115,11 @@ export function AnnouncementCard({ announcement: initialAnnouncement, isCompact 
     finally { setIsSubmittingComment(false); }
   };
   
-  const handleCommentOrReplyDeleted = () => {
-    // Force re-fetch of announcement data to update comment/reply counts and lists
+  const handleCommentOrReplyActionInCard = () => {
+    // This callback can be used if specific actions in CommentItem need to trigger a refresh
+    // of the announcement data within this card, beyond what useEffect already does.
+    // For instance, if comment counts need very specific immediate updates not covered by prop changes.
+    // Currently, the useEffect relying on getAnnouncementById should handle most updates.
     const updatedAnn = getAnnouncementById(announcement.id);
     if (updatedAnn) {
       setAnnouncement(updatedAnn);
@@ -167,6 +182,8 @@ export function AnnouncementCard({ announcement: initialAnnouncement, isCompact 
     if (announcement.mediaType === 'url/link') return <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Bağlantı</>;
     return <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya</>;
   };
+  
+  if (!announcement) return null; // If announcement becomes null (e.g. deleted)
 
   return (
     <>
@@ -191,7 +208,7 @@ export function AnnouncementCard({ announcement: initialAnnouncement, isCompact 
                   <ThumbsUp className={`mr-2 h-4 w-4 ${hasLiked ? '' : 'text-primary'}`} />
                   {hasLiked ? "Beğenildi" : "Beğen"} ({announcement.likes?.length || 0})
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setShowCommentInput(!showCommentInput)} disabled={!user}>
+                <Button variant="outline" size="sm" onClick={() => setShowCommentInput(!showCommentInput)} disabled={!user || isSubmittingComment}>
                   <MessageCircle className="mr-2 h-4 w-4 text-primary" />
                   Yorum Yap ({announcement.comments?.length || 0})
                 </Button>
@@ -211,28 +228,48 @@ export function AnnouncementCard({ announcement: initialAnnouncement, isCompact 
                 <div className="space-y-3 mt-4">
                   <h4 className="text-md font-semibold text-primary">Yorumlar ({announcement.comments.length})</h4>
                   {announcement.comments.map(comment => (
-                    <CommentItem key={comment.id} comment={comment} announcementId={announcement.id} onCommentDeleted={handleCommentOrReplyDeleted} />
+                    <CommentItem 
+                        key={comment.id} 
+                        comment={comment} 
+                        announcementId={announcement.id} 
+                        onCommentOrReplyAction={handleCommentOrReplyActionInCard}
+                    />
                   ))}
                 </div>
               )}
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-end items-center">
+        <CardFooter className="flex justify-end items-center pt-4">
           {canAttemptDeleteAnnouncement && !isCompact && (
             <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="destructive" size="sm"><Trash2 className="h-4 w-4 mr-2" /> Sil</Button></AlertDialogTrigger>
+              <AlertDialogTrigger asChild><Button variant="destructive" size="sm" disabled={isDeletingAnnouncement}><Trash2 className="h-4 w-4 mr-2" /> Sil</Button></AlertDialogTrigger>
               <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle><AlertDialogDescription>"{announcement.title}" başlıklı duyuruyu kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>İptal</AlertDialogCancel><AlertDialogAction onClick={() => setIsAdminPasswordDialogOpenForAnnDelete(true)} className="bg-destructive hover:bg-destructive/90">Evet, Sil</AlertDialogAction></AlertDialogFooter>
+                <AlertDialogHeader><AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle><AlertDialogDescription>"{announcement.title}" başlıklı duyuruyu ve tüm yorumlarını/yanıtlarını kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)</AlertDialogDescription></AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeletingAnnouncement}>İptal</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => setIsAdminPasswordDialogOpenForAnnDelete(true)} 
+                    className="bg-destructive hover:bg-destructive/90"
+                    disabled={isDeletingAnnouncement}
+                  >
+                    {isDeletingAnnouncement ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
         </CardFooter>
       </Card>
 
-      <AdminPasswordDialog isOpen={isAdminPasswordDialogOpenForAnnDelete} onOpenChange={setIsAdminPasswordDialogOpenForAnnDelete} onVerified={performDeleteAnnouncement} />
+      <AdminPasswordDialog 
+        isOpen={isAdminPasswordDialogOpenForAnnDelete} 
+        onOpenChange={setIsAdminPasswordDialogOpenForAnnDelete} 
+        onVerified={performDeleteAnnouncement} 
+      />
       {isCompact && <AnnouncementDetailDialog isOpen={isDetailModalOpen} onOpenChange={setIsDetailModalOpen} announcement={announcement} />}
     </>
   );
 }
+
+    

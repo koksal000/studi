@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -27,18 +27,33 @@ interface ReplyItemProps {
   reply: Reply;
   announcementId: string;
   commentId: string;
-  onReplyDeleted?: () => void; // Callback after successful deletion
+  onReplyAction?: () => void; 
 }
 
-export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: ReplyItemProps) {
+export function ReplyItem({ reply: initialReply, announcementId, commentId, onReplyAction }: ReplyItemProps) {
   const { user, isAdmin } = useUser();
-  const { addReplyToComment, deleteReply } = useAnnouncements();
+  const { addReplyToComment, deleteReply, getAnnouncementById } = useAnnouncements();
   const { toast } = useToast();
+
+  // Local state for the reply to ensure it reflects updates from the hook
+  const [reply, setReply] = useState<Reply>(initialReply);
+
+  useEffect(() => {
+    const parentAnnouncement = getAnnouncementById(announcementId);
+    const parentComment = parentAnnouncement?.comments?.find(c => c.id === commentId);
+    const updatedReply = parentComment?.replies?.find(r => r.id === initialReply.id);
+    if (updatedReply) {
+      setReply(updatedReply);
+    } else {
+      setReply(initialReply); // Fallback if not found
+    }
+  }, [initialReply, announcementId, commentId, getAnnouncementById]);
+
 
   const [showReplyToReplyForm, setShowReplyToReplyForm] = useState(false);
   const [replyToReplyText, setReplyToReplyText] = useState('');
   const [isSubmittingReplyToReply, setIsSubmittingReplyToReply] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingReply, setIsDeletingReply] = useState(false);
   const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
   
   const formattedDate = new Date(reply.date).toLocaleDateString('tr-TR', {
@@ -65,9 +80,11 @@ export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: 
     }
     setIsSubmittingReplyToReply(true);
     try {
+      // When replying to a reply, the `replyingToAuthorName` should be the author of *this current reply*
       await addReplyToComment(announcementId, commentId, replyToReplyText, reply.authorName);
       setReplyToReplyText('');
       setShowReplyToReplyForm(false);
+      if (onReplyAction) onReplyAction();
     } catch (error) {
       // Toast for error already handled in hook
     } finally {
@@ -76,22 +93,25 @@ export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: 
   };
 
   const handleDeleteReply = async () => {
-    setIsDeleting(true);
+    setIsDeletingReply(true);
     try {
       await deleteReply(announcementId, commentId, reply.id);
       toast({ title: "Yanıt Silindi", description: "Yanıt başarıyla kaldırıldı." });
-      if (onReplyDeleted) onReplyDeleted();
+      if (onReplyAction) onReplyAction();
+      // The component might unmount if the reply is removed from the parent's list
     } catch (error: any) {
-       if (!error.message?.includes("Admin privileges required")) {
+       if (!error.message?.includes("Admin privileges required")) { // Avoid double toast
         toast({ title: "Silme Başarısız", description: error.message || "Yanıt silinirken bir sorun oluştu.", variant: "destructive"});
       }
     } finally {
-      setIsDeleting(false);
+      setIsDeletingReply(false);
       setIsAdminPasswordDialogOpenForDelete(false);
     }
   };
   
-  const canDeleteReply = isAdmin; // Simplified: Only admin can delete any reply for now
+  const canDeleteThisReply = isAdmin; 
+
+  if (!reply) return null;
 
   return (
     <>
@@ -102,8 +122,8 @@ export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: 
           {getInitials(reply.authorName)}
         </AvatarFallback>
       </Avatar>
-      <div className="flex-1 space-y-0.5 min-w-0"> {/* Added min-w-0 here */}
-        <p className="text-foreground/90 whitespace-pre-wrap break-words"> {/* Added break-words */}
+      <div className="flex-1 space-y-0.5 min-w-0">
+        <p className="text-foreground/90 whitespace-pre-wrap break-words">
           <span className="font-semibold text-primary">{reply.authorName}</span>
           {reply.replyingToAuthorName && <span className="text-muted-foreground"> yanıtladı (@{reply.replyingToAuthorName})</span>}
           : {reply.text}
@@ -115,15 +135,15 @@ export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: 
             size="xs" 
             className="p-0 h-auto text-[10px] text-muted-foreground hover:text-primary"
             onClick={() => setShowReplyToReplyForm(!showReplyToReplyForm)}
-            disabled={!user}
+            disabled={!user || isSubmittingReplyToReply}
           >
             <MessageSquare className="h-3 w-3 mr-0.5" /> Yanıtla
           </Button>
-          {canDeleteReply && (
+          {canDeleteThisReply && (
              <AlertDialog>
                 <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="xs" className="p-0 h-auto text-[10px] text-destructive hover:text-destructive" disabled={isDeleting}>
-                        {isDeleting ? <Loader2 className="h-3 w-3 animate-spin mr-0.5"/> : <Trash2 className="h-3 w-3 mr-0.5" />}
+                    <Button variant="ghost" size="xs" className="p-0 h-auto text-[10px] text-destructive hover:text-destructive" disabled={isDeletingReply}>
+                        {isDeletingReply ? <Loader2 className="h-3 w-3 animate-spin mr-0.5"/> : <Trash2 className="h-3 w-3 mr-0.5" />}
                         Sil
                     </Button>
                 </AlertDialogTrigger>
@@ -135,9 +155,13 @@ export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: 
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>İptal</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} className="bg-destructive hover:bg-destructive/90">
-                      Evet, Sil
+                    <AlertDialogCancel disabled={isDeletingReply}>İptal</AlertDialogCancel>
+                    <AlertDialogAction 
+                        onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} 
+                        className="bg-destructive hover:bg-destructive/90"
+                        disabled={isDeletingReply}
+                    >
+                      {isDeletingReply ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -171,3 +195,5 @@ export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: 
     </>
   );
 }
+
+    

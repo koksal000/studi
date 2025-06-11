@@ -1,10 +1,10 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { summarizeWeather, type WeatherSummaryOutput } from '@/ai/flows/weather-summarization';
-import { AlertTriangle, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Loader2, Sun, Wind, CalendarDays, Clock } from 'lucide-react'; // Thermometer, Droplet kaldırıldı, gereksizdi
+import { AlertTriangle, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Loader2, Sun, Wind, CalendarDays, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -38,33 +38,63 @@ export function WeatherCard() {
   const [error, setError] = useState<string | null>(null);
   const [displayedDataTimestamp, setDisplayedDataTimestamp] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchWeatherAndScheduleNext = async () => {
+    setIsLoading(true);
+    // Don't clear error immediately if there's old data to show
+    // setError(null); 
+    try {
+      console.log(`[WeatherCard] Attempting to fetch weather data at ${new Date().toISOString()}`);
+      const result = await summarizeWeather({ location: 'Domaniç' });
+      setWeather(result);
+      if (result.dataTimestamp) {
+        const newTimestamp = new Date(result.dataTimestamp);
+        setDisplayedDataTimestamp(newTimestamp);
+        console.log(`[WeatherCard] Successfully fetched weather. Data timestamp: ${newTimestamp.toISOString()}`);
+      } else {
+        setDisplayedDataTimestamp(new Date()); // Fallback
+        console.warn(`[WeatherCard] Fetched weather data missing dataTimestamp.`);
+      }
+      setError(null); // Clear error on successful fetch
+    } catch (e: any) {
+      setError(e.message || 'Hava durumu bilgisi alınamadı.');
+      console.error("[WeatherCard] Error fetching weather:", e);
+      // Keep stale 'weather' and 'displayedDataTimestamp' if an error occurs
+    } finally {
+      setIsLoading(false);
+      scheduleNextAlignedFetch();
+    }
+  };
+  
+  const scheduleNextAlignedFetch = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    const milliseconds = now.getMilliseconds();
+    
+    const minutesToNextTenMinuteMark = (10 - (minutes % 10)) % 10; // Handle case when minutes are 0, 10, 20...
+    let delayToNextTenMinuteMark = (minutesToNextTenMinuteMark * 60 - seconds) * 1000 - milliseconds;
+
+    if (delayToNextTenMinuteMark <= 0) { // If we are on or past the 10-minute mark, schedule for the *next* one
+        delayToNextTenMinuteMark += 10 * 60 * 1000;
+    }
+    
+    console.log(`[WeatherCard] Next aligned fetch scheduled in ${Math.round(delayToNextTenMinuteMark/1000)}s (target: ${new Date(Date.now() + delayToNextTenMinuteMark).toLocaleTimeString()})`);
+    timerRef.current = setTimeout(fetchWeatherAndScheduleNext, delayToNextTenMinuteMark);
+  };
 
   useEffect(() => {
-    const fetchWeather = async () => {
-      setIsLoading(true); // Set loading true at the start of each fetch attempt
-      // setError(null); // Don't clear previous error immediately, only if new fetch is successful
-      try {
-        const result = await summarizeWeather({ location: 'Domaniç' });
-        setWeather(result);
-        if (result.dataTimestamp) {
-          setDisplayedDataTimestamp(new Date(result.dataTimestamp));
-        } else {
-          setDisplayedDataTimestamp(new Date()); // Fallback if dataTimestamp is missing
-        }
-        setError(null); // Clear error on successful fetch
-      } catch (e: any) {
-        setError(e.message || 'Hava durumu bilgisi alınamadı.');
-        console.error(e);
-        // Don't clear old weather data on error, so user can still see stale data
-      } finally {
-        setIsLoading(false);
+    fetchWeatherAndScheduleNext(); // Initial fetch and scheduling
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
       }
     };
-
-    fetchWeather(); // Initial fetch
-    const intervalId = setInterval(fetchWeather, 10 * 60 * 1000); // Attempt to refresh every 10 minutes
-    return () => clearInterval(intervalId);
-  }, []);
+  }, []); // Empty dependency array means this runs once on mount and cleanup on unmount
 
   const getFormattedTime = (date: Date | null) => {
     if (!date) return "";
@@ -80,7 +110,7 @@ export function WeatherCard() {
     <>
       <Card 
         className="cursor-pointer hover:shadow-lg transition-shadow"
-        onClick={() => weather && !isLoading && !error && setIsModalOpen(true)}
+        onClick={() => weather && !isLoading && setIsModalOpen(true)} // Allow opening modal even if there was a recent error but old data exists
       >
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -89,24 +119,24 @@ export function WeatherCard() {
           </CardTitle>
           {displayedDataTimestamp && (
              <CardDescription>
-              Son başarılı güncelleme: {getFormattedTime(displayedDataTimestamp)}
+              Veri zamanı: {getFormattedTime(displayedDataTimestamp)}
             </CardDescription>
           )}
         </CardHeader>
         <CardContent>
-          {isLoading && !weather && ( // Show loader only if there's no weather data at all yet
+          {isLoading && !weather && ( 
             <div className="flex items-center justify-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2 text-muted-foreground">Yükleniyor...</p>
             </div>
           )}
-          {error && !isLoading && !weather && ( // Show error only if loading finished and still no weather data
+          {error && !isLoading && !weather && ( 
             <div className="flex items-center text-destructive">
               <AlertTriangle className="h-5 w-5 mr-2" />
               <p>{error}</p>
             </div>
           )}
-          {weather && ( // Always display weather data if available, even if loading new or if there was an error with the latest fetch
+          {weather && ( 
             <div className="space-y-4">
                {isLoading && <p className="text-xs text-muted-foreground text-center animate-pulse">Yeni veriler yükleniyor...</p>}
                {error && <p className="text-xs text-destructive text-center">Güncelleme hatası: {error}. Gösterilen veriler eski olabilir.</p>}
@@ -210,3 +240,5 @@ export function WeatherCard() {
     </>
   );
 }
+
+    

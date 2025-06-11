@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -27,18 +27,34 @@ import {
 interface CommentItemProps {
   comment: Comment;
   announcementId: string;
-  onCommentDeleted?: () => void; // Callback after successful deletion
+  onCommentOrReplyAction?: () => void; // Generic callback for when a comment/reply is added or deleted
 }
 
-export function CommentItem({ comment, announcementId, onCommentDeleted }: CommentItemProps) {
+export function CommentItem({ comment: initialComment, announcementId, onCommentOrReplyAction }: CommentItemProps) {
   const { user, isAdmin } = useUser();
-  const { addReplyToComment, deleteComment } = useAnnouncements();
+  const { addReplyToComment, deleteComment, getAnnouncementById } = useAnnouncements();
   const { toast } = useToast();
+
+  // Local state for the comment to ensure it reflects updates from the hook
+  const [comment, setComment] = useState<Comment>(initialComment);
+
+  useEffect(() => {
+    const parentAnnouncement = getAnnouncementById(announcementId);
+    const updatedComment = parentAnnouncement?.comments?.find(c => c.id === initialComment.id);
+    if (updatedComment) {
+      setComment(updatedComment);
+    } else {
+      // Comment might have been deleted, handle this case if necessary (e.g., render null or a placeholder)
+      // For now, assume it means the comment is gone if not found, or fallback to initial if parent not found.
+       setComment(initialComment); // Fallback if somehow parent announcement not immediately found
+    }
+  }, [initialComment, announcementId, getAnnouncementById]);
+
 
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingComment, setIsDeletingComment] = useState(false);
   const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
 
 
@@ -66,9 +82,10 @@ export function CommentItem({ comment, announcementId, onCommentDeleted }: Comme
     }
     setIsSubmittingReply(true);
     try {
-      await addReplyToComment(announcementId, comment.id, replyText, comment.authorName);
+      await addReplyToComment(announcementId, comment.id, replyText, comment.authorName); // Pass replyingToAuthorName
       setReplyText('');
       setShowReplyForm(false);
+      if (onCommentOrReplyAction) onCommentOrReplyAction();
     } catch (error) {
       // Toast for error already handled in hook
     } finally {
@@ -77,23 +94,25 @@ export function CommentItem({ comment, announcementId, onCommentDeleted }: Comme
   };
   
   const handleDeleteComment = async () => {
-    setIsDeleting(true);
+    setIsDeletingComment(true);
     try {
       await deleteComment(announcementId, comment.id);
       toast({ title: "Yorum Silindi", description: "Yorum başarıyla kaldırıldı."});
-      if (onCommentDeleted) onCommentDeleted();
+      if (onCommentOrReplyAction) onCommentOrReplyAction();
+      // The component might unmount if the comment is removed from the parent's list
     } catch (error: any) {
-      // Error already toasted in hook or not an admin
-      if (!error.message?.includes("Admin privileges required")) {
+      if (!error.message?.includes("Admin privileges required")) { // Avoid double toast
         toast({ title: "Silme Başarısız", description: error.message || "Yorum silinirken bir sorun oluştu.", variant: "destructive"});
       }
     } finally {
-      setIsDeleting(false);
+      setIsDeletingComment(false);
       setIsAdminPasswordDialogOpenForDelete(false);
     }
   };
 
-  const canDeleteComment = isAdmin; // Simplified: Only admin can delete any comment for now
+  const canDeleteThisComment = isAdmin; 
+
+  if (!comment) return null; // If comment state becomes null (e.g., after deletion and parent re-render)
 
   return (
     <>
@@ -104,7 +123,7 @@ export function CommentItem({ comment, announcementId, onCommentDeleted }: Comme
             {getInitials(comment.authorName)}
           </AvatarFallback>
         </Avatar>
-        <div className="flex-1 space-y-1 min-w-0"> {/* Added min-w-0 here */}
+        <div className="flex-1 space-y-1 min-w-0">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-primary">{comment.authorName}</h4>
             <p className="text-xs text-muted-foreground flex items-center">
@@ -112,22 +131,22 @@ export function CommentItem({ comment, announcementId, onCommentDeleted }: Comme
               {formattedDate}
             </p>
           </div>
-          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p> {/* Added break-words */}
+          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p>
           <div className="flex items-center space-x-2 pt-1">
             <Button 
               variant="ghost" 
               size="xs" 
               className="text-xs text-muted-foreground hover:text-primary"
               onClick={() => setShowReplyForm(!showReplyForm)}
-              disabled={!user}
+              disabled={!user || isSubmittingReply}
             >
               <MessageSquare className="h-3.5 w-3.5 mr-1" /> Yanıtla ({comment.replies?.length || 0})
             </Button>
-            {canDeleteComment && (
+            {canDeleteThisComment && (
                <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="ghost" size="xs" className="text-xs text-destructive hover:text-destructive" disabled={isDeleting}>
-                    {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1"/> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                  <Button variant="ghost" size="xs" className="text-xs text-destructive hover:text-destructive" disabled={isDeletingComment}>
+                    {isDeletingComment ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1"/> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
                     Sil
                   </Button>
                 </AlertDialogTrigger>
@@ -135,13 +154,17 @@ export function CommentItem({ comment, announcementId, onCommentDeleted }: Comme
                   <AlertDialogHeader>
                     <AlertDialogTitle>Yorumu Silmeyi Onayla</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Bu yorumu kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                      Bu yorumu ve tüm yanıtlarını kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>İptal</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} className="bg-destructive hover:bg-destructive/90">
-                      Evet, Sil
+                    <AlertDialogCancel disabled={isDeletingComment}>İptal</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} 
+                      className="bg-destructive hover:bg-destructive/90"
+                      disabled={isDeletingComment}
+                    >
+                      {isDeletingComment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -176,6 +199,7 @@ export function CommentItem({ comment, announcementId, onCommentDeleted }: Comme
                 reply={reply} 
                 announcementId={announcementId} 
                 commentId={comment.id} 
+                onReplyAction={onCommentOrReplyAction}
             />
           ))}
         </div>
@@ -189,3 +213,5 @@ export function CommentItem({ comment, announcementId, onCommentDeleted }: Comme
     </>
   );
 }
+
+    

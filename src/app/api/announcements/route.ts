@@ -2,7 +2,7 @@
 // src/app/api/announcements/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import type { Announcement, Comment, Reply } from '@/hooks/use-announcements'; 
+import type { Announcement, Comment, Reply, Like } from '@/hooks/use-announcements'; 
 import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
@@ -96,16 +96,18 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
     }
     
     const processedDataToSave = dataToSave.map(ann => ({
-        ...ann,
+        ...ann, // Ensure all top-level properties are preserved
+        likes: ann.likes || [],
         comments: (ann.comments || []).map(comment => ({
-            ...comment,
+            ...comment, // Preserve comment properties
             replies: (comment.replies || []).map(reply => ({
-                ...reply,
+                ...reply, // Preserve reply properties
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(processedDataToSave, null, 2));
+    // console.log(`[API/Announcements] Data saved to ${ANNOUNCEMENTS_FILE_PATH}. Count: ${processedDataToSave.length}`);
     return true;
   } catch (error) {
     console.error("[API/Announcements] CRITICAL: Error saving announcements to file:", error);
@@ -119,7 +121,7 @@ if (!initialized) {
 }
 
 export async function GET() {
-  loadAnnouncementsFromFile();
+  loadAnnouncementsFromFile(); // Ensure latest data is loaded for direct GET requests
   return NextResponse.json([...announcementsData]);
 }
 
@@ -133,31 +135,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Geçersiz JSON yükü." }, { status: 400 });
   }
 
-  loadAnnouncementsFromFile();
-  let currentDataFromFile = [...announcementsData];
+  loadAnnouncementsFromFile(); // Load the latest state from file
+  let currentDataFromFile = [...announcementsData.map(a => ({...a, comments: a.comments?.map(c => ({...c, replies: c.replies?.map(r => ({...r}))}))}))]; // Deep copy for modification
   let announcementModified = false;
+  let modifiedAnnouncement: Announcement | null = null;
+
 
   if ('action' in payload) {
     const actionPayload = payload;
     const annIndex = currentDataFromFile.findIndex(ann => ann.id === actionPayload.announcementId);
 
-    if (annIndex === -1 && actionPayload.action !== "ADD_COMMENT_TO_ANNOUNCEMENT" && actionPayload.action !== "ADD_REPLY_TO_COMMENT" && actionPayload.action !== "DELETE_COMMENT" && actionPayload.action !== "DELETE_REPLY") {
-        return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
+    if (annIndex === -1) {
+        return NextResponse.json({ message: 'İlgili duyuru bulunamadı.' }, { status: 404 });
     }
     
-    let announcementToUpdate: Announcement | undefined;
-    if (annIndex !== -1) {
-        announcementToUpdate = { ...currentDataFromFile[annIndex] };
-        announcementToUpdate.likes = announcementToUpdate.likes || [];
-        announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
-            ...c, 
-            replies: (c.replies || []).map(r => ({...r })),
-        }));
-    }
+    // Work on a copy of the specific announcement
+    let announcementToUpdate = JSON.parse(JSON.stringify(currentDataFromFile[annIndex])) as Announcement;
+    announcementToUpdate.likes = announcementToUpdate.likes || [];
+    announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
+        ...c, 
+        replies: (c.replies || []).map(r => ({...r })),
+    }));
 
 
     if (actionPayload.action === "TOGGLE_ANNOUNCEMENT_LIKE") {
-      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const likeExistsIndex = announcementToUpdate.likes.findIndex(like => like.userId === actionPayload.userId);
       if (likeExistsIndex > -1) {
         announcementToUpdate.likes.splice(likeExistsIndex, 1);
@@ -166,7 +167,6 @@ export async function POST(request: NextRequest) {
       }
       announcementModified = true;
     } else if (actionPayload.action === "ADD_COMMENT_TO_ANNOUNCEMENT") {
-      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const newComment: Comment = {
         ...actionPayload.comment,
         id: `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -177,12 +177,11 @@ export async function POST(request: NextRequest) {
       announcementToUpdate.comments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       announcementModified = true;
     } else if (actionPayload.action === "ADD_REPLY_TO_COMMENT") {
-      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
       if (commentIndex === -1) {
-        return NextResponse.json({ message: 'Yorum bulunamadı.' }, { status: 404 });
+        return NextResponse.json({ message: 'Yanıt eklenecek yorum bulunamadı.' }, { status: 404 });
       }
-      const commentToUpdate = { ...announcementToUpdate.comments[commentIndex] };
+      const commentToUpdate = announcementToUpdate.comments[commentIndex];
       commentToUpdate.replies = commentToUpdate.replies || [];
       const newReply: Reply = {
         ...actionPayload.reply,
@@ -191,39 +190,38 @@ export async function POST(request: NextRequest) {
       };
       commentToUpdate.replies.push(newReply);
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      announcementToUpdate.comments[commentIndex] = commentToUpdate;
+      // No need to reassign commentToUpdate to announcementToUpdate.comments[commentIndex] as it's a reference modification
       announcementModified = true;
     } else if (actionPayload.action === "DELETE_COMMENT") {
-      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
       if (commentIndex === -1) {
-        return NextResponse.json({ message: 'Yorum bulunamadı.' }, { status: 404 });
+        return NextResponse.json({ message: 'Silinecek yorum bulunamadı.' }, { status: 404 });
       }
       announcementToUpdate.comments.splice(commentIndex, 1);
       announcementModified = true;
     } else if (actionPayload.action === "DELETE_REPLY") {
-      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
       if (commentIndex === -1) {
-        return NextResponse.json({ message: 'Üst yorum bulunamadı.' }, { status: 404 });
+        return NextResponse.json({ message: 'Yanıtın ait olduğu yorum bulunamadı.' }, { status: 404 });
       }
-      const commentToUpdate = { ...announcementToUpdate.comments[commentIndex] };
+      const commentToUpdate = announcementToUpdate.comments[commentIndex];
       commentToUpdate.replies = commentToUpdate.replies || [];
       const replyIndex = commentToUpdate.replies.findIndex(r => r.id === actionPayload.replyId);
       if (replyIndex === -1) {
-        return NextResponse.json({ message: 'Yanıt bulunamadı.' }, { status: 404 });
+        return NextResponse.json({ message: 'Silinecek yanıt bulunamadı.' }, { status: 404 });
       }
       commentToUpdate.replies.splice(replyIndex, 1);
-      announcementToUpdate.comments[commentIndex] = commentToUpdate;
       announcementModified = true;
     }
     
-    if (announcementModified && announcementToUpdate) {
+    if (announcementModified) {
         currentDataFromFile[annIndex] = announcementToUpdate;
+        modifiedAnnouncement = announcementToUpdate;
     }
 
   } else { 
-    const newAnnouncement = payload as Announcement;
+    // Adding a new announcement
+    const newAnnouncement = payload as Announcement; // Type assertion
     if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
       return NextResponse.json({ message: 'Geçersiz duyuru yükü. Gerekli alanlar eksik.' }, { status: 400 });
     }
@@ -243,21 +241,23 @@ export async function POST(request: NextRequest) {
     
     const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);
     if (existingIndex !== -1) {
-      currentDataFromFile[existingIndex] = newAnnouncement;
+      currentDataFromFile[existingIndex] = newAnnouncement; // Should ideally be an update action
     } else {
       currentDataFromFile.unshift(newAnnouncement);
     }
     announcementModified = true;
+    modifiedAnnouncement = newAnnouncement;
   }
 
   if (announcementModified) {
     currentDataFromFile.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (saveAnnouncementsToFile(currentDataFromFile)) {
-      announcementsData = currentDataFromFile;
-      announcementEmitter.emit('update', [...announcementsData]);
-      return NextResponse.json(payload, { status: 'action' in payload ? 200 : 201 });
+      announcementsData = currentDataFromFile; // Update global in-memory store
+      announcementEmitter.emit('update', [...announcementsData]); // Emit copy to prevent external modification
+      return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
     } else {
-      console.error(`[API/Announcements] Failed to save data to file.`);
+      // If save fails, it's a server error. The in-memory `announcementsData` might be stale until next load.
+      console.error(`[API/Announcements] Failed to save data to file after modification.`);
       return NextResponse.json({ message: "Sunucu hatası: Veri kalıcı olarak kaydedilemedi." }, { status: 500 });
     }
   } else {
@@ -273,13 +273,13 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Duyuru IDsi silme için gerekli' }, { status: 400 });
   }
 
-  loadAnnouncementsFromFile();
+  loadAnnouncementsFromFile(); // Load latest
   const currentDataFromFile = [...announcementsData];
   const filteredAnnouncements = currentDataFromFile.filter(ann => ann.id !== id);
 
   if (filteredAnnouncements.length < currentDataFromFile.length) {
     if (saveAnnouncementsToFile(filteredAnnouncements)) {
-      announcementsData = filteredAnnouncements;
+      announcementsData = filteredAnnouncements; // Update global in-memory
       announcementEmitter.emit('update', [...announcementsData]);
       return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
     } else {
@@ -290,3 +290,5 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
+
+    

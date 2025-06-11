@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Announcement, Comment } from '@/hooks/use-announcements';
+import type { Announcement } from '@/hooks/use-announcements';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import Image from 'next/image';
 import { UserCircle, CalendarDays, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2 } from 'lucide-react';
@@ -16,7 +16,7 @@ import { CommentItem } from './comment-item';
 interface AnnouncementDetailDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  announcement: Announcement | null;
+  announcement: Announcement | null; // Make it nullable
 }
 
 export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: initialAnnouncement }: AnnouncementDetailDialogProps) {
@@ -24,12 +24,14 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   const { getAnnouncementById, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   
+  // Use a local state for the announcement being displayed in the dialog
   const [announcement, setAnnouncement] = useState<Announcement | null>(initialAnnouncement);
   
   useEffect(() => {
-    if (initialAnnouncement && isOpen) { // Also check isOpen to refetch when dialog becomes visible
+    if (initialAnnouncement && isOpen) {
+      // Fetch the latest version of the announcement when dialog opens or initialAnnouncement changes
       const updatedAnn = getAnnouncementById(initialAnnouncement.id);
-      setAnnouncement(updatedAnn || initialAnnouncement);
+      setAnnouncement(updatedAnn || initialAnnouncement); // Use updated if found, else initial
     } else if (!isOpen) {
       // Reset state or specific parts if needed when dialog closes
       setShowCommentInput(false);
@@ -45,7 +47,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false); 
 
-  if (!announcement) return null;
+  if (!announcement) return null; // If no announcement, render nothing
 
   const currentUserIdentifier = user ? `${user.name} ${user.surname}` : null;
   const hasLiked = announcement.likes && announcement.likes.some(like => like.userId === currentUserIdentifier);
@@ -63,11 +65,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
         </span>
       );
     }
-    return (
-      <span className="flex items-center">
-        <UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}
-      </span>
-    );
+    return (<span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>);
   };
 
   const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); } else { videoRef.current.pause(); setIsPlaying(false); }}};
@@ -77,8 +75,8 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); return; }
     try {
       await toggleAnnouncementLike(announcement.id);
-      const updatedAnn = getAnnouncementById(announcement.id);
-      if(updatedAnn) setAnnouncement(updatedAnn);
+      // The useAnnouncements hook will update the global state,
+      // and the useEffect above will update the local 'announcement' state for this dialog.
     } catch (error) {/* Hook toasts */}
   };
 
@@ -91,10 +89,20 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
       await addCommentToAnnouncement(announcement.id, commentText);
       setCommentText('');
       setShowCommentInput(false);
-      const updatedAnn = getAnnouncementById(announcement.id); 
-      if(updatedAnn) setAnnouncement(updatedAnn);
+      // Global state updates via hook, useEffect re-fetches for dialog
     } catch (error) {/* Hook toasts */} 
     finally { setIsSubmittingComment(false); }
+  };
+  
+  const handleCommentOrReplyDeletedInDialog = () => {
+    // Force re-fetch of announcement data to update comment/reply counts and lists
+    const updatedAnn = getAnnouncementById(announcement.id);
+    if (updatedAnn) {
+      setAnnouncement(updatedAnn);
+    } else {
+      // If the whole announcement was somehow deleted while dialog is open
+      onOpenChange(false); // Close dialog
+    }
   };
 
 
@@ -128,21 +136,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe src={`https://player.vimeo.com/video/${videoId}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="Vimeo video player" className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
     if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
-        return (
-          <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden">
-            <a 
-              href={announcement.media} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-primary hover:underline flex items-center w-full"
-            >
-              <Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>
-              <span className="truncate"> {/* Added truncate here */}
-                {announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}
-              </span>
-            </a>
-          </div>
-        );
+        return (<div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/><span className="truncate">{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</span></a></div>);
     }
     return null;
   };
@@ -191,7 +185,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
               <div className="space-y-3 mt-4">
                 <h4 className="text-md font-semibold text-primary">Yorumlar ({announcement.comments.length})</h4>
                 {announcement.comments.map(comment => (
-                  <CommentItem key={comment.id} comment={comment} announcementId={announcement.id} />
+                  <CommentItem key={comment.id} comment={comment} announcementId={announcement.id} onCommentDeleted={handleCommentOrReplyDeletedInDialog} />
                 ))}
               </div>
             )}

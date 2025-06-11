@@ -5,34 +5,45 @@ import type { Reply } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight } from 'lucide-react'; // ThumbsUp kaldırıldı
+import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
+import { AdminPasswordDialog } from './admin-password-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ReplyItemProps {
   reply: Reply;
   announcementId: string;
   commentId: string;
+  onReplyDeleted?: () => void; // Callback after successful deletion
 }
 
-export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) {
-  const { user } = useUser();
-  const { addReplyToComment } = useAnnouncements(); // toggleReplyLike kaldırıldı
+export function ReplyItem({ reply, announcementId, commentId, onReplyDeleted }: ReplyItemProps) {
+  const { user, isAdmin } = useUser();
+  const { addReplyToComment, deleteReply } = useAnnouncements();
   const { toast } = useToast();
 
   const [showReplyToReplyForm, setShowReplyToReplyForm] = useState(false);
   const [replyToReplyText, setReplyToReplyText] = useState('');
   const [isSubmittingReplyToReply, setIsSubmittingReplyToReply] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
   
   const formattedDate = new Date(reply.date).toLocaleDateString('tr-TR', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
-
-  // Yanıt beğenme ile ilgili kısımlar kaldırıldı
-  // const currentUserFullName = user ? `${user.name} ${user.surname}` : null;
-  // const hasLikedReply = reply.likes && reply.likes.some(like => like.userId === currentUserFullName);
 
   const getInitials = (name: string) => {
     const names = name.split(' ');
@@ -64,25 +75,41 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
     }
   };
 
-  // handleReplyLikeToggle fonksiyonu kaldırıldı
+  const handleDeleteReply = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteReply(announcementId, commentId, reply.id);
+      toast({ title: "Yanıt Silindi", description: "Yanıt başarıyla kaldırıldı." });
+      if (onReplyDeleted) onReplyDeleted();
+    } catch (error: any) {
+       if (!error.message?.includes("Admin privileges required")) {
+        toast({ title: "Silme Başarısız", description: error.message || "Yanıt silinirken bir sorun oluştu.", variant: "destructive"});
+      }
+    } finally {
+      setIsDeleting(false);
+      setIsAdminPasswordDialogOpenForDelete(false);
+    }
+  };
+  
+  const canDeleteReply = isAdmin; // Simplified: Only admin can delete any reply for now
 
   return (
+    <>
     <div className="flex space-x-2 items-start text-xs">
-      <CornerDownRight className="h-3.5 w-3.5 mt-0.5 text-muted-foreground flex-shrink-0" />
-      <Avatar className="h-6 w-6 flex-shrink-0">
+      <CornerDownRight className="h-3.5 w-3.5 mt-1 text-muted-foreground flex-shrink-0" />
+      <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
         <AvatarFallback className="bg-accent text-accent-foreground text-[10px]">
           {getInitials(reply.authorName)}
         </AvatarFallback>
       </Avatar>
-      <div className="flex-1 space-y-0.5 min-w-0">
-        <p className="text-foreground/90 whitespace-pre-wrap break-words">
+      <div className="flex-1 space-y-0.5 min-w-0"> {/* Added min-w-0 here */}
+        <p className="text-foreground/90 whitespace-pre-wrap break-words"> {/* Added break-words */}
           <span className="font-semibold text-primary">{reply.authorName}</span>
           {reply.replyingToAuthorName && <span className="text-muted-foreground"> yanıtladı (@{reply.replyingToAuthorName})</span>}
           : {reply.text}
         </p>
         <div className="flex items-center space-x-2 text-muted-foreground text-[10px]">
           <span>{formattedDate}</span>
-          {/* Yanıt beğen butonu kaldırıldı */}
           <Button 
             variant="ghost" 
             size="xs" 
@@ -92,6 +119,30 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
           >
             <MessageSquare className="h-3 w-3 mr-0.5" /> Yanıtla
           </Button>
+          {canDeleteReply && (
+             <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="xs" className="p-0 h-auto text-[10px] text-destructive hover:text-destructive" disabled={isDeleting}>
+                        {isDeleting ? <Loader2 className="h-3 w-3 animate-spin mr-0.5"/> : <Trash2 className="h-3 w-3 mr-0.5" />}
+                        Sil
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Yanıtı Silmeyi Onayla</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Bu yanıtı kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>İptal</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} className="bg-destructive hover:bg-destructive/90">
+                      Evet, Sil
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+          )}
         </div>
 
         {showReplyToReplyForm && user && (
@@ -112,5 +163,11 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
         )}
       </div>
     </div>
+    <AdminPasswordDialog
+        isOpen={isAdminPasswordDialogOpenForDelete}
+        onOpenChange={setIsAdminPasswordDialogOpenForDelete}
+        onVerified={handleDeleteReply}
+    />
+    </>
   );
 }

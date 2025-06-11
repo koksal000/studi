@@ -2,7 +2,7 @@
 // src/app/api/announcements/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import type { Announcement, Comment, Like, Reply } from '@/hooks/use-announcements'; 
+import type { Announcement, Comment, Reply } from '@/hooks/use-announcements'; 
 import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
@@ -27,19 +27,32 @@ interface ToggleAnnouncementLikeApiPayload {
 interface AddCommentApiPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies'>; // likes kaldırıldı
+  comment: Omit<Comment, 'id' | 'date' | 'replies'>;
 }
 interface AddReplyApiPayload {
   action: "ADD_REPLY_TO_COMMENT";
   announcementId: string;
   commentId: string;
-  reply: Omit<Reply, 'id' | 'date'>; // likes kaldırıldı
+  reply: Omit<Reply, 'id' | 'date'>;
+}
+interface DeleteCommentApiPayload {
+  action: "DELETE_COMMENT";
+  announcementId: string;
+  commentId: string;
+}
+interface DeleteReplyApiPayload {
+  action: "DELETE_REPLY";
+  announcementId: string;
+  commentId: string;
+  replyId: string;
 }
 
 type AnnouncementApiPayload = 
   | ToggleAnnouncementLikeApiPayload
   | AddCommentApiPayload
   | AddReplyApiPayload
+  | DeleteCommentApiPayload
+  | DeleteReplyApiPayload
   | Announcement;
 
 
@@ -57,10 +70,8 @@ const loadAnnouncementsFromFile = () => {
           likes: ann.likes || [],
           comments: (ann.comments || []).map(comment => ({
             ...comment,
-            // likes: comment.likes || [], // Yorum beğenme kaldırıldı
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                // likes: reply.likes || [] // Yanıt beğenme kaldırıldı
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
           })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), 
         })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
@@ -88,10 +99,8 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
         ...ann,
         comments: (ann.comments || []).map(comment => ({
             ...comment,
-            // likes: comment.likes || [], // Yorum beğenme kaldırıldı
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                // likes: reply.likes || [] // Yanıt beğenme kaldırıldı
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -132,7 +141,7 @@ export async function POST(request: NextRequest) {
     const actionPayload = payload;
     const annIndex = currentDataFromFile.findIndex(ann => ann.id === actionPayload.announcementId);
 
-    if (annIndex === -1 && actionPayload.action !== "ADD_COMMENT_TO_ANNOUNCEMENT" && actionPayload.action !== "ADD_REPLY_TO_COMMENT") { // Allow if annId is for comment/reply
+    if (annIndex === -1 && actionPayload.action !== "ADD_COMMENT_TO_ANNOUNCEMENT" && actionPayload.action !== "ADD_REPLY_TO_COMMENT" && actionPayload.action !== "DELETE_COMMENT" && actionPayload.action !== "DELETE_REPLY") {
         return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
     }
     
@@ -142,7 +151,7 @@ export async function POST(request: NextRequest) {
         announcementToUpdate.likes = announcementToUpdate.likes || [];
         announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
             ...c, 
-            replies: (c.replies || []).map(r => ({...r })), // likes kaldırıldı
+            replies: (c.replies || []).map(r => ({...r })),
         }));
     }
 
@@ -163,7 +172,6 @@ export async function POST(request: NextRequest) {
         id: `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
         replies: [],
-        // likes: [], // Yorum beğenme kaldırıldı
       };
       announcementToUpdate.comments.push(newComment);
       announcementToUpdate.comments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -180,10 +188,32 @@ export async function POST(request: NextRequest) {
         ...actionPayload.reply,
         id: `rpl_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
-        // likes: [], // Yanıt beğenme kaldırıldı
       };
       commentToUpdate.replies.push(newReply);
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      announcementToUpdate.comments[commentIndex] = commentToUpdate;
+      announcementModified = true;
+    } else if (actionPayload.action === "DELETE_COMMENT") {
+      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
+      const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
+      if (commentIndex === -1) {
+        return NextResponse.json({ message: 'Yorum bulunamadı.' }, { status: 404 });
+      }
+      announcementToUpdate.comments.splice(commentIndex, 1);
+      announcementModified = true;
+    } else if (actionPayload.action === "DELETE_REPLY") {
+      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
+      const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
+      if (commentIndex === -1) {
+        return NextResponse.json({ message: 'Üst yorum bulunamadı.' }, { status: 404 });
+      }
+      const commentToUpdate = { ...announcementToUpdate.comments[commentIndex] };
+      commentToUpdate.replies = commentToUpdate.replies || [];
+      const replyIndex = commentToUpdate.replies.findIndex(r => r.id === actionPayload.replyId);
+      if (replyIndex === -1) {
+        return NextResponse.json({ message: 'Yanıt bulunamadı.' }, { status: 404 });
+      }
+      commentToUpdate.replies.splice(replyIndex, 1);
       announcementToUpdate.comments[commentIndex] = commentToUpdate;
       announcementModified = true;
     }
@@ -208,7 +238,7 @@ export async function POST(request: NextRequest) {
     newAnnouncement.likes = newAnnouncement.likes || [];
     newAnnouncement.comments = (newAnnouncement.comments || []).map(c => ({
         ...c, 
-        replies: (c.replies || []).map(r => ({...r })), // likes kaldırıldı
+        replies: (c.replies || []).map(r => ({...r })),
     })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);

@@ -3,7 +3,7 @@
 
 /**
  * @fileOverview Fetches and summarizes current weather conditions for Domaniç using Open-Meteo API,
- * including hourly and daily forecasts.
+ * including hourly and daily forecasts. Caches data for 10 minutes.
  *
  * - summarizeWeather - A function that handles the weather summarization process.
  * - WeatherSummaryInput - The input type for the summarizeWeather function.
@@ -18,7 +18,6 @@ const WeatherSummaryInputSchema = z.object({
 });
 export type WeatherSummaryInput = z.infer<typeof WeatherSummaryInputSchema>;
 
-// Schema for the data fetched from Open-Meteo, to be passed to the prompt
 const OpenMeteoApiDataSchema = z.object({
   location: z.string().describe('The target location, e.g., Domaniç'),
   current: z.object({
@@ -72,9 +71,13 @@ const WeatherSummaryOutputSchema = z.object({
   currentWeatherCode: z.number().describe("Original WMO weather code for current conditions for icon mapping"),
   hourlyForecast: z.array(HourlyForecastItemSchema).optional().describe("Array of hourly forecast items for the first 12 available hours. Format time in 'HH:mm'. Temperature with °C. Precipitation probability with '%'. Wind speed with 'km/h'. Translate conditions to Turkish."),
   dailyForecast: z.array(DailyForecastItemSchema).optional().describe("Array of daily forecast items for the next 7 days. Format date as 'KısaGünAdı, Gün AyAdıKısaltılmış' (e.g., 'Sal, 25 Tem') in Turkish. Temperatures with °C. Precipitation sum with 'mm'. Translate conditions to Turkish."),
+  dataTimestamp: z.string().describe('ISO string timestamp of when the data was fetched/generated.'),
 });
 export type WeatherSummaryOutput = z.infer<typeof WeatherSummaryOutputSchema>;
 
+let lastSuccessfulWeather: WeatherSummaryOutput | null = null;
+let lastSuccessfulFetchTime: Date | null = null;
+const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
 export async function summarizeWeather(input: WeatherSummaryInput): Promise<WeatherSummaryOutput> {
   return summarizeWeatherFlow(input);
@@ -83,7 +86,7 @@ export async function summarizeWeather(input: WeatherSummaryInput): Promise<Weat
 const formatOpenMeteoDataPrompt = ai.definePrompt({
   name: 'formatOpenMeteoDataPrompt',
   input: {schema: OpenMeteoApiDataSchema},
-  output: {schema: WeatherSummaryOutputSchema},
+  output: {schema: WeatherSummaryOutputSchema.omit({ dataTimestamp: true })}, // AI doesn't need to generate dataTimestamp
   prompt: `You are a weather report formatter. Based on the following real-time data for {{{location}}}:
 Current Weather Data:
   Raw Temperature: {{current.temperature}}°C
@@ -179,6 +182,14 @@ const summarizeWeatherFlow = ai.defineFlow(
     outputSchema: WeatherSummaryOutputSchema,
   },
   async (flowInput) => {
+    const now = new Date();
+
+    if (lastSuccessfulWeather && lastSuccessfulFetchTime && (now.getTime() - lastSuccessfulFetchTime.getTime() < CACHE_DURATION_MS)) {
+      console.log("[WeatherSummarization] Returning cached weather data.");
+      return { ...lastSuccessfulWeather, dataTimestamp: lastSuccessfulFetchTime.toISOString() };
+    }
+    console.log("[WeatherSummarization] Cache expired or no cache. Attempting to fetch new weather data.");
+
     if (flowInput.location.toLowerCase() !== 'domaniç') {
       throw new Error('Hava durumu verileri şu anda sadece Domaniç için mevcuttur.');
     }
@@ -198,20 +209,34 @@ const summarizeWeatherFlow = ai.defineFlow(
       apiResponseData = await response.json();
     } catch (error) {
       console.error("Open-Meteo verileri alınırken veya işlenirken hata:", error);
-      throw new Error("Hava durumu verileri alınamadı. Lütfen daha sonra tekrar deneyin.");
+      if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
+        console.warn("[WeatherSummarization] API fetch failed, serving stale data due to error:", error);
+        return { 
+          ...lastSuccessfulWeather, 
+          summary: `(Yeni veriler alınamadı, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla alınan veriler gösteriliyor) ${lastSuccessfulWeather.summary}`,
+          dataTimestamp: lastSuccessfulFetchTime.toISOString() 
+        };
+      }
+      throw new Error("Hava durumu verileri alınamadı ve önbellekte veri yok. Lütfen daha sonra tekrar deneyin.");
     }
     
-
     if (!apiResponseData.current || 
         typeof apiResponseData.current.temperature_2m !== 'number' ||
         typeof apiResponseData.current.relativehumidity_2m !== 'number' ||
         typeof apiResponseData.current.windspeed_10m !== 'number' ||
         typeof apiResponseData.current.weathercode !== 'number') {
       console.error("Open-Meteo yanıtında beklenen güncel hava durumu verileri eksik:", apiResponseData);
-      throw new Error("Open-Meteo'dan eksik güncel hava durumu verileri alındı.");
+       if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
+        console.warn("[WeatherSummarization] Invalid API response, serving stale data.");
+        return { 
+          ...lastSuccessfulWeather, 
+          summary: `(Yeni veriler işlenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla alınan veriler gösteriliyor) ${lastSuccessfulWeather.summary}`,
+          dataTimestamp: lastSuccessfulFetchTime.toISOString() 
+        };
+      }
+      throw new Error("Open-Meteo'dan eksik güncel hava durumu verileri alındı ve önbellekte veri yok.");
     }
 
-    // Check for hourly and daily data integrity if present
     const hasHourly = apiResponseData.hourly && apiResponseData.hourly.time && Array.isArray(apiResponseData.hourly.time);
     const hasDaily = apiResponseData.daily && apiResponseData.daily.time && Array.isArray(apiResponseData.daily.time);
 
@@ -240,17 +265,26 @@ const summarizeWeatherFlow = ai.defineFlow(
     };
 
     const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 2000; // 2 seconds
+    const RETRY_DELAY_MS = 2000;
     let attempts = 0;
 
     while (attempts < MAX_RETRIES) {
       try {
-        const {output} = await formatOpenMeteoDataPrompt(promptInputData);
-        if (!output) {
+        const {output: aiOutput} = await formatOpenMeteoDataPrompt(promptInputData);
+        if (!aiOutput) {
             throw new Error("Hava durumu özetleme prompt'u bir çıktı döndürmedi.");
         }
-        // Success
-        return { ...output, currentWeatherCode: apiResponseData.current.weathercode };
+        
+        const currentTimestamp = new Date().toISOString();
+        lastSuccessfulWeather = { 
+            ...aiOutput, 
+            currentWeatherCode: apiResponseData.current.weathercode, 
+            dataTimestamp: currentTimestamp 
+        };
+        lastSuccessfulFetchTime = new Date(currentTimestamp);
+        console.log("[WeatherSummarization] Successfully fetched and processed new weather data.");
+        return { ...lastSuccessfulWeather };
+
       } catch (e: any) {
         attempts++;
         const errorMessage = e.message || "";
@@ -262,17 +296,28 @@ const summarizeWeatherFlow = ai.defineFlow(
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
         } else {
           console.error("[WeatherSummarization] Error calling formatOpenMeteoDataPrompt after all retries or for non-retryable error:", e);
-          if (isServiceUnavailable) {
-            throw new Error("Hava durumu modeli şu anda aşırı yoğun. Lütfen daha sonra tekrar deneyin.");
+          if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
+            console.warn("[WeatherSummarization] AI processing failed, serving stale data.");
+            return { 
+              ...lastSuccessfulWeather, 
+              summary: `(Yeni veriler işlenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla alınan veriler gösteriliyor) ${lastSuccessfulWeather.summary}`,
+              dataTimestamp: lastSuccessfulFetchTime.toISOString() 
+            };
           }
-          throw new Error(errorMessage || "Hava durumu özeti oluşturulurken bilinmeyen bir hata oluştu.");
+          if (isServiceUnavailable) throw new Error("Hava durumu modeli şu anda aşırı yoğun ve önbellekte veri yok. Lütfen daha sonra tekrar deneyin.");
+          throw new Error(errorMessage || "Hava durumu özeti oluşturulurken bilinmeyen bir hata oluştu ve önbellekte veri yok.");
         }
       }
     }
-    // Should not be reached if the loop logic is correct, but as a fallback:
-    throw new Error("Hava durumu özeti maksimum deneme sayısına ulaşıldıktan sonra oluşturulamadı.");
+    // Fallback if loop finishes - should be caught by error throwing inside, but for safety:
+    if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
+        console.warn("[WeatherSummarization] Reached end of retry loop, serving stale data.");
+        return { 
+          ...lastSuccessfulWeather, 
+          summary: `(Yeni veriler alınamadı, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla alınan veriler gösteriliyor) ${lastSuccessfulWeather.summary}`,
+          dataTimestamp: lastSuccessfulFetchTime.toISOString()
+        };
+    }
+    throw new Error("Hava durumu özeti maksimum deneme sayısına ulaşıldıktan sonra oluşturulamadı ve önbellekte veri yok.");
   }
 );
-
-
-    

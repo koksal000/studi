@@ -1,38 +1,50 @@
 
 "use client";
 
-import type { Comment, Reply } from '@/hooks/use-announcements';
+import type { Comment } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { UserCircle, CalendarDays, MessageSquare, Send, Loader2 } from 'lucide-react'; // ThumbsUp kaldırıldı
+import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, Trash2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
 import { ReplyItem } from './reply-item';
+import { AdminPasswordDialog } from './admin-password-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface CommentItemProps {
   comment: Comment;
   announcementId: string;
+  onCommentDeleted?: () => void; // Callback after successful deletion
 }
 
-export function CommentItem({ comment, announcementId }: CommentItemProps) {
-  const { user } = useUser();
-  const { addReplyToComment } = useAnnouncements(); // toggleCommentLike kaldırıldı
+export function CommentItem({ comment, announcementId, onCommentDeleted }: CommentItemProps) {
+  const { user, isAdmin } = useUser();
+  const { addReplyToComment, deleteComment } = useAnnouncements();
   const { toast } = useToast();
 
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
+
 
   const formattedDate = new Date(comment.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
-
-  // Yorum beğenme ile ilgili kısımlar kaldırıldı
-  // const currentUserFullName = user ? `${user.name} ${user.surname}` : null;
-  // const hasLikedComment = comment.likes && comment.likes.some(like => like.userId === currentUserFullName);
 
   const getInitials = (name: string) => {
     const names = name.split(' ');
@@ -63,10 +75,28 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
       setIsSubmittingReply(false);
     }
   };
+  
+  const handleDeleteComment = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteComment(announcementId, comment.id);
+      toast({ title: "Yorum Silindi", description: "Yorum başarıyla kaldırıldı."});
+      if (onCommentDeleted) onCommentDeleted();
+    } catch (error: any) {
+      // Error already toasted in hook or not an admin
+      if (!error.message?.includes("Admin privileges required")) {
+        toast({ title: "Silme Başarısız", description: error.message || "Yorum silinirken bir sorun oluştu.", variant: "destructive"});
+      }
+    } finally {
+      setIsDeleting(false);
+      setIsAdminPasswordDialogOpenForDelete(false);
+    }
+  };
 
-  // handleCommentLikeToggle fonksiyonu kaldırıldı
+  const canDeleteComment = isAdmin; // Simplified: Only admin can delete any comment for now
 
   return (
+    <>
     <div className="p-3 bg-secondary/30 rounded-md shadow-sm">
       <div className="flex space-x-3">
         <Avatar className="h-8 w-8">
@@ -74,7 +104,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
             {getInitials(comment.authorName)}
           </AvatarFallback>
         </Avatar>
-        <div className="flex-1 space-y-1 min-w-0">
+        <div className="flex-1 space-y-1 min-w-0"> {/* Added min-w-0 here */}
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-primary">{comment.authorName}</h4>
             <p className="text-xs text-muted-foreground flex items-center">
@@ -82,9 +112,8 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
               {formattedDate}
             </p>
           </div>
-          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p>
+          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p> {/* Added break-words */}
           <div className="flex items-center space-x-2 pt-1">
-            {/* Yorum beğen butonu kaldırıldı */}
             <Button 
               variant="ghost" 
               size="xs" 
@@ -94,6 +123,30 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
             >
               <MessageSquare className="h-3.5 w-3.5 mr-1" /> Yanıtla ({comment.replies?.length || 0})
             </Button>
+            {canDeleteComment && (
+               <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="xs" className="text-xs text-destructive hover:text-destructive" disabled={isDeleting}>
+                    {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1"/> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                    Sil
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Yorumu Silmeyi Onayla</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Bu yorumu kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>İptal</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} className="bg-destructive hover:bg-destructive/90">
+                      Evet, Sil
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
 
           {showReplyForm && user && (
@@ -116,7 +169,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
       </div>
 
       {comment.replies && comment.replies.length > 0 && (
-        <div className="mt-3 ml-8 pl-4 border-l border-primary/30 space-y-3">
+        <div className="mt-3 ml-4 sm:ml-8 pl-2 sm:pl-4 border-l border-primary/30 space-y-3">
           {comment.replies.map(reply => (
             <ReplyItem 
                 key={reply.id} 
@@ -128,5 +181,11 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
         </div>
       )}
     </div>
+    <AdminPasswordDialog
+        isOpen={isAdminPasswordDialogOpenForDelete}
+        onOpenChange={setIsAdminPasswordDialogOpenForDelete}
+        onVerified={handleDeleteComment}
+    />
+    </>
   );
 }

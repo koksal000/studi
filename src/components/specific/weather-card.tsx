@@ -3,31 +3,30 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { summarizeWeather, type WeatherSummaryOutput, type HourlyForecastItem, type DailyForecastItem } from '@/ai/flows/weather-summarization'; // Assuming types are exported
-import { AlertTriangle, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Loader2, Sun, Thermometer, Droplet, Wind, CalendarDays, Clock } from 'lucide-react';
+import { summarizeWeather, type WeatherSummaryOutput } from '@/ai/flows/weather-summarization';
+import { AlertTriangle, Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, Loader2, Sun, Wind, CalendarDays, Clock } from 'lucide-react'; // Thermometer, Droplet kaldırıldı, gereksizdi
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-// ScrollArea importu kaldırıldı
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 
 const getWeatherIcon = (weatherCode: number | undefined, sizeClass = "h-10 w-10"): JSX.Element => {
   if (weatherCode === undefined) return <Cloud className={sizeClass + " text-gray-400"} />;
   switch (weatherCode) {
-    case 0: return <Sun className={sizeClass + " text-yellow-400"} />; // Clear sky
-    case 1: return <CloudSun className={sizeClass + " text-sky-400"} />; // Mainly clear
-    case 2: return <CloudSun className={sizeClass + " text-sky-500"} />; // Partly cloudy
-    case 3: return <Cloud className={sizeClass + " text-gray-400"} />; // Overcast
-    case 45: case 48: return <CloudFog className={sizeClass + " text-gray-500"} />; // Fog
-    case 51: case 53: case 55: return <CloudDrizzle className={sizeClass + " text-blue-300"} />; // Drizzle
-    case 56: case 57: return <CloudDrizzle className={sizeClass + " text-blue-400"} />; // Freezing Drizzle
-    case 61: case 63: case 65: return <CloudRain className={sizeClass + " text-blue-500"} />; // Rain
-    case 66: case 67: return <CloudRain className={sizeClass + " text-blue-600"} />; // Freezing Rain
-    case 71: case 73: case 75: return <CloudSnow className={sizeClass + " text-white"} />; // Snow fall
-    case 77: return <CloudSnow className={sizeClass + " text-gray-200"} />; // Snow grains
-    case 80: case 81: case 82: return <CloudRain className={sizeClass + " text-blue-600"} />; // Rain showers
-    case 85: case 86: return <CloudSnow className={sizeClass + " text-gray-100"} />; // Snow showers
-    case 95: return <CloudLightning className={sizeClass + " text-yellow-500"} />; // Thunderstorm
-    case 96: case 99: return <CloudLightning className={sizeClass + " text-yellow-600"} />; // Thunderstorm with hail
+    case 0: return <Sun className={sizeClass + " text-yellow-400"} />;
+    case 1: return <CloudSun className={sizeClass + " text-sky-400"} />;
+    case 2: return <CloudSun className={sizeClass + " text-sky-500"} />;
+    case 3: return <Cloud className={sizeClass + " text-gray-400"} />;
+    case 45: case 48: return <CloudFog className={sizeClass + " text-gray-500"} />;
+    case 51: case 53: case 55: return <CloudDrizzle className={sizeClass + " text-blue-300"} />;
+    case 56: case 57: return <CloudDrizzle className={sizeClass + " text-blue-400"} />;
+    case 61: case 63: case 65: return <CloudRain className={sizeClass + " text-blue-500"} />;
+    case 66: case 67: return <CloudRain className={sizeClass + " text-blue-600"} />;
+    case 71: case 73: case 75: return <CloudSnow className={sizeClass + " text-white"} />;
+    case 77: return <CloudSnow className={sizeClass + " text-gray-200"} />;
+    case 80: case 81: case 82: return <CloudRain className={sizeClass + " text-blue-600"} />;
+    case 85: case 86: return <CloudSnow className={sizeClass + " text-gray-100"} />;
+    case 95: return <CloudLightning className={sizeClass + " text-yellow-500"} />;
+    case 96: case 99: return <CloudLightning className={sizeClass + " text-yellow-600"} />;
     default: return <Cloud className={sizeClass + " text-gray-400"} />;
   }
 };
@@ -37,30 +36,45 @@ export function WeatherCard() {
   const [weather, setWeather] = useState<WeatherSummaryOutput | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [displayedDataTimestamp, setDisplayedDataTimestamp] = useState<Date | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
 
   useEffect(() => {
     const fetchWeather = async () => {
-      setIsLoading(true);
-      setError(null);
+      setIsLoading(true); // Set loading true at the start of each fetch attempt
+      // setError(null); // Don't clear previous error immediately, only if new fetch is successful
       try {
         const result = await summarizeWeather({ location: 'Domaniç' });
         setWeather(result);
-        setLastUpdated(new Date());
+        if (result.dataTimestamp) {
+          setDisplayedDataTimestamp(new Date(result.dataTimestamp));
+        } else {
+          setDisplayedDataTimestamp(new Date()); // Fallback if dataTimestamp is missing
+        }
+        setError(null); // Clear error on successful fetch
       } catch (e: any) {
         setError(e.message || 'Hava durumu bilgisi alınamadı.');
         console.error(e);
+        // Don't clear old weather data on error, so user can still see stale data
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchWeather();
-    const intervalId = setInterval(fetchWeather, 30 * 60 * 1000); // Update every 30 minutes
+    fetchWeather(); // Initial fetch
+    const intervalId = setInterval(fetchWeather, 10 * 60 * 1000); // Attempt to refresh every 10 minutes
     return () => clearInterval(intervalId);
   }, []);
+
+  const getFormattedTime = (date: Date | null) => {
+    if (!date) return "";
+    return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  const getFormattedDateTime = (date: Date | null) => {
+    if (!date) return "";
+    return date.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
+  }
 
   return (
     <>
@@ -73,27 +87,29 @@ export function WeatherCard() {
             {weather && !isLoading ? getWeatherIcon(weather.currentWeatherCode, "h-6 w-6 mr-2") : <CloudSun className="h-6 w-6 mr-2 text-primary" />}
             Domaniç Hava Durumu
           </CardTitle>
-          {lastUpdated && (
+          {displayedDataTimestamp && (
              <CardDescription>
-              Son güncelleme: {lastUpdated.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+              Son başarılı güncelleme: {getFormattedTime(displayedDataTimestamp)}
             </CardDescription>
           )}
         </CardHeader>
         <CardContent>
-          {isLoading && (
+          {isLoading && !weather && ( // Show loader only if there's no weather data at all yet
             <div className="flex items-center justify-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="ml-2 text-muted-foreground">Yükleniyor...</p>
             </div>
           )}
-          {error && !isLoading && (
+          {error && !isLoading && !weather && ( // Show error only if loading finished and still no weather data
             <div className="flex items-center text-destructive">
               <AlertTriangle className="h-5 w-5 mr-2" />
               <p>{error}</p>
             </div>
           )}
-          {weather && !isLoading && !error && (
+          {weather && ( // Always display weather data if available, even if loading new or if there was an error with the latest fetch
             <div className="space-y-4">
+               {isLoading && <p className="text-xs text-muted-foreground text-center animate-pulse">Yeni veriler yükleniyor...</p>}
+               {error && <p className="text-xs text-destructive text-center">Güncelleme hatası: {error}. Gösterilen veriler eski olabilir.</p>}
               <div className="flex items-center justify-between">
                 <div className="text-5xl font-bold text-primary">{weather.temperature}</div>
                 {getWeatherIcon(weather.currentWeatherCode, "h-12 w-12")}
@@ -101,7 +117,7 @@ export function WeatherCard() {
               <p className="text-lg text-muted-foreground capitalize">{weather.conditions}</p>
               <div className="text-sm space-y-1 text-foreground/80">
                 <div className="flex items-center">
-                  <Droplet className="h-4 w-4 mr-2 text-blue-500" />
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-blue-500"><path d="M12 2.69l.01-2.69M12 2.69A5 5 0 0117 7.69V12h-1a4 4 0 00-8 0H7v-4.31A5 5 0 0112 2.69zM12 17.31V22M12 17.31a5 5 0 01-5-5H2a10 10 0 0020 0h-5a5 5 0 01-5 5z"/></svg>
                   Nem: {weather.humidity}
                 </div>
                 <div className="flex items-center">
@@ -122,19 +138,17 @@ export function WeatherCard() {
             <DialogHeader className="p-4 sm:p-6 border-b flex-shrink-0">
               <DialogTitle className="text-xl sm:text-2xl">Domaniç Detaylı Hava Tahmini</DialogTitle>
               <DialogDescription>
-                Saatlik ve günlük tahminler. Son güncelleme: {lastUpdated?.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}
+                Saatlik ve günlük tahminler. Veri zamanı: {getFormattedDateTime(displayedDataTimestamp)}
               </DialogDescription>
             </DialogHeader>
-            {/* ScrollArea yerine standart div ile overflow: auto kullanılıyor */}
             <div className="flex-grow min-h-0 overflow-auto">
               <div className="p-4 sm:p-6">
-                {/* Hourly Forecast Section */}
                 {weather.hourlyForecast && weather.hourlyForecast.length > 0 && (
                   <section className={(weather.dailyForecast && weather.dailyForecast.length > 0) ? "mb-6" : ""}>
                     <h3 className="text-lg font-semibold mb-3 text-primary flex items-center">
                       <Clock className="mr-2 h-5 w-5" /> Saatlik Tahmin (İlk 12 Saat)
                     </h3>
-                    <div className="overflow-x-auto py-2 touch-pan-x"> {/* Yatay kaydırma için */}
+                    <div className="overflow-x-auto py-2 touch-pan-x">
                       <div className="flex space-x-3 w-max">
                         {weather.hourlyForecast.map((hour, index) => (
                           <Card key={index} className="min-w-[120px] flex-shrink-0 shadow">
@@ -155,7 +169,6 @@ export function WeatherCard() {
                   </section>
                 )}
 
-                {/* Daily Forecast Section */}
                 {weather.dailyForecast && weather.dailyForecast.length > 0 && (
                   <section>
                     <h3 className="text-lg font-semibold mb-3 text-primary flex items-center">

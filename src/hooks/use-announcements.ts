@@ -19,7 +19,6 @@ export interface Reply {
   date: string;
   replyingToAuthorName?: string;
   replyingToAuthorId?: string;
-  // likes?: Like[]; // Yanıt beğenme kaldırıldı
 }
 
 export interface Comment {
@@ -29,7 +28,6 @@ export interface Comment {
   text: string;
   date: string;
   replies?: Reply[];
-  // likes?: Like[]; // Yorum beğenme kaldırıldı
 }
 
 export interface Announcement {
@@ -52,7 +50,6 @@ export interface NewAnnouncementPayload {
   mediaType?: string | null;
 }
 
-// API action payloads
 interface ToggleAnnouncementLikePayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
   announcementId: string;
@@ -73,10 +70,25 @@ interface AddReplyPayload {
   reply: Omit<Reply, 'id' | 'date'>;
 }
 
+interface DeleteCommentPayload {
+  action: "DELETE_COMMENT";
+  announcementId: string;
+  commentId: string;
+}
+
+interface DeleteReplyPayload {
+  action: "DELETE_REPLY";
+  announcementId: string;
+  commentId: string;
+  replyId: string;
+}
+
 type AnnouncementApiPayload =
   | ToggleAnnouncementLikePayload
   | AddCommentPayload
   | AddReplyPayload
+  | DeleteCommentPayload
+  | DeleteReplyPayload
   | Announcement;
 
 export function useAnnouncements() {
@@ -111,7 +123,6 @@ export function useAnnouncements() {
 
   const showNotification = useCallback((title: string, body: string, tag?: string) => {
     if (!siteNotificationsPreference) {
-      // console.log("[Notifications] Browser notification skipped: User preference is off.");
       return;
     }
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -119,9 +130,9 @@ export function useAnnouncements() {
         try {
           const notification = new Notification(title, {
             body: body,
-            icon: '/images/logo.png', // Ensure this path is correct in your `public` folder
-            tag: tag || title, // Tag can prevent duplicate notifications if desired
-            renotify: !!tag, // If tag is used, renotify can make it pop up again
+            icon: '/images/logo.png',
+            tag: tag || title,
+            renotify: !!tag,
           });
           notification.onclick = (event) => {
             event.preventDefault();
@@ -132,29 +143,22 @@ export function useAnnouncements() {
           };
         } catch (err: any) {
           console.error("[Notifications] Browser notification construction error:", err);
-          toast({ title: title, description: body, duration: 8000 });
+          toast({ title: title, description: body, duration: 8000, variant: "default" });
         }
-      } else if (Notification.permission !== 'denied') {
-        // Permission is default, not granted, not denied.
-        // Optionally, you could prompt for permission here, but it's often better to do it at a more opportune moment.
-        // For now, fallback to toast.
-        // console.log("[Notifications] Browser notification permission not granted (default). Falling back to toast.");
-        toast({ title: title, description: body, duration: 8000 });
-      } else {
-        // Permission denied, do nothing or fallback to a very subtle in-app indicator if desired.
-        // console.log("[Notifications] Browser notification permission denied.");
+      } else if (Notification.permission === 'default') {
+        toast({ title: title, description: body, duration: 8000, variant: "default" });
+      } else if (Notification.permission === 'denied') {
+        // console.log("[Notifications] Browser notification permission denied by user.");
       }
     } else {
-      // console.log("[Notifications] Browser notification skipped: Notifications API not available. Falling back to toast.");
-      toast({ title: title, description: body, duration: 8000 });
+      toast({ title: title, description: body, duration: 8000, variant: "default" });
     }
   }, [siteNotificationsPreference, toast]);
-
+  
   useEffect(() => {
     initialDataLoadedRef.current = false;
     setIsLoading(true);
 
-    // console.log("[Announcements] Initializing hook, fetching initial data...");
     fetch('/api/announcements')
       .then(res => {
         if (!res.ok) {
@@ -164,7 +168,6 @@ export function useAnnouncements() {
         return res.json();
       })
       .then((data: Announcement[]) => {
-        // console.log("[Announcements] Initial data fetched:", data.length, "items");
         setAnnouncements(Array.isArray(data) ? data : []);
       })
       .catch(err => {
@@ -172,7 +175,7 @@ export function useAnnouncements() {
         setAnnouncements([]);
       })
       .finally(() => {
-        // setIsLoading will be handled by SSE connection or error
+        // setIsLoading handled by SSE or error in SSE
       });
 
     if (eventSourceRef.current) {
@@ -182,13 +185,10 @@ export function useAnnouncements() {
     const newEventSource = new EventSource('/api/announcements/stream');
     eventSourceRef.current = newEventSource;
 
-    newEventSource.onopen = () => {
-      // console.log('[SSE Announcements] Connection opened.');
-    };
+    newEventSource.onopen = () => {};
 
     newEventSource.onmessage = (event) => {
-      const previousAnnouncementsState = [...announcementsRef.current]; // Capture previous state
-
+      const previousAnnouncementsState = [...announcementsRef.current];
       let updatedAnnouncementsFromServer: Announcement[];
       try {
         updatedAnnouncementsFromServer = JSON.parse(event.data);
@@ -199,38 +199,32 @@ export function useAnnouncements() {
 
       setAnnouncements(updatedAnnouncementsFromServer);
 
+      const wasInitialDataLoad = !initialDataLoadedRef.current;
       if (!initialDataLoadedRef.current) {
         initialDataLoadedRef.current = true;
         setIsLoading(false);
-        // console.log("[SSE Announcements] Initial data processed via SSE.");
-        return; // Don't process notifications for initial data load
       }
-
-      // console.log("[SSE Announcements] Received update. Prev count:", previousAnnouncementsState.length, "New count:", updatedAnnouncementsFromServer.length);
-
-      if (user && initialDataLoadedRef.current) {
+      
+      if (user && !wasInitialDataLoad) { // Only process notifications after initial load
         const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
-        // Check for new announcements
         updatedAnnouncementsFromServer.forEach(newAnn => {
-          const isNewOverallAnnouncement = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
-          const isAuthorSelfAnnouncement = newAnn.authorId === currentUserIdentifier;
+          const oldAnnEquivalent = previousAnnouncementsState.find(pa => pa.id === newAnn.id);
 
-          if (isNewOverallAnnouncement && !isAuthorSelfAnnouncement) {
-            // console.log(`[Notification] New Announcement: "${newAnn.title}" by ${newAnn.author}`);
+          // Check for new announcements
+          if (!oldAnnEquivalent && newAnn.authorId !== currentUserIdentifier) {
             showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + "...", `ann-${newAnn.id}`);
           }
 
           // Check for new replies
-          const oldAnnEquivalent = previousAnnouncementsState.find(pa => pa.id === newAnn.id);
           newAnn.comments?.forEach(newComment => {
             const oldCommentEquivalent = oldAnnEquivalent?.comments?.find(pc => pc.id === newComment.id);
             newComment.replies?.forEach(newReply => {
               const isNewReply = !oldCommentEquivalent?.replies?.find(pr => pr.id === newReply.id);
               const isAuthorSelfReply = newReply.authorId === currentUserIdentifier;
+              const isReplyToCurrentUser = newReply.replyingToAuthorId === currentUserIdentifier;
 
-              if (isNewReply && newReply.replyingToAuthorId === currentUserIdentifier && !isAuthorSelfReply) {
-                // console.log(`[Notification] New Reply for ${currentUserIdentifier} from ${newReply.authorName} in Ann: "${newAnn.title}"`);
+              if (isNewReply && isReplyToCurrentUser && !isAuthorSelfReply) {
                 const notificationTitle = `${newReply.authorName} size yanıt verdi`;
                 const notificationBody = `@${newReply.replyingToAuthorName}: "${newReply.text.substring(0, 50)}..."`;
                 showNotification(notificationTitle, notificationBody, `reply-${newReply.id}`);
@@ -243,42 +237,31 @@ export function useAnnouncements() {
 
     newEventSource.onerror = (errorEvent: Event) => {
        const target = errorEvent.target as EventSource;
-      if (eventSourceRef.current !== target) {
-        return;
-      }
+      if (eventSourceRef.current !== target) return;
+      
       const readyState = target?.readyState;
-      const eventType = errorEvent.type || 'unknown event type';
-
       if (readyState === EventSource.CONNECTING) {
-        console.warn(
-          `[SSE Announcements] Initial connection failed or attempting to reconnect. EventSource readyState: ${readyState}, Event Type: ${eventType}.`,
-          "This might be due to NEXT_PUBLIC_APP_URL not being set correctly, or the stream API endpoint having issues."
-        );
+        console.warn("[SSE Announcements] Connecting or reconnecting to SSE stream...");
       } else if (readyState === EventSource.CLOSED) {
-         console.warn(
-          `[SSE Announcements] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect.`
-        );
+         console.warn("[SSE Announcements] SSE Connection closed. Browser may attempt to reconnect.");
       } else {
-        console.error(
-          `[SSE Announcements] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}.`
-        );
+        console.error("[SSE Announcements] SSE Connection error state:", readyState, errorEvent);
       }
 
       if (!initialDataLoadedRef.current) {
         setIsLoading(false);
-        initialDataLoadedRef.current = true;
+        initialDataLoadedRef.current = true; 
       }
     };
 
     return () => {
       if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
-      // console.log("[Announcements] Hook unmounting, SSE connection closed.");
     };
-  }, [showNotification, user, isAdmin, siteNotificationsPreference]); // siteNotificationsPreference eklendi, showNotification'ı etkileyebilir.
+  }, [showNotification, user, isAdmin, siteNotificationsPreference]);
 
   const sendApiRequest = async (payload: AnnouncementApiPayload) => {
-    if (!user && 'action' in payload && (payload.action === "ADD_COMMENT_TO_ANNOUNCEMENT" || payload.action === "ADD_REPLY_TO_COMMENT")) {
+    if (!user && 'action' in payload && (payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE")) { // Allow like toggle for non-logged in for now, API should handle
       toast({ title: "Giriş Gerekli", description: "Bu işlemi yapmak için giriş yapmalısınız.", variant: "destructive" });
       throw new Error("User not logged in for this action");
     }
@@ -358,7 +341,7 @@ export function useAnnouncements() {
       return;
     }
     const authorName = `${user.name} ${user.surname}`;
-    const authorId = authorName;
+    const authorId = isAdmin ? "ADMIN_ACCOUNT_COMMENTER" : authorName; // Distinguish admin comments if needed
 
     const commentPayload: Omit<Comment, 'id' | 'date' | 'replies'> = {
       authorName,
@@ -366,7 +349,7 @@ export function useAnnouncements() {
       text,
     };
     await sendApiRequest({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: commentPayload });
-  }, [user]);
+  }, [user, isAdmin]);
 
   const addReplyToCommentHook = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
     if (!user) {
@@ -378,8 +361,8 @@ export function useAnnouncements() {
       return;
     }
     const authorName = `${user.name} ${user.surname}`;
-    const authorId = authorName;
-    const replyingToAuthorId = replyingToAuthorName;
+    const authorId = isAdmin ? "ADMIN_ACCOUNT_REPLIER" : authorName;
+    const replyingToAuthorId = replyingToAuthorName; // Assuming name is used as ID for now
 
     const replyPayload: Omit<Reply, 'id' | 'date'> = {
         authorName,
@@ -389,11 +372,28 @@ export function useAnnouncements() {
         replyingToAuthorId,
     };
     await sendApiRequest({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: replyPayload });
-  }, [user]);
+  }, [user, isAdmin]);
+
+  const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
+    if (!user || !isAdmin) { // Only admin can delete comments for now
+      toast({ title: "Yetki Gerekli", description: "Yorum silmek için yönetici olmalısınız.", variant: "destructive"});
+      throw new Error("Admin privileges required to delete comment.");
+    }
+    await sendApiRequest({ action: "DELETE_COMMENT", announcementId, commentId });
+  }, [user, isAdmin]);
+
+  const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
+     if (!user || !isAdmin) { // Only admin can delete replies for now
+      toast({ title: "Yetki Gerekli", description: "Yanıt silmek için yönetici olmalısınız.", variant: "destructive"});
+      throw new Error("Admin privileges required to delete reply.");
+    }
+    await sendApiRequest({ action: "DELETE_REPLY", announcementId, commentId, replyId });
+  }, [user, isAdmin]);
+
 
   const getAnnouncementById = useCallback((id: string): Announcement | undefined => {
-    return announcementsRef.current.find(ann => ann.id === id); // Use ref here for potentially more stable access
-  }, []); // announcementsRef.current is stable, so no need to list announcements as dependency
+    return announcementsRef.current.find(ann => ann.id === id);
+  }, []); // announcementsRef.current is stable
 
   return {
     announcements,
@@ -405,5 +405,7 @@ export function useAnnouncements() {
     toggleAnnouncementLike,
     addCommentToAnnouncement: addCommentToAnnouncementHook,
     addReplyToComment: addReplyToCommentHook,
+    deleteComment,
+    deleteReply,
   };
 }

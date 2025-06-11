@@ -22,21 +22,38 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
-import { useState, useRef, type FormEvent } from 'react';
+import { useState, useRef, type FormEvent, useEffect } from 'react';
 import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog';
 import { CommentItem } from './comment-item';
 
 interface AnnouncementCardProps {
   announcement: Announcement;
   isCompact?: boolean;
-  allowDelete?: boolean;
+  allowDelete?: boolean; // Prop to control if the main announcement delete button is shown (for admin page)
 }
 
-export function AnnouncementCard({ announcement, isCompact = false, allowDelete = false }: AnnouncementCardProps) {
+export function AnnouncementCard({ announcement: initialAnnouncement, isCompact = false, allowDelete = false }: AnnouncementCardProps) {
   const { user } = useUser();
-  const { deleteAnnouncement: removeAnnouncement, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
+  const { deleteAnnouncement: removeAnnouncement, toggleAnnouncementLike, addCommentToAnnouncement, getAnnouncementById } = useAnnouncements();
   const { toast } = useToast();
-  const [isAdminPasswordDialogOpen, setIsAdminPasswordDialogOpen] = useState(false);
+  
+  const [announcement, setAnnouncement] = useState<Announcement>(initialAnnouncement);
+  useEffect(() => {
+    // Listen for updates to this specific announcement from the hook
+    const updatedAnn = getAnnouncementById(initialAnnouncement.id);
+    if (updatedAnn) {
+      setAnnouncement(updatedAnn);
+    } else {
+      // If the announcement was deleted (e.g., by another user/tab), it might become null.
+      // Handle this case, e.g., by rendering nothing or a "deleted" message.
+      // For now, let's assume it won't be null if we are rendering it.
+      // Fallback to initial if somehow not found (should not happen if list is up-to-date)
+      setAnnouncement(initialAnnouncement);
+    }
+  }, [getAnnouncementById, initialAnnouncement]);
+
+
+  const [isAdminPasswordDialogOpenForAnnDelete, setIsAdminPasswordDialogOpenForAnnDelete] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -49,70 +66,51 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
   const currentUserIdentifier = user ? `${user.name} ${user.surname}` : null;
   const hasLiked = announcement.likes && announcement.likes.some(like => like.userId === currentUserIdentifier);
 
-  const canAttemptDelete = !!user;
+  // Only admin can delete the main announcement (via admin page, where allowDelete=true)
+  const canAttemptDeleteAnnouncement = !!user && allowDelete; 
 
-  const performDelete = () => {
+  const performDeleteAnnouncement = () => {
     removeAnnouncement(announcement.id);
     toast({
       title: "Duyuru Silindi",
       description: `"${announcement.title}" başlıklı duyuru başarıyla silindi.`,
     });
+    setIsAdminPasswordDialogOpenForAnnDelete(false);
   };
 
   const formattedDate = new Date(announcement.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  const togglePlayPause = () => {
-    if (videoRef.current) {
-      if (videoRef.current.paused || videoRef.current.ended) {
-        videoRef.current.play(); setIsPlaying(true);
-      } else {
-        videoRef.current.pause(); setIsPlaying(false);
-      }
-    }
-  };
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(videoRef.current.muted);
-    }
-  };
+  const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); } else { videoRef.current.pause(); setIsPlaying(false); }}};
+  const toggleMute = () => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
 
   const handleLikeToggle = async () => {
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapın.", variant: "destructive" });
-      return;
-    }
-    try {
-      await toggleAnnouncementLike(announcement.id);
-    } catch (error) {
-      // Error already toasted in hook
-    }
+    if (!user) { toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapın.", variant: "destructive" }); return; }
+    try { await toggleAnnouncementLike(announcement.id); } catch (error) { /* Hook toasts */ }
   };
 
   const handleCommentSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Yorum yapmak için giriş yapın.", variant: "destructive" });
-      return;
-    }
-    if (!commentText.trim()) {
-      toast({ title: "Yorum Boş", description: "Lütfen bir yorum yazın.", variant: "destructive" });
-      return;
-    }
+    if (!user) { toast({ title: "Giriş Gerekli", description: "Yorum yapmak için giriş yapın.", variant: "destructive" }); return; }
+    if (!commentText.trim()) { toast({ title: "Yorum Boş", description: "Lütfen bir yorum yazın.", variant: "destructive" }); return; }
     setIsSubmittingComment(true);
     try {
       await addCommentToAnnouncement(announcement.id, commentText);
       setCommentText('');
       setShowCommentInput(false); 
-    } catch (error) {
-      // Error already toasted in hook
-    } finally {
-      setIsSubmittingComment(false);
+    } catch (error) { /* Hook toasts */ } 
+    finally { setIsSubmittingComment(false); }
+  };
+  
+  const handleCommentOrReplyDeleted = () => {
+    // Force re-fetch of announcement data to update comment/reply counts and lists
+    const updatedAnn = getAnnouncementById(announcement.id);
+    if (updatedAnn) {
+      setAnnouncement(updatedAnn);
     }
   };
+
 
   const renderAuthorInfo = () => {
     if (announcement.authorId === "ADMIN_ACCOUNT") {
@@ -123,11 +121,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
         </span>
       );
     }
-    return (
-      <span className="flex items-center">
-        <UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}
-      </span>
-    );
+    return (<span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>);
   };
 
   const renderMedia = () => {
@@ -137,11 +131,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
     const isVimeo = announcement.mediaType === 'video/url' && announcement.media.includes("vimeo.com/");
 
     if (announcement.mediaType?.startsWith('image/')) {
-      return (
-        <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted">
-          <Image src={announcement.media} alt={announcement.title} layout="fill" objectFit="contain" data-ai-hint="announcement media" />
-        </div>
-      );
+      return (<div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><Image src={announcement.media} alt={announcement.title} layout="fill" objectFit="contain" data-ai-hint="announcement media" /></div>);
     }
     if (isDirectVideoFile || (announcement.mediaType?.startsWith('video/') && announcement.media.startsWith('data:video/'))) {
       return (
@@ -164,21 +154,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe src={`https://player.vimeo.com/video/${videoId}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="Vimeo video player" className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
      if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
-      return (
-        <div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden">
-          <a 
-            href={announcement.media} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="text-primary hover:underline flex items-center w-full"
-          >
-            <Link2 className="h-4 w-4 mr-2 flex-shrink-0"/>
-            <span className="truncate">
-              {announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}
-            </span>
-          </a>
-        </div>
-      );
+      return (<div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/><span className="truncate">{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</span></a></div>);
     }
     return null;
   };
@@ -201,11 +177,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
             <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
             {renderAuthorInfo()}
             {isCompact && announcement.media && <span className="flex items-center">{getCompactMediaIndicator()}</span>}
-            {!isCompact && announcement.media && (announcement.mediaType === 'url/link' || announcement.mediaType === 'video/url') && 
-             !/\.(jpeg|jpg|gif|png|webp|mp4|webm|ogg)(\?|$)/i.test(announcement.media) && 
-             !/youtu\.?be/i.test(announcement.media) && !/vimeo\.com/i.test(announcement.media) &&
-             <span className="flex items-center"><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya Bağlantısı</span>
-            }
+            {!isCompact && announcement.media && (announcement.mediaType === 'url/link' || announcement.mediaType === 'video/url') && !/\.(jpeg|jpg|gif|png|webp|mp4|webm|ogg)(\?|$)/i.test(announcement.media) && !/youtu\.?be/i.test(announcement.media) && !/vimeo\.com/i.test(announcement.media) && <span className="flex items-center"><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya Bağlantısı</span>}
           </div>
         </CardHeader>
         <CardContent>
@@ -227,13 +199,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
 
               {showCommentInput && user && (
                 <form onSubmit={handleCommentSubmit} className="space-y-2 mb-4">
-                  <Textarea
-                    placeholder={`${user.name} ${user.surname} olarak yorum yap...`}
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    rows={2}
-                    disabled={isSubmittingComment}
-                  />
+                  <Textarea placeholder={`${user.name} ${user.surname} olarak yorum yap...`} value={commentText} onChange={(e) => setCommentText(e.target.value)} rows={2} disabled={isSubmittingComment} />
                   <Button type="submit" size="sm" disabled={isSubmittingComment || !commentText.trim()}>
                     {isSubmittingComment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                     Gönder
@@ -245,7 +211,7 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
                 <div className="space-y-3 mt-4">
                   <h4 className="text-md font-semibold text-primary">Yorumlar ({announcement.comments.length})</h4>
                   {announcement.comments.map(comment => (
-                    <CommentItem key={comment.id} comment={comment} announcementId={announcement.id} />
+                    <CommentItem key={comment.id} comment={comment} announcementId={announcement.id} onCommentDeleted={handleCommentOrReplyDeleted} />
                   ))}
                 </div>
               )}
@@ -253,19 +219,19 @@ export function AnnouncementCard({ announcement, isCompact = false, allowDelete 
           )}
         </CardContent>
         <CardFooter className="flex justify-end items-center">
-          {canAttemptDelete && !isCompact && allowDelete && (
+          {canAttemptDeleteAnnouncement && !isCompact && (
             <AlertDialog>
               <AlertDialogTrigger asChild><Button variant="destructive" size="sm"><Trash2 className="h-4 w-4 mr-2" /> Sil</Button></AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader><AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle><AlertDialogDescription>"{announcement.title}" başlıklı duyuruyu kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>İptal</AlertDialogCancel><AlertDialogAction onClick={() => setIsAdminPasswordDialogOpen(true)} className="bg-destructive hover:bg-destructive/90">Evet, Sil</AlertDialogAction></AlertDialogFooter>
+                <AlertDialogFooter><AlertDialogCancel>İptal</AlertDialogCancel><AlertDialogAction onClick={() => setIsAdminPasswordDialogOpenForAnnDelete(true)} className="bg-destructive hover:bg-destructive/90">Evet, Sil</AlertDialogAction></AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
         </CardFooter>
       </Card>
 
-      <AdminPasswordDialog isOpen={isAdminPasswordDialogOpen} onOpenChange={setIsAdminPasswordDialogOpen} onVerified={() => { performDelete(); setIsAdminPasswordDialogOpen(false); }} />
+      <AdminPasswordDialog isOpen={isAdminPasswordDialogOpenForAnnDelete} onOpenChange={setIsAdminPasswordDialogOpenForAnnDelete} onVerified={performDeleteAnnouncement} />
       {isCompact && <AnnouncementDetailDialog isOpen={isDetailModalOpen} onOpenChange={setIsDetailModalOpen} announcement={announcement} />}
     </>
   );

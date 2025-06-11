@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useUser } from '@/contexts/user-context';
@@ -113,7 +114,7 @@ export default function HomePage() {
               <p><strong>Nüfus:</strong> 425 kişi (199 erkek, 226 kadın)</p>
               <p><strong>Muhtar:</strong> Numan YAŞAR</p>
               <p><strong>Konum:</strong> Domaniç ilçe merkezine 8 km, Kütahya il merkezine 85 km</p>
-              <p><strong>Rakım:</strong> 800 m</p>
+              <p><strong>Rakım:</strong> 810 m</p>
               
               <h4 className="font-semibold mt-4 pt-3 border-t">Tarihsel Nüfus Gelişimi</h4>
               <Table>

@@ -45,7 +45,7 @@ export default function AboutPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-foreground/90">
-            Çamlıca Köyü, Kütahya ilinin Domaniç ilçesine bağlı, doğal güzellikleri ve zengin tarihi ile öne çıkan bir yerleşim yeridir. İlçe merkezine 8 km, il merkezine ise 85 km uzaklıkta bulunmaktadır. Deniz seviyesinden yüksekliği (rakım) 800 metredir.
+            Çamlıca Köyü, Kütahya ilinin Domaniç ilçesine bağlı, doğal güzellikleri ve zengin tarihi ile öne çıkan bir yerleşim yeridir. İlçe merkezine 8 km, il merkezine ise 85 km uzaklıkta bulunmaktadır. Deniz seviyesinden yüksekliği (rakım) 810 metredir.
           </p>
           <p className="text-foreground/90">
             Köyümüz, Domaniç&apos;in merkezi konumunda olup, çevresindeki diğer köylere ulaşım açısından önemli bir geçiş noktasıdır. Yaklaşık 20 km²&apos;lik bir alana yayılan Çamlıca, İstanbul&apos;un Fatih ilçesinden bile daha geniş bir yüzölçümüne sahiptir. Bu geniş arazi, tarım ve hayvancılık faaliyetleri için elverişli koşullar sunmaktadır.
@@ -58,7 +58,7 @@ export default function AboutPage() {
                     <li>İlçe: Domaniç</li>
                     <li>İlçe Merkezine Uzaklık: 8 km</li>
                     <li>İl Merkezine Uzaklık: 85 km</li>
-                    <li>Rakım: 800 metre</li>
+                    <li>Rakım: 810 metre</li>
                     <li>Yüzölçümü: Yaklaşık 20 km²</li>
                 </ul>
             </div>
@@ -220,6 +220,3 @@ export default function AboutPage() {
     </div>
   );
 }
-
-
-    

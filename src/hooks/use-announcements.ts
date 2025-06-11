@@ -63,14 +63,14 @@ interface ToggleAnnouncementLikePayload {
 interface AddCommentPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies'>; // likes kaldırıldı
+  comment: Omit<Comment, 'id' | 'date' | 'replies'>; 
 }
 
 interface AddReplyPayload {
   action: "ADD_REPLY_TO_COMMENT";
   announcementId: string;
   commentId: string;
-  reply: Omit<Reply, 'id' | 'date'>; // likes kaldırıldı
+  reply: Omit<Reply, 'id' | 'date'>; 
 }
 
 type AnnouncementApiPayload = 
@@ -117,6 +117,8 @@ export function useAnnouncements() {
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission !== 'granted') {
         console.log("[SSE Announcements] Browser notification skipped: Browser permission not granted.");
+        // İzin istenmemişse veya reddedilmişse toast ile bildirim gösterilebilir.
+        toast({ title: title, description: body, duration: 8000 });
         return;
       }
       try {
@@ -135,11 +137,15 @@ export function useAnnouncements() {
         };
       } catch (err: any) {
         console.error("[SSE Announcements] Browser notification construction error:", err);
+        // Tarayıcı bildirimi başarısız olursa toast ile göster.
+        toast({ title: title, description: body, duration: 8000 });
       }
     } else {
       console.log("[SSE Announcements] Browser notification skipped: Notifications API not available.");
+      // Tarayıcı bildirimi desteklenmiyorsa toast ile göster.
+      toast({ title: title, description: body, duration: 8000 });
     }
-  }, [siteNotificationsPreference]);
+  }, [siteNotificationsPreference, toast]);
 
   useEffect(() => {
     initialDataLoadedRef.current = false;
@@ -185,47 +191,40 @@ export function useAnnouncements() {
         const previousAnnouncements = announcementsRef.current; 
         setAnnouncements(updatedAnnouncementsFromServer);
 
-        if (updatedAnnouncementsFromServer.length > 0 && previousAnnouncements.length > 0) {
-            const latestServerAnnouncement = updatedAnnouncementsFromServer[0]; 
-            const correspondingPrevAnnouncement = previousAnnouncements.find(ann => ann.id === latestServerAnnouncement.id);
-            
-            const isNewAnnouncement = !correspondingPrevAnnouncement && new Date(latestServerAnnouncement.date).getTime() > (previousAnnouncements[0] ? new Date(previousAnnouncements[0].date).getTime() : 0);
-            const isAuthorSelfAnnouncement = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
-
-            if (isNewAnnouncement && !isAuthorSelfAnnouncement) {
-                 showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
-            }
-        } else if (updatedAnnouncementsFromServer.length > previousAnnouncements.length && updatedAnnouncementsFromServer.length > 0) {
-            const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
-            const isAuthorSelfAnnouncement = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
-            if (!isAuthorSelfAnnouncement) {
-                showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
-            }
-        }
-
         if (user) {
-            const currentUserFullName = `${user.name} ${user.surname}`;
-            updatedAnnouncementsFromServer.forEach(newAnn => {
-                const oldAnn = previousAnnouncements.find(pa => pa.id === newAnn.id);
-                newAnn.comments?.forEach(newComment => {
-                    const oldComment = oldAnn?.comments?.find(pc => pc.id === newComment.id);
-                    newComment.replies?.forEach(newReply => {
-                        const oldReply = oldComment?.replies?.find(pr => pr.id === newReply.id);
-                        if (!oldReply) { 
-                            const isAuthorSelfReply = newReply.authorId === currentUserFullName;
-                            const replyingToCurrentUserComment = newComment.authorId === currentUserFullName;
-                            const replyingToCurrentUserReply = newReply.replyingToAuthorId === currentUserFullName;
+          const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
-                            if ((replyingToCurrentUserComment || replyingToCurrentUserReply) && !isAuthorSelfReply) {
-                                showNotification(
-                                    `${newReply.authorName} size yanıt verdi`, 
-                                    `"${newComment.text.substring(0,30)}..." yorumuna: ${newReply.text.substring(0, 50)}...`
-                                );
-                            }
-                        }
-                    });
-                });
+          updatedAnnouncementsFromServer.forEach(newAnn => {
+            const oldAnn = previousAnnouncements.find(pa => pa.id === newAnn.id);
+
+            // Genel yeni duyuru bildirimi (opsiyonel, şimdilik aktif)
+            const isNewOverallAnnouncement = !oldAnn && new Date(newAnn.date).getTime() > (previousAnnouncements[0] ? new Date(previousAnnouncements[0].date).getTime() : 0);
+            const isAuthorSelfAnnouncement = newAnn.authorId === currentUserIdentifier;
+
+            if (isNewOverallAnnouncement && !isAuthorSelfAnnouncement && initialDataLoadedRef.current) { // Sadece ilk yüklemeden sonraki yeni duyurular için
+                 showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + "...");
+            }
+
+            // Kullanıcıya yapılan yeni yanıtlar için bildirim
+            newAnn.comments?.forEach(newComment => {
+              const oldComment = oldAnn?.comments?.find(pc => pc.id === newComment.id);
+
+              newComment.replies?.forEach(newReply => {
+                const isNewReply = !oldComment?.replies?.find(pr => pr.id === newReply.id);
+
+                if (isNewReply) {
+                  const isAuthorSelfReply = newReply.authorId === currentUserIdentifier;
+                  
+                  // Yanıtın hedef aldığı kişi mevcut kullanıcı mı diye kontrol et
+                  if (newReply.replyingToAuthorId === currentUserIdentifier && !isAuthorSelfReply) {
+                    const notificationTitle = `${newReply.authorName} size yanıt verdi`;
+                    const notificationBody = `@${newReply.replyingToAuthorName}'a yazdığınız mesaja yanıt: ${newReply.text.substring(0, 50)}...`;
+                    showNotification(notificationTitle, notificationBody);
+                  }
+                }
+              });
             });
+          });
         }
 
       } catch (error) {
@@ -266,10 +265,10 @@ export function useAnnouncements() {
       if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
     };
-  }, [showNotification, user, isAdmin, updateLastOpenedTimestamp]); 
+  }, [showNotification, user, isAdmin, updateLastOpenedTimestamp]); // siteNotificationsPreference kaldırıldı, showNotification içinde zaten kullanılıyor
 
   const sendApiRequest = async (payload: AnnouncementApiPayload) => {
-    if (!user && payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE" && !('title' in payload) ) {
+    if (!user && 'action' in payload && payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE" ) {
         if (payload.action === "ADD_COMMENT_TO_ANNOUNCEMENT" || payload.action === "ADD_REPLY_TO_COMMENT") {
              toast({ title: "Giriş Gerekli", description: "Bu işlemi yapmak için giriş yapmalısınız.", variant: "destructive" });
              throw new Error("User not logged in for this action");
@@ -286,6 +285,9 @@ export function useAnnouncements() {
         toast({ title: "İşlem Başarısız", description: errorData.message || 'Sunucu hatası.', variant: "destructive" });
         throw new Error(errorData.message || 'Sunucu hatası.');
       }
+      // Başarılı API isteği sonrası UI SSE ile güncellenecek.
+      // İsteğe bağlı olarak burada geçici bir olumlu toast gösterilebilir.
+      // Örneğin: if ('action' in payload && payload.action === "ADD_COMMENT_TO_ANNOUNCEMENT") toast({ title: "Yorum Eklendi", description: "Yorumunuz başarıyla gönderildi."});
     } catch (error) {
       console.error("[Announcements] API request error:", error);
       if (!(error instanceof Error && (error.message.includes('Sunucu hatası') || error.message.includes("User not logged in")))) {
@@ -312,7 +314,7 @@ export function useAnnouncements() {
       comments: [],
     };
     await sendApiRequest(newAnnouncementData);
-  }, [user, isAdmin, sendApiRequest]); 
+  }, [user, isAdmin]); // sendApiRequest bağımlılıklardan çıkarıldı, kendi içindeki değerlere göre çalışmalı
 
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user) throw new Error("User not logged in");
@@ -323,8 +325,12 @@ export function useAnnouncements() {
         toast({ title: "Silme Başarısız", description: errorData.message, variant: "destructive" });
         throw new Error(errorData.message);
       }
+      // UI SSE ile güncellenecek.
     } catch (error) {
       console.error("[Announcements] Delete error:", error);
+      if (!(error instanceof Error && error.message.includes("Silme Başarısız"))) {
+          toast({ title: "Silme İşlemi Hatası", description: "Duyuru silinirken bir sorun oluştu.", variant: "destructive" });
+      }
       throw error;
     }
   }, [user, toast]); 
@@ -334,9 +340,9 @@ export function useAnnouncements() {
       toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive"});
       return;
     }
-    const userId = `${user.name} ${user.surname}`;
+    const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`; // Beğenenin ID'si
     await sendApiRequest({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId });
-  }, [user, sendApiRequest, toast]);
+  }, [user, isAdmin]); // sendApiRequest bağımlılıklardan çıkarıldı
 
   const addCommentToAnnouncementHook = useCallback(async (announcementId: string, text: string) => {
     if (!user) {
@@ -348,7 +354,7 @@ export function useAnnouncements() {
       return;
     }
     const authorName = `${user.name} ${user.surname}`;
-    const authorId = authorName;
+    const authorId = authorName; // Basit ID sistemi
 
     const commentPayload: Omit<Comment, 'id' | 'date' | 'replies'> = {
       authorName,
@@ -356,7 +362,7 @@ export function useAnnouncements() {
       text,
     };
     await sendApiRequest({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: commentPayload });
-  }, [user, sendApiRequest, toast]);
+  }, [user]); // sendApiRequest bağımlılıklardan çıkarıldı
 
   const addReplyToCommentHook = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
     if (!user) {
@@ -368,8 +374,8 @@ export function useAnnouncements() {
       return;
     }
     const authorName = `${user.name} ${user.surname}`;
-    const authorId = authorName;
-    const replyingToAuthorId = replyingToAuthorName; 
+    const authorId = authorName; // Basit ID sistemi
+    const replyingToAuthorId = replyingToAuthorName; // Basit ID sistemi, yanıtlarda kime yanıt verildiğini tutar
 
     const replyPayload: Omit<Reply, 'id' | 'date'> = {
         authorName,
@@ -379,11 +385,12 @@ export function useAnnouncements() {
         replyingToAuthorId,
     };
     await sendApiRequest({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: replyPayload });
-  }, [user, sendApiRequest, toast]);
+  }, [user]); // sendApiRequest bağımlılıklardan çıkarıldı
 
   const getAnnouncementById = useCallback((id: string): Announcement | undefined => {
+    // announcements state'i doğrudan kullanılıyor, bu hook'un dependencylerinde güncellenmeli.
     return announcements.find(ann => ann.id === id);
-  }, [announcements]);
+  }, [announcements]); // announcements bağımlılığı eklendi
 
   return { 
     announcements, 
@@ -397,3 +404,5 @@ export function useAnnouncements() {
     addReplyToComment: addReplyToCommentHook,
   };
 }
+
+    

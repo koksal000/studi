@@ -5,12 +5,12 @@ import type { Comment, Reply } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, ThumbsUp } from 'lucide-react'; // Added ThumbsUp
+import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, ThumbsUp } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
-import { ReplyItem } from './reply-item'; // Import ReplyItem
+import { ReplyItem } from './reply-item';
 
 interface CommentItemProps {
   comment: Comment;
@@ -19,7 +19,7 @@ interface CommentItemProps {
 
 export function CommentItem({ comment, announcementId }: CommentItemProps) {
   const { user } = useUser();
-  const { addReplyToComment, toggleCommentLike } = useAnnouncements(); // Added toggleCommentLike
+  const { addReplyToComment, toggleCommentLike } = useAnnouncements();
   const { toast } = useToast();
 
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -53,7 +53,6 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
     }
     setIsSubmittingReply(true);
     try {
-      // Pass comment.authorName as replyingToAuthorName for direct replies to the comment
       await addReplyToComment(announcementId, comment.id, replyText, comment.authorName);
       setReplyText('');
       setShowReplyForm(false);
@@ -84,7 +83,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
             {getInitials(comment.authorName)}
           </AvatarFallback>
         </Avatar>
-        <div className="flex-1 space-y-1">
+        <div className="flex-1 space-y-1 min-w-0"> {/* Added min-w-0 */}
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-primary">{comment.authorName}</h4>
             <p className="text-xs text-muted-foreground flex items-center">
@@ -92,7 +91,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
               {formattedDate}
             </p>
           </div>
-          <p className="text-sm text-foreground/90 whitespace-pre-wrap">{comment.text}</p>
+          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p> {/* Added break-words */}
           <div className="flex items-center space-x-2 pt-1">
             <Button
               variant={hasLikedComment ? "default" : "ghost"}

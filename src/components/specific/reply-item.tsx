@@ -5,7 +5,7 @@ import type { Reply } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, ThumbsUp } from 'lucide-react'; // Added ThumbsUp
+import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, ThumbsUp } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
@@ -19,7 +19,7 @@ interface ReplyItemProps {
 
 export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) {
   const { user } = useUser();
-  const { addReplyToComment, toggleReplyLike } = useAnnouncements(); // Added toggleReplyLike
+  const { addReplyToComment, toggleReplyLike } = useAnnouncements();
   const { toast } = useToast();
 
   const [showReplyToReplyForm, setShowReplyToReplyForm] = useState(false);
@@ -53,7 +53,6 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
     }
     setIsSubmittingReplyToReply(true);
     try {
-      // Pass reply.authorName as replyingToAuthorName for replies to this reply
       await addReplyToComment(announcementId, commentId, replyToReplyText, reply.authorName);
       setReplyToReplyText('');
       setShowReplyToReplyForm(false);
@@ -84,8 +83,8 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
           {getInitials(reply.authorName)}
         </AvatarFallback>
       </Avatar>
-      <div className="flex-1 space-y-0.5">
-        <p className="text-foreground/90 whitespace-pre-wrap">
+      <div className="flex-1 space-y-0.5 min-w-0"> {/* Added min-w-0 */}
+        <p className="text-foreground/90 whitespace-pre-wrap break-words"> {/* Added break-words */}
           <span className="font-semibold text-primary">{reply.authorName}</span>
           {reply.replyingToAuthorName && <span className="text-muted-foreground"> yanıtladı (@{reply.replyingToAuthorName})</span>}
           : {reply.text}

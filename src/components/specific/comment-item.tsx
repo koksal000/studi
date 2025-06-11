@@ -5,11 +5,12 @@ import type { Comment, Reply } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, CornerDownRight } from 'lucide-react';
+import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, ThumbsUp } from 'lucide-react'; // Added ThumbsUp
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
+import { ReplyItem } from './reply-item'; // Import ReplyItem
 
 interface CommentItemProps {
   comment: Comment;
@@ -18,7 +19,7 @@ interface CommentItemProps {
 
 export function CommentItem({ comment, announcementId }: CommentItemProps) {
   const { user } = useUser();
-  const { addReplyToComment } = useAnnouncements();
+  const { addReplyToComment, toggleCommentLike } = useAnnouncements(); // Added toggleCommentLike
   const { toast } = useToast();
 
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -28,6 +29,9 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
   const formattedDate = new Date(comment.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
+
+  const currentUserFullName = user ? `${user.name} ${user.surname}` : null;
+  const hasLikedComment = comment.likes && comment.likes.some(like => like.userId === currentUserFullName);
 
   const getInitials = (name: string) => {
     const names = name.split(' ');
@@ -49,6 +53,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
     }
     setIsSubmittingReply(true);
     try {
+      // Pass comment.authorName as replyingToAuthorName for direct replies to the comment
       await addReplyToComment(announcementId, comment.id, replyText, comment.authorName);
       setReplyText('');
       setShowReplyForm(false);
@@ -56,6 +61,18 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
       // Toast for error already handled in hook
     } finally {
       setIsSubmittingReply(false);
+    }
+  };
+
+  const handleCommentLikeToggle = async () => {
+    if (!user) {
+      toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive" });
+      return;
+    }
+    try {
+      await toggleCommentLike(announcementId, comment.id);
+    } catch (error) {
+      // Toast handled in hook
     }
   };
 
@@ -77,6 +94,16 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
           </div>
           <p className="text-sm text-foreground/90 whitespace-pre-wrap">{comment.text}</p>
           <div className="flex items-center space-x-2 pt-1">
+            <Button
+              variant={hasLikedComment ? "default" : "ghost"}
+              size="xs"
+              className={`text-xs ${hasLikedComment ? '' : 'text-muted-foreground hover:text-primary'}`}
+              onClick={handleCommentLikeToggle}
+              disabled={!user}
+            >
+              <ThumbsUp className={`h-3.5 w-3.5 mr-1 ${hasLikedComment ? '' : 'text-primary'}`} />
+              Beğen ({comment.likes?.length || 0})
+            </Button>
             <Button 
               variant="ghost" 
               size="xs" 
@@ -84,7 +111,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
               onClick={() => setShowReplyForm(!showReplyForm)}
               disabled={!user}
             >
-              <MessageSquare className="h-3.5 w-3.5 mr-1" /> Yanıtla
+              <MessageSquare className="h-3.5 w-3.5 mr-1" /> Yanıtla ({comment.replies?.length || 0})
             </Button>
           </div>
 
@@ -110,22 +137,12 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-3 ml-8 pl-4 border-l border-primary/30 space-y-3">
           {comment.replies.map(reply => (
-            <div key={reply.id} className="flex space-x-2 items-start text-xs">
-              <CornerDownRight className="h-3.5 w-3.5 mt-0.5 text-muted-foreground flex-shrink-0" />
-              <Avatar className="h-6 w-6 flex-shrink-0">
-                <AvatarFallback className="bg-accent text-accent-foreground text-[10px]">
-                  {getInitials(reply.authorName)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <p className="text-foreground/90 whitespace-pre-wrap">
-                  <span className="font-semibold text-primary">{reply.authorName}</span> yanıtladı (<em>@{reply.replyingToCommentAuthorName}</em>): {reply.text}
-                </p>
-                <p className="text-muted-foreground text-[10px] mt-0.5">
-                  {new Date(reply.date).toLocaleDateString('tr-TR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-            </div>
+            <ReplyItem 
+                key={reply.id} 
+                reply={reply} 
+                announcementId={announcementId} 
+                commentId={comment.id} 
+            />
           ))}
         </div>
       )}

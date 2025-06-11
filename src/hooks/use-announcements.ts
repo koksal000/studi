@@ -17,7 +17,9 @@ export interface Reply {
   authorId: string; // user.name + " " + user.surname for association
   text: string;
   date: string; // ISO string
-  replyingToCommentAuthorName: string; // Name of the author of the comment being replied to
+  replyingToAuthorName?: string; 
+  replyingToAuthorId?: string; 
+  likes?: Like[];
 }
 
 export interface Comment {
@@ -27,6 +29,7 @@ export interface Comment {
   text: string;
   date: string; // ISO string
   replies?: Reply[];
+  likes?: Like[];
 }
 
 export interface Announcement {
@@ -50,7 +53,7 @@ export interface NewAnnouncementPayload {
 }
 
 // API action payloads
-interface ToggleLikePayload {
+interface ToggleAnnouncementLikePayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
   announcementId: string;
   userId: string;
@@ -60,17 +63,39 @@ interface ToggleLikePayload {
 interface AddCommentPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies'>;
+  comment: Omit<Comment, 'id' | 'date' | 'replies' | 'likes'>;
 }
 
 interface AddReplyPayload {
   action: "ADD_REPLY_TO_COMMENT";
   announcementId: string;
   commentId: string;
-  reply: Omit<Reply, 'id' | 'date'>;
+  reply: Omit<Reply, 'id' | 'date' | 'likes'>;
 }
 
-type AnnouncementApiPayload = ToggleLikePayload | AddCommentPayload | AddReplyPayload | Announcement;
+interface ToggleCommentLikePayload {
+  action: "TOGGLE_COMMENT_LIKE";
+  announcementId: string;
+  commentId: string;
+  userId: string;
+}
+
+interface ToggleReplyLikePayload {
+  action: "TOGGLE_REPLY_LIKE";
+  announcementId: string;
+  commentId: string;
+  replyId: string;
+  userId: string;
+}
+
+
+type AnnouncementApiPayload = 
+  | ToggleAnnouncementLikePayload 
+  | AddCommentPayload 
+  | AddReplyPayload 
+  | ToggleCommentLikePayload
+  | ToggleReplyLikePayload
+  | Announcement;
 
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -115,7 +140,7 @@ export function useAnnouncements() {
       try {
         const notification = new Notification(title, {
           body: body,
-          icon: '/images/logo.png', // Make sure this path is correct
+          icon: '/images/logo.png', 
         });
         notification.onclick = (event) => {
           event.preventDefault();
@@ -178,23 +203,52 @@ export function useAnnouncements() {
         const previousAnnouncements = announcementsRef.current;
         setAnnouncements(updatedAnnouncementsFromServer);
 
+        // Notification logic for new announcements
         if (updatedAnnouncementsFromServer.length > 0 && previousAnnouncements.length > 0) {
             const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
             const correspondingPrevAnnouncement = previousAnnouncements.find(ann => ann.id === latestServerAnnouncement.id);
             
             const isNewAnnouncement = !correspondingPrevAnnouncement;
-            const isAuthorSelf = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
+            const isAuthorSelfAnnouncement = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
 
-            if (isNewAnnouncement && !isAuthorSelf) {
+            if (isNewAnnouncement && !isAuthorSelfAnnouncement) {
                  showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
             }
         } else if (updatedAnnouncementsFromServer.length > previousAnnouncements.length && updatedAnnouncementsFromServer.length > 0) {
             const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
-            const isAuthorSelf = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
-            if (!isAuthorSelf) {
+            const isAuthorSelfAnnouncement = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
+            if (!isAuthorSelfAnnouncement) {
                 showNotification(`Yeni Duyuru: ${latestServerAnnouncement.title}`, latestServerAnnouncement.content.substring(0, 100) + "...");
             }
         }
+
+        // Notification logic for new replies to user
+        if (user) {
+            const currentUserFullName = `${user.name} ${user.surname}`;
+            updatedAnnouncementsFromServer.forEach(newAnn => {
+                const oldAnn = previousAnnouncements.find(pa => pa.id === newAnn.id);
+                newAnn.comments?.forEach(newComment => {
+                    const oldComment = oldAnn?.comments?.find(pc => pc.id === newComment.id);
+                    newComment.replies?.forEach(newReply => {
+                        const oldReply = oldComment?.replies?.find(pr => pr.id === newReply.id);
+                        if (!oldReply) { // This is a new reply
+                            const isAuthorSelfReply = newReply.authorId === currentUserFullName;
+                             // Check if replying to current user's comment or reply
+                            const replyingToCurrentUserComment = newComment.authorId === currentUserFullName;
+                            const replyingToCurrentUserReply = newReply.replyingToAuthorId === currentUserFullName;
+
+                            if ((replyingToCurrentUserComment || replyingToCurrentUserReply) && !isAuthorSelfReply) {
+                                showNotification(
+                                    `${newReply.authorName} size yanıt verdi`, 
+                                    `"${newComment.text.substring(0,30)}..." yorumuna: ${newReply.text.substring(0, 50)}...`
+                                );
+                            }
+                        }
+                    });
+                });
+            });
+        }
+
       } catch (error) {
         console.error("[SSE Announcements] Error processing SSE message:", error);
       }
@@ -236,7 +290,15 @@ export function useAnnouncements() {
   }, [showNotification, user, isAdmin, updateLastOpenedTimestamp]);
 
   const sendApiRequest = async (payload: AnnouncementApiPayload) => {
-    if (!user) throw new Error("User not logged in");
+    if (!user && payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE" && payload.action !== "TOGGLE_COMMENT_LIKE" && payload.action !== "TOGGLE_REPLY_LIKE" && !('title' in payload) /* for adding announcement */) {
+        // Allow like/comment/reply actions only if user is logged in
+        // Adding announcement (if ever allowed for non-admins) would also need user check
+        // This specific check is more about actions requiring a known user ID
+        if (payload.action === "ADD_COMMENT_TO_ANNOUNCEMENT" || payload.action === "ADD_REPLY_TO_COMMENT") {
+             toast({ title: "Giriş Gerekli", description: "Bu işlemi yapmak için giriş yapmalısınız.", variant: "destructive" });
+             throw new Error("User not logged in for this action");
+        }
+    }
     try {
       const response = await fetch('/api/announcements', {
         method: 'POST',
@@ -250,7 +312,7 @@ export function useAnnouncements() {
       }
     } catch (error) {
       console.error("[Announcements] API request error:", error);
-      if (!(error instanceof Error && error.message.includes('Sunucu hatası'))) {
+      if (!(error instanceof Error && (error.message.includes('Sunucu hatası') || error.message.includes("User not logged in")))) {
         toast({ title: "Ağ Hatası", description: "İstek gönderilemedi.", variant: "destructive" });
       }
       throw error;
@@ -312,7 +374,7 @@ export function useAnnouncements() {
     const authorName = `${user.name} ${user.surname}`;
     const authorId = authorName;
 
-    const commentPayload: Omit<Comment, 'id' | 'date' | 'replies'> = {
+    const commentPayload: Omit<Comment, 'id' | 'date' | 'replies' | 'likes'> = {
       authorName,
       authorId,
       text,
@@ -320,7 +382,7 @@ export function useAnnouncements() {
     await sendApiRequest({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: commentPayload });
   }, [user, sendApiRequest, toast]);
 
-  const addReplyToCommentHook = useCallback(async (announcementId: string, commentId: string, text: string, replyingToCommentAuthorName: string) => {
+  const addReplyToCommentHook = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Yanıtlamak için giriş yapmalısınız.", variant: "destructive"});
       return;
@@ -331,14 +393,34 @@ export function useAnnouncements() {
     }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = authorName;
+    const replyingToAuthorId = replyingToAuthorName; // Using name as ID for now
 
-    const replyPayload: Omit<Reply, 'id' | 'date'> = {
+    const replyPayload: Omit<Reply, 'id' | 'date' | 'likes'> = {
         authorName,
         authorId,
         text,
-        replyingToCommentAuthorName,
+        replyingToAuthorName,
+        replyingToAuthorId,
     };
     await sendApiRequest({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: replyPayload });
+  }, [user, sendApiRequest, toast]);
+
+  const toggleCommentLike = useCallback(async (announcementId: string, commentId: string) => {
+    if (!user) {
+      toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive"});
+      return;
+    }
+    const userId = `${user.name} ${user.surname}`;
+    await sendApiRequest({ action: "TOGGLE_COMMENT_LIKE", announcementId, commentId, userId });
+  }, [user, sendApiRequest, toast]);
+
+  const toggleReplyLike = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
+    if (!user) {
+      toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive"});
+      return;
+    }
+    const userId = `${user.name} ${user.surname}`;
+    await sendApiRequest({ action: "TOGGLE_REPLY_LIKE", announcementId, commentId, replyId, userId });
   }, [user, sendApiRequest, toast]);
 
 
@@ -355,6 +437,9 @@ export function useAnnouncements() {
     unreadCount, 
     toggleAnnouncementLike, 
     addCommentToAnnouncement: addCommentToAnnouncementHook,
-    addReplyToComment: addReplyToCommentHook
+    addReplyToComment: addReplyToCommentHook,
+    toggleCommentLike,
+    toggleReplyLike
   };
 }
+

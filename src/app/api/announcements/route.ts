@@ -2,7 +2,7 @@
 // src/app/api/announcements/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import type { Announcement, Comment, Like, Reply } from '@/hooks/use-announcements'; // Removed AnnouncementApiPayload
+import type { Announcement, Comment, Like, Reply } from '@/hooks/use-announcements'; 
 import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
@@ -18,44 +18,28 @@ const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(MAX_VIDEO_CONVERSION_RAW_SIZE_MB_A
 let announcementsData: Announcement[] = [];
 let initialized = false;
 
-// Define API specific action payloads here as they are internal to the API logic
 interface ToggleAnnouncementLikeApiPayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
   announcementId: string;
   userId: string;
-  userName: string; // Kept for consistency if needed, but userId is primary
+  userName: string; 
 }
 interface AddCommentApiPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies' | 'likes'>;
+  comment: Omit<Comment, 'id' | 'date' | 'replies'>; // likes kaldırıldı
 }
 interface AddReplyApiPayload {
   action: "ADD_REPLY_TO_COMMENT";
   announcementId: string;
   commentId: string;
-  reply: Omit<Reply, 'id' | 'date' | 'likes'>;
-}
-interface ToggleCommentLikeApiPayload {
-  action: "TOGGLE_COMMENT_LIKE";
-  announcementId: string;
-  commentId: string;
-  userId: string;
-}
-interface ToggleReplyLikeApiPayload {
-  action: "TOGGLE_REPLY_LIKE";
-  announcementId: string;
-  commentId: string;
-  replyId: string;
-  userId: string;
+  reply: Omit<Reply, 'id' | 'date'>; // likes kaldırıldı
 }
 
 type AnnouncementApiPayload = 
   | ToggleAnnouncementLikeApiPayload
   | AddCommentApiPayload
   | AddReplyApiPayload
-  | ToggleCommentLikeApiPayload
-  | ToggleReplyLikeApiPayload
   | Announcement;
 
 
@@ -73,10 +57,10 @@ const loadAnnouncementsFromFile = () => {
           likes: ann.likes || [],
           comments: (ann.comments || []).map(comment => ({
             ...comment,
-            likes: comment.likes || [],
+            // likes: comment.likes || [], // Yorum beğenme kaldırıldı
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                likes: reply.likes || []
+                // likes: reply.likes || [] // Yanıt beğenme kaldırıldı
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
           })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), 
         })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
@@ -104,10 +88,10 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
         ...ann,
         comments: (ann.comments || []).map(comment => ({
             ...comment,
-            likes: comment.likes || [],
+            // likes: comment.likes || [], // Yorum beğenme kaldırıldı
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                likes: reply.likes || []
+                // likes: reply.likes || [] // Yanıt beğenme kaldırıldı
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -148,19 +132,23 @@ export async function POST(request: NextRequest) {
     const actionPayload = payload;
     const annIndex = currentDataFromFile.findIndex(ann => ann.id === actionPayload.announcementId);
 
-    if (annIndex === -1) {
-      return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
+    if (annIndex === -1 && actionPayload.action !== "ADD_COMMENT_TO_ANNOUNCEMENT" && actionPayload.action !== "ADD_REPLY_TO_COMMENT") { // Allow if annId is for comment/reply
+        return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
     }
-    const announcementToUpdate = { ...currentDataFromFile[annIndex] };
-    announcementToUpdate.likes = announcementToUpdate.likes || [];
-    announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
-        ...c, 
-        replies: (c.replies || []).map(r => ({...r, likes: r.likes || []})), 
-        likes: c.likes || []
-    }));
+    
+    let announcementToUpdate: Announcement | undefined;
+    if (annIndex !== -1) {
+        announcementToUpdate = { ...currentDataFromFile[annIndex] };
+        announcementToUpdate.likes = announcementToUpdate.likes || [];
+        announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
+            ...c, 
+            replies: (c.replies || []).map(r => ({...r })), // likes kaldırıldı
+        }));
+    }
 
 
     if (actionPayload.action === "TOGGLE_ANNOUNCEMENT_LIKE") {
+      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const likeExistsIndex = announcementToUpdate.likes.findIndex(like => like.userId === actionPayload.userId);
       if (likeExistsIndex > -1) {
         announcementToUpdate.likes.splice(likeExistsIndex, 1);
@@ -169,17 +157,19 @@ export async function POST(request: NextRequest) {
       }
       announcementModified = true;
     } else if (actionPayload.action === "ADD_COMMENT_TO_ANNOUNCEMENT") {
+      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const newComment: Comment = {
         ...actionPayload.comment,
         id: `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
         replies: [],
-        likes: [],
+        // likes: [], // Yorum beğenme kaldırıldı
       };
       announcementToUpdate.comments.push(newComment);
       announcementToUpdate.comments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       announcementModified = true;
     } else if (actionPayload.action === "ADD_REPLY_TO_COMMENT") {
+      if (!announcementToUpdate) return NextResponse.json({ message: 'Duyuru bulunamadı.' }, { status: 404 });
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
       if (commentIndex === -1) {
         return NextResponse.json({ message: 'Yorum bulunamadı.' }, { status: 404 });
@@ -190,54 +180,19 @@ export async function POST(request: NextRequest) {
         ...actionPayload.reply,
         id: `rpl_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
-        likes: [],
+        // likes: [], // Yanıt beğenme kaldırıldı
       };
       commentToUpdate.replies.push(newReply);
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       announcementToUpdate.comments[commentIndex] = commentToUpdate;
       announcementModified = true;
-    } else if (actionPayload.action === "TOGGLE_COMMENT_LIKE") {
-        const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
-        if (commentIndex === -1) return NextResponse.json({ message: 'Yorum bulunamadı.' }, { status: 404 });
-        
-        const commentToUpdate = { ...announcementToUpdate.comments[commentIndex] };
-        commentToUpdate.likes = commentToUpdate.likes || [];
-        const likeExistsIndex = commentToUpdate.likes.findIndex(like => like.userId === actionPayload.userId);
-        if (likeExistsIndex > -1) {
-            commentToUpdate.likes.splice(likeExistsIndex, 1);
-        } else {
-            commentToUpdate.likes.push({ userId: actionPayload.userId });
-        }
-        announcementToUpdate.comments[commentIndex] = commentToUpdate;
-        announcementModified = true;
-    } else if (actionPayload.action === "TOGGLE_REPLY_LIKE") {
-        const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
-        if (commentIndex === -1) return NextResponse.json({ message: 'Yorum bulunamadı.' }, { status: 404 });
-
-        const commentToUpdate = { ...announcementToUpdate.comments[commentIndex] };
-        commentToUpdate.replies = commentToUpdate.replies || [];
-        const replyIndex = commentToUpdate.replies.findIndex(r => r.id === actionPayload.replyId);
-        if (replyIndex === -1) return NextResponse.json({ message: 'Yanıt bulunamadı.' }, { status: 404 });
-
-        const replyToUpdate = { ...commentToUpdate.replies[replyIndex] };
-        replyToUpdate.likes = replyToUpdate.likes || [];
-        const likeExistsIndex = replyToUpdate.likes.findIndex(like => like.userId === actionPayload.userId);
-        if (likeExistsIndex > -1) {
-            replyToUpdate.likes.splice(likeExistsIndex, 1);
-        } else {
-            replyToUpdate.likes.push({ userId: actionPayload.userId });
-        }
-        commentToUpdate.replies[replyIndex] = replyToUpdate;
-        announcementToUpdate.comments[commentIndex] = commentToUpdate;
-        announcementModified = true;
     }
-
     
-    if (announcementModified) {
+    if (announcementModified && announcementToUpdate) {
         currentDataFromFile[annIndex] = announcementToUpdate;
     }
 
-  } else { // This is for adding a new announcement
+  } else { 
     const newAnnouncement = payload as Announcement;
     if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
       return NextResponse.json({ message: 'Geçersiz duyuru yükü. Gerekli alanlar eksik.' }, { status: 400 });
@@ -253,8 +208,7 @@ export async function POST(request: NextRequest) {
     newAnnouncement.likes = newAnnouncement.likes || [];
     newAnnouncement.comments = (newAnnouncement.comments || []).map(c => ({
         ...c, 
-        replies: (c.replies || []).map(r => ({...r, likes: r.likes || []})), 
-        likes: c.likes || []
+        replies: (c.replies || []).map(r => ({...r })), // likes kaldırıldı
     })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);

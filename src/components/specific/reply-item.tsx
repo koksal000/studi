@@ -5,7 +5,7 @@ import type { Reply } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, ThumbsUp } from 'lucide-react';
+import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight } from 'lucide-react'; // ThumbsUp kaldırıldı
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
@@ -19,7 +19,7 @@ interface ReplyItemProps {
 
 export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) {
   const { user } = useUser();
-  const { addReplyToComment, toggleReplyLike } = useAnnouncements();
+  const { addReplyToComment } = useAnnouncements(); // toggleReplyLike kaldırıldı
   const { toast } = useToast();
 
   const [showReplyToReplyForm, setShowReplyToReplyForm] = useState(false);
@@ -30,8 +30,9 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  const currentUserFullName = user ? `${user.name} ${user.surname}` : null;
-  const hasLikedReply = reply.likes && reply.likes.some(like => like.userId === currentUserFullName);
+  // Yanıt beğenme ile ilgili kısımlar kaldırıldı
+  // const currentUserFullName = user ? `${user.name} ${user.surname}` : null;
+  // const hasLikedReply = reply.likes && reply.likes.some(like => like.userId === currentUserFullName);
 
   const getInitials = (name: string) => {
     const names = name.split(' ');
@@ -63,17 +64,7 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
     }
   };
 
-  const handleReplyLikeToggle = async () => {
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive" });
-      return;
-    }
-    try {
-      await toggleReplyLike(announcementId, commentId, reply.id);
-    } catch (error) {
-      // Toast handled in hook
-    }
-  };
+  // handleReplyLikeToggle fonksiyonu kaldırıldı
 
   return (
     <div className="flex space-x-2 items-start text-xs">
@@ -83,24 +74,15 @@ export function ReplyItem({ reply, announcementId, commentId }: ReplyItemProps) 
           {getInitials(reply.authorName)}
         </AvatarFallback>
       </Avatar>
-      <div className="flex-1 space-y-0.5 min-w-0"> {/* Added min-w-0 */}
-        <p className="text-foreground/90 whitespace-pre-wrap break-words"> {/* Added break-words */}
+      <div className="flex-1 space-y-0.5 min-w-0">
+        <p className="text-foreground/90 whitespace-pre-wrap break-words">
           <span className="font-semibold text-primary">{reply.authorName}</span>
           {reply.replyingToAuthorName && <span className="text-muted-foreground"> yanıtladı (@{reply.replyingToAuthorName})</span>}
           : {reply.text}
         </p>
         <div className="flex items-center space-x-2 text-muted-foreground text-[10px]">
           <span>{formattedDate}</span>
-          <Button
-            variant={hasLikedReply ? "default" : "ghost"}
-            size="xs"
-            className={`p-0 h-auto text-[10px] ${hasLikedReply ? 'text-primary-foreground' : 'text-muted-foreground hover:text-primary'}`}
-            onClick={handleReplyLikeToggle}
-            disabled={!user}
-          >
-            <ThumbsUp className={`h-3 w-3 mr-0.5 ${hasLikedReply ? '' : 'text-primary'}`} />
-            Beğen ({reply.likes?.length || 0})
-          </Button>
+          {/* Yanıt beğen butonu kaldırıldı */}
           <Button 
             variant="ghost" 
             size="xs" 

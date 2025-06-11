@@ -5,7 +5,7 @@ import type { Comment, Reply } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, ThumbsUp } from 'lucide-react';
+import { UserCircle, CalendarDays, MessageSquare, Send, Loader2 } from 'lucide-react'; // ThumbsUp kaldırıldı
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
@@ -19,7 +19,7 @@ interface CommentItemProps {
 
 export function CommentItem({ comment, announcementId }: CommentItemProps) {
   const { user } = useUser();
-  const { addReplyToComment, toggleCommentLike } = useAnnouncements();
+  const { addReplyToComment } = useAnnouncements(); // toggleCommentLike kaldırıldı
   const { toast } = useToast();
 
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -30,8 +30,9 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  const currentUserFullName = user ? `${user.name} ${user.surname}` : null;
-  const hasLikedComment = comment.likes && comment.likes.some(like => like.userId === currentUserFullName);
+  // Yorum beğenme ile ilgili kısımlar kaldırıldı
+  // const currentUserFullName = user ? `${user.name} ${user.surname}` : null;
+  // const hasLikedComment = comment.likes && comment.likes.some(like => like.userId === currentUserFullName);
 
   const getInitials = (name: string) => {
     const names = name.split(' ');
@@ -63,17 +64,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
     }
   };
 
-  const handleCommentLikeToggle = async () => {
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive" });
-      return;
-    }
-    try {
-      await toggleCommentLike(announcementId, comment.id);
-    } catch (error) {
-      // Toast handled in hook
-    }
-  };
+  // handleCommentLikeToggle fonksiyonu kaldırıldı
 
   return (
     <div className="p-3 bg-secondary/30 rounded-md shadow-sm">
@@ -83,7 +74,7 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
             {getInitials(comment.authorName)}
           </AvatarFallback>
         </Avatar>
-        <div className="flex-1 space-y-1 min-w-0"> {/* Added min-w-0 */}
+        <div className="flex-1 space-y-1 min-w-0">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold text-primary">{comment.authorName}</h4>
             <p className="text-xs text-muted-foreground flex items-center">
@@ -91,18 +82,9 @@ export function CommentItem({ comment, announcementId }: CommentItemProps) {
               {formattedDate}
             </p>
           </div>
-          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p> {/* Added break-words */}
+          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p>
           <div className="flex items-center space-x-2 pt-1">
-            <Button
-              variant={hasLikedComment ? "default" : "ghost"}
-              size="xs"
-              className={`text-xs ${hasLikedComment ? '' : 'text-muted-foreground hover:text-primary'}`}
-              onClick={handleCommentLikeToggle}
-              disabled={!user}
-            >
-              <ThumbsUp className={`h-3.5 w-3.5 mr-1 ${hasLikedComment ? '' : 'text-primary'}`} />
-              Beğen ({comment.likes?.length || 0})
-            </Button>
+            {/* Yorum beğen butonu kaldırıldı */}
             <Button 
               variant="ghost" 
               size="xs" 

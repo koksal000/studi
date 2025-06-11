@@ -8,7 +8,11 @@
     "date": "2025-06-11T17:05:37.909Z",
     "author": "Yönetim Hesabı",
     "authorId": "ADMIN_ACCOUNT",
-    "likes": [],
+    "likes": [
+      {
+        "userId": "Deneme Deneme"
+      }
+    ],
     "comments": [
       {
         "authorName": "Deneme Deneme",
@@ -17,6 +21,24 @@
         "id": "cmt_1749661804428_mrek8su",
         "date": "2025-06-11T17:10:04.428Z",
         "replies": [
+          {
+            "authorName": "Deneme Deneme",
+            "authorId": "Deneme Deneme",
+            "text": "Deneme",
+            "replyingToAuthorName": "Deneme Deneme",
+            "replyingToAuthorId": "Deneme Deneme",
+            "id": "rpl_1749670404124_wxagcgo",
+            "date": "2025-06-11T19:33:24.124Z"
+          },
+          {
+            "authorName": "Deneme Deneme",
+            "authorId": "Deneme Deneme",
+            "text": "Deneme",
+            "replyingToAuthorName": "Deneme Deneme",
+            "replyingToAuthorId": "Deneme Deneme",
+            "id": "rpl_1749670378368_jodbc6y",
+            "date": "2025-06-11T19:32:58.368Z"
+          },
           {
             "authorName": "Deneme Deneme",
             "authorId": "Deneme Deneme",

@@ -11,7 +11,7 @@ import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
 import { ReplyItem } from './reply-item';
-import { AdminPasswordDialog } from './admin-password-dialog';
+// AdminPasswordDialog kaldırıldı, artık self-deletion için kullanılmayacak
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +27,7 @@ import {
 interface CommentItemProps {
   comment: Comment;
   announcementId: string;
-  onCommentOrReplyAction?: () => void; // Generic callback for when a comment/reply is added or deleted
+  onCommentOrReplyAction?: () => void; 
 }
 
 export function CommentItem({ comment: initialComment, announcementId, onCommentOrReplyAction }: CommentItemProps) {
@@ -35,7 +35,6 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
   const { addReplyToComment, deleteComment, getAnnouncementById } = useAnnouncements();
   const { toast } = useToast();
 
-  // Local state for the comment to ensure it reflects updates from the hook
   const [comment, setComment] = useState<Comment>(initialComment);
 
   useEffect(() => {
@@ -44,9 +43,7 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
     if (updatedComment) {
       setComment(updatedComment);
     } else {
-      // Comment might have been deleted, handle this case if necessary (e.g., render null or a placeholder)
-      // For now, assume it means the comment is gone if not found, or fallback to initial if parent not found.
-       setComment(initialComment); // Fallback if somehow parent announcement not immediately found
+       setComment(initialComment); 
     }
   }, [initialComment, announcementId, getAnnouncementById]);
 
@@ -55,7 +52,8 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
-  const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
+  // AdminPasswordDialog state'i kaldırıldı
+  // const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
 
 
   const formattedDate = new Date(comment.date).toLocaleDateString('tr-TR', {
@@ -82,37 +80,46 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
     }
     setIsSubmittingReply(true);
     try {
-      await addReplyToComment(announcementId, comment.id, replyText, comment.authorName); // Pass replyingToAuthorName
+      await addReplyToComment(announcementId, comment.id, replyText, comment.authorName);
       setReplyText('');
       setShowReplyForm(false);
       if (onCommentOrReplyAction) onCommentOrReplyAction();
     } catch (error) {
-      // Toast for error already handled in hook
     } finally {
       setIsSubmittingReply(false);
     }
   };
   
   const handleDeleteComment = async () => {
+    if (!user) {
+        toast({ title: "Giriş Gerekli", description: "Yorum silmek için giriş yapmalısınız.", variant: "destructive" });
+        return;
+    }
+    const currentUserAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+    if (currentUserAuthorId !== comment.authorId) {
+        toast({ title: "Yetki Hatası", description: "Bu yorumu silme yetkiniz yok.", variant: "destructive" });
+        return;
+    }
+
     setIsDeletingComment(true);
     try {
       await deleteComment(announcementId, comment.id);
-      toast({ title: "Yorum Silindi", description: "Yorum başarıyla kaldırıldı."});
+      toast({ title: "Yorum Silindi", description: "Yorumunuz başarıyla kaldırıldı."});
       if (onCommentOrReplyAction) onCommentOrReplyAction();
-      // The component might unmount if the comment is removed from the parent's list
     } catch (error: any) {
-      if (!error.message?.includes("Admin privileges required")) { // Avoid double toast
+      if (!error.message?.includes("Bu yorumu silme yetkiniz yok")) {
         toast({ title: "Silme Başarısız", description: error.message || "Yorum silinirken bir sorun oluştu.", variant: "destructive"});
       }
     } finally {
       setIsDeletingComment(false);
-      setIsAdminPasswordDialogOpenForDelete(false);
+      // setIsAdminPasswordDialogOpenForDelete(false); // Kaldırıldı
     }
   };
 
-  const canDeleteThisComment = isAdmin; 
+  const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
+  const canDeleteThisComment = currentUserAuthorId === comment.authorId; 
 
-  if (!comment) return null; // If comment state becomes null (e.g., after deletion and parent re-render)
+  if (!comment) return null;
 
   return (
     <>
@@ -160,7 +167,7 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={isDeletingComment}>İptal</AlertDialogCancel>
                     <AlertDialogAction 
-                      onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} 
+                      onClick={handleDeleteComment} // Admin şifre adımı kaldırıldı, direkt silme işlemi çağrılıyor
                       className="bg-destructive hover:bg-destructive/90"
                       disabled={isDeletingComment}
                     >
@@ -205,13 +212,7 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
         </div>
       )}
     </div>
-    <AdminPasswordDialog
-        isOpen={isAdminPasswordDialogOpenForDelete}
-        onOpenChange={setIsAdminPasswordDialogOpenForDelete}
-        onVerified={handleDeleteComment}
-    />
+    {/* AdminPasswordDialog kaldırıldı */}
     </>
   );
 }
-
-    

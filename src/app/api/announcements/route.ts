@@ -27,24 +27,26 @@ interface ToggleAnnouncementLikeApiPayload {
 interface AddCommentApiPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies'>;
+  comment: Omit<Comment, 'id' | 'date' | 'replies' | 'likes'>;
 }
 interface AddReplyApiPayload {
   action: "ADD_REPLY_TO_COMMENT";
   announcementId: string;
   commentId: string;
-  reply: Omit<Reply, 'id' | 'date'>;
+  reply: Omit<Reply, 'id' | 'date' | 'likes'>;
 }
 interface DeleteCommentApiPayload {
   action: "DELETE_COMMENT";
   announcementId: string;
   commentId: string;
+  deleterAuthorId: string; // ID of the user attempting to delete
 }
 interface DeleteReplyApiPayload {
   action: "DELETE_REPLY";
   announcementId: string;
   commentId: string;
   replyId: string;
+  deleterAuthorId: string; // ID of the user attempting to delete
 }
 
 type AnnouncementApiPayload = 
@@ -70,8 +72,10 @@ const loadAnnouncementsFromFile = () => {
           likes: ann.likes || [],
           comments: (ann.comments || []).map(comment => ({
             ...comment,
+            likes: comment.likes || [], // Ensure likes array exists
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
+                likes: reply.likes || [], // Ensure likes array exists
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
           })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), 
         })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
@@ -96,18 +100,19 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
     }
     
     const processedDataToSave = dataToSave.map(ann => ({
-        ...ann, // Ensure all top-level properties are preserved
+        ...ann,
         likes: ann.likes || [],
         comments: (ann.comments || []).map(comment => ({
-            ...comment, // Preserve comment properties
+            ...comment,
+            likes: comment.likes || [],
             replies: (comment.replies || []).map(reply => ({
-                ...reply, // Preserve reply properties
+                ...reply,
+                likes: reply.likes || [],
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     fs.writeFileSync(ANNOUNCEMENTS_FILE_PATH, JSON.stringify(processedDataToSave, null, 2));
-    // console.log(`[API/Announcements] Data saved to ${ANNOUNCEMENTS_FILE_PATH}. Count: ${processedDataToSave.length}`);
     return true;
   } catch (error) {
     console.error("[API/Announcements] CRITICAL: Error saving announcements to file:", error);
@@ -121,7 +126,7 @@ if (!initialized) {
 }
 
 export async function GET() {
-  loadAnnouncementsFromFile(); // Ensure latest data is loaded for direct GET requests
+  loadAnnouncementsFromFile(); 
   return NextResponse.json([...announcementsData]);
 }
 
@@ -135,8 +140,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Geçersiz JSON yükü." }, { status: 400 });
   }
 
-  loadAnnouncementsFromFile(); // Load the latest state from file
-  let currentDataFromFile = [...announcementsData.map(a => ({...a, comments: a.comments?.map(c => ({...c, replies: c.replies?.map(r => ({...r}))}))}))]; // Deep copy for modification
+  loadAnnouncementsFromFile(); 
+  let currentDataFromFile = [...announcementsData.map(a => ({...a, comments: a.comments?.map(c => ({...c, replies: c.replies?.map(r => ({...r}))}))}))]; 
   let announcementModified = false;
   let modifiedAnnouncement: Announcement | null = null;
 
@@ -149,12 +154,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'İlgili duyuru bulunamadı.' }, { status: 404 });
     }
     
-    // Work on a copy of the specific announcement
     let announcementToUpdate = JSON.parse(JSON.stringify(currentDataFromFile[annIndex])) as Announcement;
     announcementToUpdate.likes = announcementToUpdate.likes || [];
     announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
         ...c, 
-        replies: (c.replies || []).map(r => ({...r })),
+        likes: c.likes || [],
+        replies: (c.replies || []).map(r => ({...r, likes: r.likes || []})),
     }));
 
 
@@ -172,6 +177,7 @@ export async function POST(request: NextRequest) {
         id: `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
         replies: [],
+        likes: [],
       };
       announcementToUpdate.comments.push(newComment);
       announcementToUpdate.comments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -187,15 +193,18 @@ export async function POST(request: NextRequest) {
         ...actionPayload.reply,
         id: `rpl_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
+        likes: [],
       };
       commentToUpdate.replies.push(newReply);
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      // No need to reassign commentToUpdate to announcementToUpdate.comments[commentIndex] as it's a reference modification
       announcementModified = true;
     } else if (actionPayload.action === "DELETE_COMMENT") {
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
       if (commentIndex === -1) {
         return NextResponse.json({ message: 'Silinecek yorum bulunamadı.' }, { status: 404 });
+      }
+      if (announcementToUpdate.comments[commentIndex].authorId !== actionPayload.deleterAuthorId) {
+        return NextResponse.json({ message: 'Bu yorumu silme yetkiniz yok.' }, { status: 403 });
       }
       announcementToUpdate.comments.splice(commentIndex, 1);
       announcementModified = true;
@@ -210,6 +219,9 @@ export async function POST(request: NextRequest) {
       if (replyIndex === -1) {
         return NextResponse.json({ message: 'Silinecek yanıt bulunamadı.' }, { status: 404 });
       }
+      if (commentToUpdate.replies[replyIndex].authorId !== actionPayload.deleterAuthorId) {
+        return NextResponse.json({ message: 'Bu yanıtı silme yetkiniz yok.' }, { status: 403 });
+      }
       commentToUpdate.replies.splice(replyIndex, 1);
       announcementModified = true;
     }
@@ -220,8 +232,7 @@ export async function POST(request: NextRequest) {
     }
 
   } else { 
-    // Adding a new announcement
-    const newAnnouncement = payload as Announcement; // Type assertion
+    const newAnnouncement = payload as Announcement; 
     if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
       return NextResponse.json({ message: 'Geçersiz duyuru yükü. Gerekli alanlar eksik.' }, { status: 400 });
     }
@@ -236,12 +247,13 @@ export async function POST(request: NextRequest) {
     newAnnouncement.likes = newAnnouncement.likes || [];
     newAnnouncement.comments = (newAnnouncement.comments || []).map(c => ({
         ...c, 
-        replies: (c.replies || []).map(r => ({...r })),
+        likes: c.likes || [],
+        replies: (c.replies || []).map(r => ({...r, likes: r.likes || [] })),
     })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);
     if (existingIndex !== -1) {
-      currentDataFromFile[existingIndex] = newAnnouncement; // Should ideally be an update action
+      currentDataFromFile[existingIndex] = newAnnouncement; 
     } else {
       currentDataFromFile.unshift(newAnnouncement);
     }
@@ -252,11 +264,10 @@ export async function POST(request: NextRequest) {
   if (announcementModified) {
     currentDataFromFile.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (saveAnnouncementsToFile(currentDataFromFile)) {
-      announcementsData = currentDataFromFile; // Update global in-memory store
-      announcementEmitter.emit('update', [...announcementsData]); // Emit copy to prevent external modification
+      announcementsData = currentDataFromFile; 
+      announcementEmitter.emit('update', [...announcementsData]); 
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
     } else {
-      // If save fails, it's a server error. The in-memory `announcementsData` might be stale until next load.
       console.error(`[API/Announcements] Failed to save data to file after modification.`);
       return NextResponse.json({ message: "Sunucu hatası: Veri kalıcı olarak kaydedilemedi." }, { status: 500 });
     }
@@ -273,13 +284,13 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Duyuru IDsi silme için gerekli' }, { status: 400 });
   }
 
-  loadAnnouncementsFromFile(); // Load latest
+  loadAnnouncementsFromFile(); 
   const currentDataFromFile = [...announcementsData];
   const filteredAnnouncements = currentDataFromFile.filter(ann => ann.id !== id);
 
   if (filteredAnnouncements.length < currentDataFromFile.length) {
     if (saveAnnouncementsToFile(filteredAnnouncements)) {
-      announcementsData = filteredAnnouncements; // Update global in-memory
+      announcementsData = filteredAnnouncements; 
       announcementEmitter.emit('update', [...announcementsData]);
       return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
     } else {
@@ -290,5 +301,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
-
-    

@@ -10,7 +10,7 @@ import { useState, type FormEvent, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
-import { AdminPasswordDialog } from './admin-password-dialog';
+// AdminPasswordDialog kaldırıldı
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +35,6 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
   const { addReplyToComment, deleteReply, getAnnouncementById } = useAnnouncements();
   const { toast } = useToast();
 
-  // Local state for the reply to ensure it reflects updates from the hook
   const [reply, setReply] = useState<Reply>(initialReply);
 
   useEffect(() => {
@@ -45,7 +44,7 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
     if (updatedReply) {
       setReply(updatedReply);
     } else {
-      setReply(initialReply); // Fallback if not found
+      setReply(initialReply); 
     }
   }, [initialReply, announcementId, commentId, getAnnouncementById]);
 
@@ -54,7 +53,8 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
   const [replyToReplyText, setReplyToReplyText] = useState('');
   const [isSubmittingReplyToReply, setIsSubmittingReplyToReply] = useState(false);
   const [isDeletingReply, setIsDeletingReply] = useState(false);
-  const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
+  // AdminPasswordDialog state'i kaldırıldı
+  // const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
   
   const formattedDate = new Date(reply.date).toLocaleDateString('tr-TR', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -80,36 +80,43 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
     }
     setIsSubmittingReplyToReply(true);
     try {
-      // When replying to a reply, the `replyingToAuthorName` should be the author of *this current reply*
       await addReplyToComment(announcementId, commentId, replyToReplyText, reply.authorName);
       setReplyToReplyText('');
       setShowReplyToReplyForm(false);
       if (onReplyAction) onReplyAction();
     } catch (error) {
-      // Toast for error already handled in hook
     } finally {
       setIsSubmittingReplyToReply(false);
     }
   };
 
   const handleDeleteReply = async () => {
+    if (!user) {
+        toast({ title: "Giriş Gerekli", description: "Yanıt silmek için giriş yapmalısınız.", variant: "destructive" });
+        return;
+    }
+    const currentUserAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+    if (currentUserAuthorId !== reply.authorId) {
+        toast({ title: "Yetki Hatası", description: "Bu yanıtı silme yetkiniz yok.", variant: "destructive" });
+        return;
+    }
     setIsDeletingReply(true);
     try {
       await deleteReply(announcementId, commentId, reply.id);
-      toast({ title: "Yanıt Silindi", description: "Yanıt başarıyla kaldırıldı." });
+      toast({ title: "Yanıt Silindi", description: "Yanıtınız başarıyla kaldırıldı." });
       if (onReplyAction) onReplyAction();
-      // The component might unmount if the reply is removed from the parent's list
     } catch (error: any) {
-       if (!error.message?.includes("Admin privileges required")) { // Avoid double toast
+      if (!error.message?.includes("Bu yanıtı silme yetkiniz yok")) {
         toast({ title: "Silme Başarısız", description: error.message || "Yanıt silinirken bir sorun oluştu.", variant: "destructive"});
       }
     } finally {
       setIsDeletingReply(false);
-      setIsAdminPasswordDialogOpenForDelete(false);
+      // setIsAdminPasswordDialogOpenForDelete(false); // Kaldırıldı
     }
   };
   
-  const canDeleteThisReply = isAdmin; 
+  const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
+  const canDeleteThisReply = currentUserAuthorId === reply.authorId; 
 
   if (!reply) return null;
 
@@ -157,7 +164,7 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={isDeletingReply}>İptal</AlertDialogCancel>
                     <AlertDialogAction 
-                        onClick={() => setIsAdminPasswordDialogOpenForDelete(true)} 
+                        onClick={handleDeleteReply} // Direkt silme işlemi
                         className="bg-destructive hover:bg-destructive/90"
                         disabled={isDeletingReply}
                     >
@@ -187,13 +194,7 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
         )}
       </div>
     </div>
-    <AdminPasswordDialog
-        isOpen={isAdminPasswordDialogOpenForDelete}
-        onOpenChange={setIsAdminPasswordDialogOpenForDelete}
-        onVerified={handleDeleteReply}
-    />
+    {/* AdminPasswordDialog kaldırıldı */}
     </>
   );
 }
-
-    

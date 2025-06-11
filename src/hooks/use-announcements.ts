@@ -200,15 +200,15 @@ export function useAnnouncements() {
       }
       try {
         const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-        const previousAnnouncements = announcementsRef.current;
+        const previousAnnouncements = announcementsRef.current; // Use the ref for comparison before state update
         setAnnouncements(updatedAnnouncementsFromServer);
 
         // Notification logic for new announcements
         if (updatedAnnouncementsFromServer.length > 0 && previousAnnouncements.length > 0) {
-            const latestServerAnnouncement = updatedAnnouncementsFromServer[0];
+            const latestServerAnnouncement = updatedAnnouncementsFromServer[0]; // Assuming sorted by date desc
             const correspondingPrevAnnouncement = previousAnnouncements.find(ann => ann.id === latestServerAnnouncement.id);
             
-            const isNewAnnouncement = !correspondingPrevAnnouncement;
+            const isNewAnnouncement = !correspondingPrevAnnouncement && new Date(latestServerAnnouncement.date).getTime() > (previousAnnouncements[0] ? new Date(previousAnnouncements[0].date).getTime() : 0);
             const isAuthorSelfAnnouncement = user && (latestServerAnnouncement.authorId === (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`));
 
             if (isNewAnnouncement && !isAuthorSelfAnnouncement) {
@@ -233,7 +233,6 @@ export function useAnnouncements() {
                         const oldReply = oldComment?.replies?.find(pr => pr.id === newReply.id);
                         if (!oldReply) { // This is a new reply
                             const isAuthorSelfReply = newReply.authorId === currentUserFullName;
-                             // Check if replying to current user's comment or reply
                             const replyingToCurrentUserComment = newComment.authorId === currentUserFullName;
                             const replyingToCurrentUserReply = newReply.replyingToAuthorId === currentUserFullName;
 
@@ -287,13 +286,10 @@ export function useAnnouncements() {
       if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
     };
-  }, [showNotification, user, isAdmin, updateLastOpenedTimestamp]);
+  }, [showNotification, user, isAdmin, updateLastOpenedTimestamp]); // Removed announcements from dependency array for the main SSE effect
 
   const sendApiRequest = async (payload: AnnouncementApiPayload) => {
     if (!user && payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE" && payload.action !== "TOGGLE_COMMENT_LIKE" && payload.action !== "TOGGLE_REPLY_LIKE" && !('title' in payload) /* for adding announcement */) {
-        // Allow like/comment/reply actions only if user is logged in
-        // Adding announcement (if ever allowed for non-admins) would also need user check
-        // This specific check is more about actions requiring a known user ID
         if (payload.action === "ADD_COMMENT_TO_ANNOUNCEMENT" || payload.action === "ADD_REPLY_TO_COMMENT") {
              toast({ title: "Giriş Gerekli", description: "Bu işlemi yapmak için giriş yapmalısınız.", variant: "destructive" });
              throw new Error("User not logged in for this action");
@@ -310,6 +306,7 @@ export function useAnnouncements() {
         toast({ title: "İşlem Başarısız", description: errorData.message || 'Sunucu hatası.', variant: "destructive" });
         throw new Error(errorData.message || 'Sunucu hatası.');
       }
+      // No local state update here, rely on SSE
     } catch (error) {
       console.error("[Announcements] API request error:", error);
       if (!(error instanceof Error && (error.message.includes('Sunucu hatası') || error.message.includes("User not logged in")))) {
@@ -336,7 +333,7 @@ export function useAnnouncements() {
       comments: [],
     };
     await sendApiRequest(newAnnouncementData);
-  }, [user, isAdmin, sendApiRequest]);
+  }, [user, isAdmin, sendApiRequest]); // sendApiRequest is stable
 
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user) throw new Error("User not logged in");
@@ -347,11 +344,12 @@ export function useAnnouncements() {
         toast({ title: "Silme Başarısız", description: errorData.message, variant: "destructive" });
         throw new Error(errorData.message);
       }
+      // No local state update here, rely on SSE
     } catch (error) {
       console.error("[Announcements] Delete error:", error);
       throw error;
     }
-  }, [user, toast]);
+  }, [user, toast]); // toast is stable
 
   const toggleAnnouncementLike = useCallback(async (announcementId: string) => {
     if (!user) {
@@ -425,8 +423,10 @@ export function useAnnouncements() {
 
 
   const getAnnouncementById = useCallback((id: string): Announcement | undefined => {
-    return announcementsRef.current.find(ann => ann.id === id);
-  }, []);
+    // Use the announcements state directly so this function returns the latest data
+    // when announcements state itself is updated.
+    return announcements.find(ann => ann.id === id);
+  }, [announcements]); // Depend on the announcements state
 
   return { 
     announcements, 

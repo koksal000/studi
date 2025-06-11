@@ -8,11 +8,7 @@
     "date": "2025-06-11T17:05:37.909Z",
     "author": "Yönetim Hesabı",
     "authorId": "ADMIN_ACCOUNT",
-    "likes": [
-      {
-        "userId": "Deneme Deneme"
-      }
-    ],
+    "likes": [],
     "comments": [
       {
         "authorName": "Deneme Deneme",
@@ -49,11 +45,7 @@
             ]
           }
         ],
-        "likes": [
-          {
-            "userId": "Deneme Deneme"
-          }
-        ]
+        "likes": []
       }
     ]
   }

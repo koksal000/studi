@@ -9,7 +9,7 @@ import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { SettingsProvider } from '@/contexts/settings-context';
-import { AnnouncementStatusProvider } from '@/contexts/announcement-status-context'; // Yeni import
+import { AnnouncementStatusProvider } from '@/contexts/announcement-status-context';
 
 export const metadata: Metadata = {
   title: 'KöyümDomaniç - Çamlıca Köyü Portalı',
@@ -23,6 +23,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <head>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6542591429414591"
+             crossOrigin="anonymous"></script>
+      </head>
       <body className={`antialiased flex flex-col min-h-screen`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <UserProvider>

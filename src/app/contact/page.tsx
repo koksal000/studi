@@ -17,11 +17,9 @@ import { useContactMessages } from '@/hooks/use-contact-messages';
 export default function ContactPage() {
   const { toast } = useToast();
   const { user, showEntryForm } = useUser();
-  const [formData, setFormData] = useState({ subject: '', message: '' }); // Removed email from here
+  const [formData, setFormData] = useState({ subject: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addContactMessage } = useContactMessages();
-
-  // Email is now sourced from user context, no need to set it in formData state here.
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
@@ -29,7 +27,7 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user || !user.email) { // Check for user and user.email
+    if (!user || !user.email) { 
       toast({
         title: "Giriş Gerekli",
         description: "Mesaj göndermek için lütfen adınızı, soyadınızı ve e-postanızı giriş formunda belirtin.",
@@ -50,7 +48,7 @@ export default function ContactPage() {
     try {
       const payload = {
         name: `${user.name} ${user.surname}`, 
-        email: user.email, // Use email from context
+        email: user.email, 
         subject: formData.subject,
         message: formData.message,
       };
@@ -64,6 +62,10 @@ export default function ContactPage() {
       setFormData({ subject: '', message: '' }); 
     } catch (error: any) {
       console.error("Form Submission Error:", error);
+      // Toast for error is handled within useContactMessages or here if it's not caught there
+      if (!(error.message?.includes("Sunucu hatası") || error.message?.includes("Ağ hatası"))) {
+          toast({ title: "Mesaj Gönderilemedi", description: error.message || "Bilinmeyen bir hata oluştu.", variant: "destructive"});
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -134,7 +136,6 @@ export default function ContactPage() {
           <form onSubmit={handleSubmit} className="space-y-6 p-6 border rounded-lg shadow-sm bg-card">
             <h3 className="text-xl font-semibold text-primary mb-2 border-b pb-2">Bize Mesaj Gönderin</h3>
             <p className="text-xs text-muted-foreground mt-1 mb-3">Gönderdiğiniz mesajlar kimseyle paylaşılmayacak olup, yalnızca site yöneticisine iletilerek taleplerinizin işleme alınması amacıyla kullanılacaktır.</p>
-            {/* Email input removed from here */}
              <div className="space-y-2">
               <Label htmlFor="subject" className="flex items-center"><MessageSquare className="mr-2 h-4 w-4 text-muted-foreground"/> Konu</Label>
               <Input id="subject" type="text" placeholder="Mesajınızın konusu" value={formData.subject} onChange={handleChange} required disabled={isSubmitting} />

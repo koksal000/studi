@@ -1,31 +1,14 @@
 [
   {
-    "id": "ann_1750355875030_z6q84sd",
-    "title": "Deneme ",
-    "content": "Deneme ",
+    "id": "ann_1750358941990_urfhqfn",
+    "title": "Deneme",
+    "content": "Deneme",
     "media": null,
     "mediaType": null,
-    "date": "2025-06-19T17:57:55.030Z",
+    "date": "2025-06-19T18:49:01.990Z",
     "author": "Yönetim Hesabı",
     "authorId": "ADMIN_ACCOUNT",
     "likes": [],
-    "comments": [
-      {
-        "authorName": "Deneme Deneme",
-        "authorId": "ADMIN_ACCOUNT",
-        "text": "Deneme",
-        "id": "cmt_1750358073441_wvlomxg",
-        "date": "2025-06-19T18:34:33.441Z",
-        "replies": []
-      },
-      {
-        "authorName": "Deneme Deneme",
-        "authorId": "ADMIN_ACCOUNT",
-        "text": "Deneme",
-        "id": "cmt_1750358045815_xhnqmky",
-        "date": "2025-06-19T18:34:05.815Z",
-        "replies": []
-      }
-    ]
+    "comments": []
   }
 ]

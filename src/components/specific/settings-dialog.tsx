@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Moon, Sun, Laptop, Mail } from 'lucide-react'; // Added Mail icon
+import { Moon, Sun, Laptop, Mail } from 'lucide-react';
 import { VILLAGE_NAME } from '@/lib/constants';
 
 interface SettingsDialogProps {
@@ -23,17 +23,46 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
     setAppTheme, 
     emailNotificationPreference,
     setEmailNotificationPreference,
-    // siteNotificationsPreference, // Kept for future if needed, but not used in UI now
-    // setSiteNotificationsPreference 
   } = useSettings(); 
   const { user, logout } = useUser();
   const { toast } = useToast();
   
-  const handleSaveSettings = () => {
-    toast({
-      title: "Ayarlar Kaydedildi",
-      description: "Tercihleriniz güncellendi.",
-    });
+  const handleSaveSettings = async () => {
+    if (user && user.email) {
+      try {
+        const response = await fetch('/api/user-profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email, emailNotificationPreference }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'E-posta tercihleri sunucuya kaydedilemedi.' }));
+          toast({
+            title: "Kaydetme Hatası",
+            description: errorData.message,
+            variant: "destructive",
+          });
+          return; // Do not close dialog or show success if API fails
+        }
+        toast({
+          title: "Ayarlar Kaydedildi",
+          description: "Tercihleriniz güncellendi.",
+        });
+      } catch (error) {
+        toast({
+          title: "Ağ Hatası",
+          description: "E-posta tercihleri sunucuya kaydedilirken bir sorun oluştu.",
+          variant: "destructive",
+        });
+        return; // Do not close dialog or show success if API fails
+      }
+    } else {
+       toast({
+        title: "Ayarlar Kaydedildi",
+        description: "Görünüm tercihleriniz güncellendi. E-posta tercihleri için kullanıcı bilgisi bulunamadı.",
+        variant: "warning"
+      });
+    }
     onOpenChange(false);
   };
 
@@ -87,6 +116,7 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
                       id="email-notifications"
                       checked={emailNotificationPreference}
                       onCheckedChange={setEmailNotificationPreference}
+                      disabled={!user || !user.email} // Disable if no user/email
                     />
                   </div>
                 </div>

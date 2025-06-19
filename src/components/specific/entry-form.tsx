@@ -23,7 +23,6 @@ export function EntryForm() {
       login(name.trim(), surname.trim(), email.trim());
       
       try {
-        // Register/update user profile on the server
         const profileResponse = await fetch('/api/user-profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -32,12 +31,10 @@ export function EntryForm() {
         if (!profileResponse.ok) {
           const errorData = await profileResponse.json().catch(() => ({ message: 'Kullanıcı profili sunucuya kaydedilemedi.' }));
           console.warn("[EntryForm] Failed to save user profile to server:", errorData.message);
-          // Non-critical, proceed with client-side login
         } else {
           console.log("[EntryForm] User profile saved to server.");
         }
 
-        // Increment entry count
         await fetch('/api/stats/entry-count', { method: 'POST' });
         console.log("[EntryForm] Entry count increment request sent.");
 
@@ -117,7 +114,7 @@ export function EntryForm() {
                     placeholder="E-posta adresinizi girin"
                   />
                   <p className="text-xs text-neutral-300/80 pt-1">
-                    E-posta adresiniz, sizinle iletişim kurmak ve köy duyurularından haberdar olmanız için kullanılacaktır. Bu bilgiyi gizli tutuyoruz. E-posta bildirimlerini Ayarlar bölümünden açıp kapatabilirsiniz.
+                    E-posta adresiniz, sizinle iletişim kurmak ve siteye giriş için kullanılacaktır. Bu bilgiyi gizli tutuyoruz.
                   </p>
                 </div>
                 <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">

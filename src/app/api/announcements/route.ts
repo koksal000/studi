@@ -118,107 +118,7 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
   }
 };
 
-async function sendEmailViaEmailJSHttpApi(
-    recipientProfile: UserProfile,
-    announcement: Announcement
-) {
-    const serviceID = process.env.EMAILJS_SERVICE_ID;
-    const templateID = process.env.EMAILJS_TEMPLATE_ID;
-    const userID = process.env.EMAILJS_PUBLIC_KEY; // EmailJS Public Key (User ID)
-    const accessToken = process.env.EMAILJS_ACCESS_TOKEN;
-
-    if (!serviceID || !templateID || !userID ) {
-        console.error("[EmailJS Send] EmailJS configuration is missing in .env file (SERVICE_ID, TEMPLATE_ID, or PUBLIC_KEY). Cannot send email.");
-        return;
-    }
-    if (!accessToken || accessToken === "BURAYA_EMAILJS_ACCESS_TOKENINIZI_GIRIN") {
-         console.error("[EmailJS Send] EMAILJS_ACCESS_TOKEN is not configured in .env file or still has the placeholder value. Backend email sending will fail. Please get your Access Token from EmailJS dashboard (Account > API Keys).");
-        return;
-    }
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-    const announcementLink = `${appUrl}/announcements`; // Link to general announcements page
-    // For a direct link to the specific announcement, you'd need to adjust the announcements page to handle fragment identifiers or query params.
-    // For now, linking to the main announcements page.
-
-    const templateParams = {
-        email: recipientProfile.email, // Assuming your EmailJS template uses {{email}} for recipient
-        to_name: `${recipientProfile.name} ${recipientProfile.surname}`,
-        from_name: "Çamlıca Köyü Yönetimi",
-        subject: `Yeni Duyuru: ${announcement.title}`,
-        announcement_title: announcement.title,
-        announcement_content: announcement.content.substring(0, 250) + (announcement.content.length > 250 ? "..." : ""), // Summary
-        announcement_link: announcementLink,
-        site_url: appUrl,
-        current_year: new Date().getFullYear().toString(),
-    };
-
-    const emailJsPayload = {
-        service_id: serviceID,
-        template_id: templateID,
-        user_id: userID, 
-        template_params: templateParams,
-        accessToken: accessToken,
-    };
-
-    try {
-        const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(emailJsPayload),
-        });
-
-        if (response.ok) {
-            console.log(`[EmailJS Send] Successfully sent email to ${recipientProfile.email} for announcement: "${announcement.title}"`);
-        } else {
-            const errorText = await response.text();
-            console.error(`[EmailJS Send] Failed to send email to ${recipientProfile.email}. Status: ${response.status}, Response: ${errorText}. Check EmailJS dashboard for logs and ensure Access Token & template params are correct for template ${templateID}.`);
-        }
-    } catch (error) {
-        console.error(`[EmailJS Send] Network or other error sending email to ${recipientProfile.email}:`, error);
-    }
-}
-
-async function sendEmailNotifications(announcement: Announcement) {
-  console.log(`[EmailJS Send] Triggered for announcement: "${announcement.title}"`);
-
-  let userProfiles: UserProfile[] = [];
-  try {
-    if (fs.existsSync(USER_DATA_FILE_PATH)) {
-      const fileData = fs.readFileSync(USER_DATA_FILE_PATH, 'utf-8');
-      userProfiles = JSON.parse(fileData) as UserProfile[];
-    } else {
-      console.warn(`[EmailJS Send] User data file not found at ${USER_DATA_FILE_PATH}. No emails will be sent.`);
-      return;
-    }
-  } catch (error) {
-    console.error(`[EmailJS Send] Error reading or parsing user data file:`, error);
-    return;
-  }
-
-  const optedInUsers = userProfiles.filter(user => user.emailNotificationPreference);
-
-  if (optedInUsers.length === 0) {
-    console.log("[EmailJS Send] No users opted-in for email notifications.");
-    return;
-  }
-
-  console.log(`[EmailJS Send] Found ${optedInUsers.length} users opted-in for email notifications. Sending with 1-second delay...`);
-
-  for (let i = 0; i < optedInUsers.length; i++) {
-    const user = optedInUsers[i];
-    if (user.email) {
-      await sendEmailViaEmailJSHttpApi(user, announcement);
-      if (i < optedInUsers.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 1-second delay
-      }
-    }
-  }
-  console.log(`[EmailJS Send] Email sending process completed for ${optedInUsers.length} users.`);
-}
-
+// E-posta gönderme fonksiyonları (EmailJS HTTP API ile) kaldırıldı.
 
 if (!initializedFs) {
   loadAnnouncementsFromFile();
@@ -369,12 +269,13 @@ export async function POST(request: NextRequest) {
       announcementsData = currentDataFromFile;
       announcementEmitter.emit('update', [...announcementsData]);
 
-      if (isNewAnnouncement && modifiedAnnouncement) {
-        console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}". Triggering EmailJS notifications.`);
-        sendEmailNotifications(modifiedAnnouncement).catch(err => {
-            console.error("[API/Announcements] Error during EmailJS notification process:", err);
-        });
-      }
+      // E-posta gönderme mantığı kaldırıldı.
+      // if (isNewAnnouncement && modifiedAnnouncement) {
+      //   console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}". Triggering Email notifications.`);
+      //   sendEmailNotifications(modifiedAnnouncement).catch(err => { // Bu fonksiyon artık yok
+      //       console.error("[API/Announcements] Error during Email notification process:", err);
+      //   });
+      // }
 
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
     } else {

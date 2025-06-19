@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from '@/components/ui/switch';
+import { Switch } from '@/components/ui/switch'; // Switch'i hala siteNotificationsPreference için kullanacağız.
 import { useToast } from '@/hooks/use-toast';
-import { Moon, Sun, Laptop, Mail } from 'lucide-react';
+import { Moon, Sun, Laptop, Bell } from 'lucide-react'; // Mail ikonu kaldırıldı, Bell eklendi (site bildirimleri için)
 import { VILLAGE_NAME } from '@/lib/constants';
 
 interface SettingsDialogProps {
@@ -21,48 +21,19 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
   const { 
     currentTheme, 
     setAppTheme, 
-    emailNotificationPreference,
-    setEmailNotificationPreference,
+    siteNotificationsPreference, // Bu kalacak
+    setSiteNotificationsPreference, // Bu kalacak
   } = useSettings(); 
   const { user, logout } = useUser();
   const { toast } = useToast();
   
   const handleSaveSettings = async () => {
-    if (user && user.email) {
-      try {
-        const response = await fetch('/api/user-profile', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: user.email, emailNotificationPreference }),
-        });
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: 'E-posta tercihleri sunucuya kaydedilemedi.' }));
-          toast({
-            title: "Kaydetme Hatası",
-            description: errorData.message,
-            variant: "destructive",
-          });
-          return; // Do not close dialog or show success if API fails
-        }
-        toast({
-          title: "Ayarlar Kaydedildi",
-          description: "Tercihleriniz güncellendi.",
-        });
-      } catch (error) {
-        toast({
-          title: "Ağ Hatası",
-          description: "E-posta tercihleri sunucuya kaydedilirken bir sorun oluştu.",
-          variant: "destructive",
-        });
-        return; // Do not close dialog or show success if API fails
-      }
-    } else {
-       toast({
-        title: "Ayarlar Kaydedildi",
-        description: "Görünüm tercihleriniz güncellendi. E-posta tercihleri için kullanıcı bilgisi bulunamadı.",
-        variant: "warning"
-      });
-    }
+    // E-posta tercihleri API çağrısı kaldırıldı.
+    // Sadece tema ve site bildirimleri (localStorage'a zaten kaydediliyor)
+    toast({
+      title: "Ayarlar Kaydedildi",
+      description: "Tercihleriniz güncellendi.",
+    });
     onOpenChange(false);
   };
 
@@ -106,17 +77,16 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
                   <Label className="text-base font-medium">Bildirim Ayarları</Label>
                   <div className="flex items-center justify-between rounded-lg border p-4">
                     <div className="flex items-center space-x-2">
-                      <Mail className="h-5 w-5 text-primary" />
-                      <Label htmlFor="email-notifications" className="flex flex-col">
-                        <span>E-posta Bildirimleri</span>
-                        <span className="text-xs text-muted-foreground">Yeni duyurulardan e-posta ile haberdar olun.</span>
+                      <Bell className="h-5 w-5 text-primary" /> 
+                      <Label htmlFor="site-notifications" className="flex flex-col">
+                        <span>Site Bildirimleri</span>
+                        <span className="text-xs text-muted-foreground">Yeni duyurular için tarayıcı bildirimi alın.</span>
                       </Label>
                     </div>
                     <Switch
-                      id="email-notifications"
-                      checked={emailNotificationPreference}
-                      onCheckedChange={setEmailNotificationPreference}
-                      disabled={!user || !user.email} // Disable if no user/email
+                      id="site-notifications"
+                      checked={siteNotificationsPreference}
+                      onCheckedChange={setSiteNotificationsPreference}
                     />
                   </div>
                 </div>

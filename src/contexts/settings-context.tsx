@@ -7,22 +7,21 @@ import { useTheme } from 'next-themes';
 interface SettingsContextType {
   currentTheme: string | undefined;
   setAppTheme: (theme: string) => void;
-  siteNotificationsPreference: boolean; // This was for local browser notifications, can be kept or removed.
+  siteNotificationsPreference: boolean; 
   setSiteNotificationsPreference: (enabled: boolean) => void;
-  emailNotificationPreference: boolean;
-  setEmailNotificationPreference: (enabled: boolean) => void;
+  // emailNotificationPreference ve setEmailNotificationPreference kaldırıldı
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 const SITE_NOTIFICATIONS_KEY = 'camlicaKoyuSiteNotificationsEnabled';
-const EMAIL_NOTIFICATIONS_PREFERENCE_KEY = 'camlicaKoyuEmailNotificationPreference';
+// EMAIL_NOTIFICATIONS_PREFERENCE_KEY kaldırıldı
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { theme, setTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [siteNotificationsPreference, setSiteNotificationsPreferenceState] = useState(true);
-  const [emailNotificationPreference, setEmailNotificationPreferenceState] = useState(true);
+  // emailNotificationPreference state'i kaldırıldı
 
   useEffect(() => {
     setIsLoading(true); 
@@ -31,18 +30,11 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     if (storedSiteNotificationsPref !== null) {
       setSiteNotificationsPreferenceState(storedSiteNotificationsPref === 'true');
     } else {
-      localStorage.setItem(SITE_NOTIFICATIONS_KEY, 'true');
+      localStorage.setItem(SITE_NOTIFICATIONS_KEY, 'true'); // Default to true
       setSiteNotificationsPreferenceState(true);
     }
 
-    const storedEmailNotificationsPref = localStorage.getItem(EMAIL_NOTIFICATIONS_PREFERENCE_KEY);
-    if (storedEmailNotificationsPref !== null) {
-      setEmailNotificationPreferenceState(storedEmailNotificationsPref === 'true');
-    } else {
-      // Default email notifications to true
-      localStorage.setItem(EMAIL_NOTIFICATIONS_PREFERENCE_KEY, 'true');
-      setEmailNotificationPreferenceState(true);
-    }
+    // emailNotificationPreference ile ilgili localStorage okuma/yazma işlemleri kaldırıldı
     
     setIsLoading(false); 
   }, []); 
@@ -54,7 +46,6 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const handleSetSiteNotificationsPreference = (enabled: boolean) => {
     localStorage.setItem(SITE_NOTIFICATIONS_KEY, enabled.toString());
     setSiteNotificationsPreferenceState(enabled);
-    // Existing logic for browser notifications if any, can remain or be adjusted.
     if (enabled && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().then(permission => {
         if (permission === "granted") {
@@ -66,10 +57,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const handleSetEmailNotificationPreference = (enabled: boolean) => {
-    localStorage.setItem(EMAIL_NOTIFICATIONS_PREFERENCE_KEY, enabled.toString());
-    setEmailNotificationPreferenceState(enabled);
-  };
+  // handleSetEmailNotificationPreference kaldırıldı
 
   if (isLoading && typeof window !== 'undefined') { 
      return (
@@ -88,8 +76,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
       setAppTheme,
       siteNotificationsPreference, 
       setSiteNotificationsPreference: handleSetSiteNotificationsPreference,
-      emailNotificationPreference,
-      setEmailNotificationPreference: handleSetEmailNotificationPreference
+      // emailNotificationPreference ve setEmailNotificationPreference context değerinden kaldırıldı
     }}>
       {children}
     </SettingsContext.Provider>

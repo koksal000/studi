@@ -126,7 +126,7 @@ export function useAnnouncements() {
 
  const showNotification = useCallback((title: string, body: string, tag?: string) => {
     if (!siteNotificationsPreference) {
-      console.log("[Notifications] Site notifications preference is disabled.");
+      // console.log("[Notifications] Site notifications preference is disabled.");
       return;
     }
 
@@ -135,7 +135,7 @@ export function useAnnouncements() {
         try {
           const notification = new Notification(title, {
             body: body,
-            icon: '/images/logo.png', // Ensure public/images/logo.png exists
+            icon: '/images/logo.png', 
             tag: tag || `ann-${Date.now()}`,
             renotify: !!tag, 
           });
@@ -151,13 +151,13 @@ export function useAnnouncements() {
           toast({ title: title, description: body, duration: 8000, variant: "default" });
         }
       } else if (Notification.permission === 'denied') {
-        console.log("[Notifications] Browser notification permission denied by user.");
+        // console.log("[Notifications] Browser notification permission denied by user.");
       } else if (Notification.permission === 'default') {
-        console.log("[Notifications] Browser notification permission is default. Falling back to toast.");
+        // console.log("[Notifications] Browser notification permission is default. Falling back to toast.");
         toast({ title: title, description: body, duration: 8000, variant: "default" });
       }
     } else {
-      console.log("[Notifications] Notification API not available. Falling back to toast.");
+      // console.log("[Notifications] Notification API not available. Falling back to toast.");
       toast({ title: title, description: body, duration: 8000, variant: "default" });
     }
   }, [siteNotificationsPreference, toast]);
@@ -194,7 +194,7 @@ export function useAnnouncements() {
     };
 
     newEventSource.onmessage = (event) => {
-      const previousAnnouncementsState = [...announcementsRef.current];
+      const previousAnnouncementsState = [...announcementsRef.current]; // Capture state BEFORE update
       let updatedAnnouncementsFromServer: Announcement[];
       try {
         updatedAnnouncementsFromServer = JSON.parse(event.data);
@@ -202,20 +202,30 @@ export function useAnnouncements() {
         console.error("[SSE Announcements] Error parsing SSE message data:", error);
         return;
       }
-      setAnnouncements(updatedAnnouncementsFromServer);
-
+      
       const wasInitialDataLoad = !initialDataLoadedRef.current;
       if (!initialDataLoadedRef.current) {
         initialDataLoadedRef.current = true;
         setIsLoading(false);
       }
       
-      if (user && !wasInitialDataLoad) {
+      // Update main state after checking wasInitialDataLoad, but before notification logic
+      setAnnouncements(updatedAnnouncementsFromServer); 
+
+      if (user && !wasInitialDataLoad) { // Only process notifications after initial load and if user exists
         const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
         
         updatedAnnouncementsFromServer.forEach(newAnn => {
+          const isGenuinelyNew = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
+          const isAuthorSelf = newAnn.authorId === currentUserIdentifier;
+
+          if (isGenuinelyNew && !isAuthorSelf) {
+            const notificationTitle = `Yeni Duyuru: ${newAnn.title}`;
+            const notificationBody = newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : "");
+            showNotification(notificationTitle, notificationBody, `new-ann-${newAnn.id}`);
+          }
+
           const oldAnnEquivalent = previousAnnouncementsState.find(pa => pa.id === newAnn.id);
-          
           newAnn.comments?.forEach(newComment => {
             const oldCommentEquivalent = oldAnnEquivalent?.comments?.find(pc => pc.id === newComment.id);
             
@@ -225,9 +235,9 @@ export function useAnnouncements() {
               const isReplyToCurrentUser = newReply.replyingToAuthorId === currentUserIdentifier;
 
               if (isNewReply && isReplyToCurrentUser && !isAuthorSelfReply) {
-                const notificationTitle = `${newReply.authorName} size yanıt verdi`;
-                const notificationBody = `@${newReply.replyingToAuthorName}: "${newReply.text.substring(0, 50)}..."`;
-                showNotification(notificationTitle, notificationBody, `reply-${newReply.id}-${newAnn.id}`);
+                const replyNotificationTitle = `${newReply.authorName} size yanıt verdi`;
+                const replyNotificationBody = `@${newReply.replyingToAuthorName}: "${newReply.text.substring(0, 50)}..."`;
+                showNotification(replyNotificationTitle, replyNotificationBody, `reply-${newReply.id}-${newAnn.id}`);
               }
             });
           });
@@ -398,3 +408,6 @@ export function useAnnouncements() {
     deleteReply,
   };
 }
+
+
+    

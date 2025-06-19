@@ -6,24 +6,22 @@ import type { Announcement, Comment, Reply } from '@/hooks/use-announcements';
 import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
-import type { UserProfile } from '@/app/api/user-profile/route'; // Import UserProfile type
+import type { UserProfile } from '@/app/api/user-profile/route';
+import admin from 'firebase-admin';
+import nodemailer from 'nodemailer';
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
-const USER_DATA_FILE_PATH = path.join(dataDir, '_user_data.json'); // Path to user data
+const USER_DATA_FILE_PATH = path.join(dataDir, '_user_data.json');
 
 const MAX_IMAGE_RAW_SIZE_MB_API = 5;
 const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
 const MAX_IMAGE_PAYLOAD_SIZE_API = Math.floor(MAX_IMAGE_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
 const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
 
-// --- EmailJS Config ---
-const EMAILJS_SERVICE_ID = 'service_c8hlgh8';
-const EMAILJS_TEMPLATE_ID = 'template_a5i8fuh';
-const EMAILJS_PUBLIC_KEY = 'V4zUqX1G76vK-6j56'; // This is the User ID / Public Key for EmailJS API
-
 let announcementsData: Announcement[] = [];
-let initialized = false;
+let initializedFs = false;
+let firebaseAdminInitialized = false;
 
 interface ToggleAnnouncementLikeApiPayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
@@ -67,7 +65,7 @@ type AnnouncementApiPayload =
 
 const loadAnnouncementsFromFile = () => {
   try {
-    if (!initialized) console.log(`[API/Announcements] DATA_PATH used: ${dataDir}`);
+    if (!initializedFs) console.log(`[API/Announcements] DATA_PATH used: ${dataDir}`);
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
       const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
       if (fileData.trim() === '') {
@@ -85,10 +83,10 @@ const loadAnnouncementsFromFile = () => {
           })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), 
         })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
       }
-      if (!initialized) console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements from file.`);
+      if (!initializedFs) console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements from file.`);
     } else {
       announcementsData = [];
-      if (!initialized) console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array.`);
+      if (!initializedFs) console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array.`);
       saveAnnouncementsToFile();
     }
   } catch (error) {
@@ -123,63 +121,128 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
   }
 };
 
-async function sendEmailNotificationViaEmailJS(
-  recipientEmail: string,
-  recipientName: string,
-  announcementTitle: string,
-  announcementSummary: string,
-  announcementLink: string
-) {
-  const EMAILJS_ACCESS_TOKEN = process.env.EMAILJS_ACCESS_TOKEN;
+function initializeFirebaseAdmin() {
+    if (firebaseAdminInitialized) return;
+    try {
+        const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH;
+        const googleAppCreds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-  if (!EMAILJS_ACCESS_TOKEN) {
-    console.warn(`[EmailJS Send] EMAILJS_ACCESS_TOKEN is not configured. Cannot send email to ${recipientEmail}. Please set this environment variable.`);
-    return;
-  }
-
-  const templateParams = {
-    to_email: recipientEmail,
-    to_name: recipientName, // Assuming your EmailJS template can use this
-    from_name: "Çamlıca Köyü Yönetimi",
-    subject: `Yeni Duyuru: ${announcementTitle}`,
-    announcement_title: announcementTitle,
-    announcement_summary: announcementSummary,
-    announcement_link: announcementLink,
-    // Add any other params your EmailJS template 'template_a5i8fuh' expects
-  };
-
-  const emailJsPayload = {
-    service_id: EMAILJS_SERVICE_ID,
-    template_id: EMAILJS_TEMPLATE_ID,
-    user_id: EMAILJS_PUBLIC_KEY, // Public Key (User ID)
-    template_params: templateParams,
-    accessToken: EMAILJS_ACCESS_TOKEN,
-  };
-  
-  console.log(`[EmailJS Send] Preparing to send email to ${recipientEmail} for announcement: "${announcementTitle}"`);
-
-  try {
-    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(emailJsPayload),
-    });
-
-    const responseText = await response.text();
-    if (response.ok) {
-      console.log(`[EmailJS Send] Successfully sent email to ${recipientEmail}. Response: ${responseText}`);
-    } else {
-      console.error(`[EmailJS Send] Failed to send email to ${recipientEmail}. Status: ${response.status}, Body: ${responseText}`);
+        if (admin.apps.length === 0) { // Check if SDK is already initialized
+            if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+                const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+                admin.initializeApp({
+                    credential: admin.credential.cert(serviceAccount)
+                });
+                console.log("[Firebase Admin] SDK initialized successfully via service account file.");
+            } else if (googleAppCreds) {
+                admin.initializeApp({
+                    credential: admin.credential.applicationDefault()
+                });
+                console.log("[Firebase Admin] SDK initialized successfully via GOOGLE_APPLICATION_CREDENTIALS.");
+            } else {
+                console.error("[Firebase Admin] Firebase Admin SDK could not be initialized. Service account file path or GOOGLE_APPLICATION_CREDENTIALS not set or file not found.");
+                return; // Do not set firebaseAdminInitialized to true
+            }
+        } else {
+            console.log("[Firebase Admin] SDK already initialized.");
+        }
+        firebaseAdminInitialized = true;
+    } catch (error) {
+        console.error('[Firebase Admin] Error initializing Firebase Admin SDK:', error);
     }
-  } catch (error) {
-    console.error(`[EmailJS Send] Exception sending email to ${recipientEmail}:`, error);
-  }
 }
 
+const generateAnnouncementEmailHtml = (
+    userName: string,
+    announcementTitle: string,
+    announcementContent: string,
+    announcementLink: string,
+    siteUrl: string,
+    currentYear: number
+): string => {
+    // Sanitize content for HTML display
+    const sanitizedContent = announcementContent
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;")
+        .replace(/\n/g, "<br />");
+
+    return `
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Yeni Duyuru: ${announcementTitle}</title>
+    <style type="text/css">
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f0f4f8; color: #333333; }
+        table { border-collapse: collapse; }
+        td { padding: 0; }
+        .container { width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .header-section { background-color: #4CAF50; padding: 40px 20px; text-align: center; color: #ffffff; }
+        .header-section h1 { font-family: 'Montserrat', Arial, sans-serif; font-size: 28px; margin: 0 0 10px 0; line-height: 1.2; }
+        .header-section p { font-size: 16px; margin: 0; }
+        .button { display: inline-block; background-color: #3498db; color: #ffffff !important; padding: 12px 25px; border-radius: 25px; font-weight: bold; font-size: 16px; text-decoration: none; margin-top: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); -webkit-text-size-adjust: none; mso-hide: all; }
+        .content-section { padding: 30px; text-align: left; color: #333333; }
+        .content-section h2 { font-family: 'Montserrat', Arial, sans-serif; font-size: 24px; margin-top: 0; margin-bottom: 15px; color: #1a202c; text-align:center; }
+        .content-section p.announcement-content { font-size: 15px; line-height: 1.8; margin-bottom: 15px; }
+        .footer-section { background-color: #1a202c; color: #e2e8f0; padding: 30px; text-align: center; font-size: 13px; }
+        .footer-section img { width: 40px; height: auto; margin: 0 5px 5px 5px; vertical-align: middle; }
+        .footer-section p { margin: 0 0 5px 0; color: #b0b0b0; }
+        .footer-logo-text { color: #ffffff; font-weight: bold; display: block; font-size: 10px; margin-top: 3px; }
+    </style>
+</head>
+<body>
+    <center>
+        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+                <td align="center" style="padding: 20px 0;">
+                    <table class="container" border="0" cellpadding="0" cellspacing="0" width="100%">
+                        <tr>
+                            <td class="header-section">
+                                <h1>Merhaba ${userName},</h1>
+                                <p>Çamlıca Köyü'nden yeni bir duyuru var!</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="content-section">
+                                <h2>${announcementTitle}</h2>
+                                <p class="announcement-content">${sanitizedContent}</p>
+                                <div style="text-align: center; margin-top: 25px;">
+                                 <a href="${announcementLink}" class="button" target="_blank" rel="noopener noreferrer">Duyuruyu Sitede Gör</a>
+                                </div>
+                            </td>
+                        </tr>
+                         <tr>
+                            <td class="footer-section">
+                                <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:10px;">
+                                    <tr>
+                                        <td align="center">
+                                            <img src="https://files.catbox.moe/c8jbn0.png" alt="Domaniç Çamlıca Köyü Logosu"><span class="footer-logo-text">Çamlıca Köyü Sitesi</span>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <p>&copy; ${currentYear} Domaniç Çamlıca Köyü. Tüm Hakları Saklıdır.</p>
+                                <p>Bu e-posta bildirimi, <a href="${siteUrl}/ayarlar" style="color: #b0b0b0; text-decoration: underline;">ayarlarınızda</a> e-posta bildirimlerini açık tuttuğunuz için gönderilmiştir.</p>
+                                <p>Artık bildirim almak istemiyorsanız, site ayarlarından bu tercihinizi değiştirebilirsiniz.</p>
+                                <p>site, domaniç çamlıca köyü için **Mücteba Köksal** tarafından tasarlanmıştır.</p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </center>
+</body>
+</html>`;
+};
+
 async function sendEmailNotifications(announcement: Announcement) {
-  console.log(`[Email Send] Triggered for announcement: "${announcement.title}"`);
+  console.log(`[Nodemailer Send] Triggered for announcement: "${announcement.title}"`);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-  const announcementLink = `${appUrl}/announcements`;
+  const announcementLink = `${appUrl}/announcements`; // Link to the general announcements page
 
   let userProfiles: UserProfile[] = [];
   try {
@@ -187,42 +250,77 @@ async function sendEmailNotifications(announcement: Announcement) {
       const fileData = fs.readFileSync(USER_DATA_FILE_PATH, 'utf-8');
       userProfiles = JSON.parse(fileData) as UserProfile[];
     } else {
-      console.warn(`[Email Send] User data file not found at ${USER_DATA_FILE_PATH}. No emails will be sent.`);
+      console.warn(`[Nodemailer Send] User data file not found at ${USER_DATA_FILE_PATH}. No emails will be sent.`);
       return;
     }
   } catch (error) {
-    console.error(`[Email Send] Error reading or parsing user data file:`, error);
+    console.error(`[Nodemailer Send] Error reading or parsing user data file:`, error);
     return;
   }
 
   const optedInUsers = userProfiles.filter(user => user.emailNotificationPreference);
 
   if (optedInUsers.length === 0) {
-    console.log("[Email Send] No users opted-in for email notifications.");
+    console.log("[Nodemailer Send] No users opted-in for email notifications.");
     return;
   }
 
-  console.log(`[Email Send] Found ${optedInUsers.length} users opted-in for email notifications.`);
+  console.log(`[Nodemailer Send] Found ${optedInUsers.length} users opted-in for email notifications.`);
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_SMTP_HOST,
+    port: parseInt(process.env.EMAIL_SMTP_PORT || "587"),
+    secure: parseInt(process.env.EMAIL_SMTP_PORT || "587") === 465, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_SMTP_USER,
+      pass: process.env.EMAIL_SMTP_PASS,
+    },
+    tls: {
+        rejectUnauthorized: false // Sunucunuzun SSL sertifikası self-signed ise veya sorunluysa bunu ekleyebilirsiniz.
+    }
+  });
+  
+  if (!process.env.EMAIL_SMTP_HOST || !process.env.EMAIL_SMTP_USER || !process.env.EMAIL_SMTP_PASS || !process.env.EMAIL_FROM_ADDRESS) {
+      console.error("[Nodemailer Send] SMTP configuration is missing in .env file. Cannot send emails.");
+      return;
+  }
 
   for (const user of optedInUsers) {
     if (user.email) {
-      await sendEmailNotificationViaEmailJS(
-        user.email,
+      const emailHtml = generateAnnouncementEmailHtml(
         `${user.name} ${user.surname}`,
         announcement.title,
-        announcement.content.substring(0, 150) + (announcement.content.length > 150 ? "..." : ""),
-        announcementLink
+        announcement.content,
+        announcementLink,
+        appUrl,
+        new Date().getFullYear()
       );
+
+      const mailOptions = {
+        from: process.env.EMAIL_FROM_ADDRESS,
+        to: user.email,
+        subject: `Yeni Duyuru: ${announcement.title}`,
+        html: emailHtml,
+      };
+
+      try {
+        let info = await transporter.sendMail(mailOptions);
+        console.log(`[Nodemailer Send] Email sent successfully to ${user.email}. Message ID: ${info.messageId}`);
+      } catch (error) {
+        console.error(`[Nodemailer Send] Failed to send email to ${user.email}:`, error);
+      }
     }
   }
-  console.log(`[Email Send] Email sending process completed for ${optedInUsers.length} users.`);
+  console.log(`[Nodemailer Send] Email sending process completed for ${optedInUsers.length} users.`);
 }
 
 
-if (!initialized) {
+if (!initializedFs) {
   loadAnnouncementsFromFile();
-  initialized = true;
+  initializedFs = true;
 }
+// Firebase Admin SDK initialization is not needed for Nodemailer directly
+// initializeFirebaseAdmin(); // This was for FCM
 
 export async function GET() {
   loadAnnouncementsFromFile(); 

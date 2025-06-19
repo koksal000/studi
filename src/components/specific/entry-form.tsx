@@ -16,9 +16,8 @@ export function EntryForm() {
   const [surname, setSurname] = useState('');
   const { login, showEntryForm } = useUser();
   const { 
-    setShowPermissionModal, 
     hasModalBeenShown,
-    isFcmLoading // Added to prevent modal from showing before FCM context is ready
+    isFcmLoading 
   } = useFirebaseMessaging();
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
@@ -29,18 +28,26 @@ export function EntryForm() {
       
       try {
         await fetch('/api/stats/entry-count', { method: 'POST' });
-        console.log("Entry count increment request sent.");
+        console.log("[EntryForm] Entry count increment request sent.");
       } catch (error) {
-        console.error("Failed to send entry count increment request:", error);
+        console.error("[EntryForm] Failed to send entry count increment request:", error);
       }
       
-      // Show notification permission modal if not shown before and FCM is not loading
-      if (!hasModalBeenShown && !isFcmLoading) {
+      // Trigger notification permission modal if it hasn't been shown and FCM context is ready
+      // The actual browser prompt is handled when the user clicks "Evet" in our custom dialog
+      if (!isFcmLoading && !hasModalBeenShown) {
+        console.log("[EntryForm] Conditions met, opening NotificationPermissionDialog. isFcmLoading:", isFcmLoading, "hasModalBeenShown:", hasModalBeenShown);
         setIsNotificationModalOpen(true);
-        setShowPermissionModal(true); // Also update context state if needed, though dialog has its own open state
+      } else {
+        console.log("[EntryForm] Conditions NOT met for NotificationPermissionDialog. isFcmLoading:", isFcmLoading, "hasModalBeenShown:", hasModalBeenShown);
       }
     }
   };
+
+  useEffect(() => {
+    // This effect is to observe changes, especially for debugging.
+    // console.log("[EntryForm Effect] isFcmLoading:", isFcmLoading, "hasModalBeenShown:", hasModalBeenShown);
+  }, [isFcmLoading, hasModalBeenShown]);
 
   if (!showEntryForm) {
     return null;

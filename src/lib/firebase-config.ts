@@ -38,45 +38,50 @@ export const getFirebaseMessaging = () => {
 
 export const requestNotificationPermissionAndToken = async (): Promise<string | null> => {
   if (typeof window === 'undefined' || !('Notification' in window)) {
-    console.warn('Push notifications not supported in this environment.');
+    console.warn('[FCM-Config] Push notifications not supported in this environment.');
     return null;
   }
 
   const msg = getFirebaseMessaging();
   if (!msg) {
-    console.warn('Firebase Messaging not initialized.');
+    console.warn('[FCM-Config] Firebase Messaging not initialized.');
     return null;
   }
 
   try {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      console.log('Notification permission granted.');
+    console.log('[FCM-Config] Current Notification.permission before request:', Notification.permission);
+    
+    // Notification.requestPermission() will prompt if permission is 'default'.
+    // If 'granted' or 'denied', it resolves immediately with that state without prompting.
+    const permissionResult = await Notification.requestPermission();
+    console.log('[FCM-Config] Notification.permission after request:', permissionResult);
+
+    if (permissionResult === 'granted') {
+      console.log('[FCM-Config] Notification permission granted by user.');
       const currentToken = await getToken(msg, { vapidKey: VAPID_KEY });
       if (currentToken) {
-        console.log('FCM Token:', currentToken);
-        // Send this token to your server to store it
+        console.log('[FCM-Config] FCM Token retrieved:', currentToken.substring(0, 20) + "...");
         try {
             await fetch('/api/fcm/register-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token: currentToken }),
             });
-            console.log("FCM token sent to server for registration.");
+            console.log("[FCM-Config] FCM token sent to server for registration.");
         } catch (apiError) {
-            console.error("Failed to send FCM token to server:", apiError);
+            console.error("[FCM-Config] Failed to send FCM token to server:", apiError);
         }
         return currentToken;
       } else {
-        console.warn('No registration token available. Request permission to generate one.');
+        console.warn('[FCM-Config] No registration token available even after permission granted. This is unusual.');
         return null;
       }
     } else {
-      console.log('Unable to get permission to notify.');
+      console.log('[FCM-Config] Notification permission was not granted. Status:', permissionResult);
       return null;
     }
   } catch (err) {
-    console.error('An error occurred while retrieving token or permission. ', err);
+    console.error('[FCM-Config] An error occurred while retrieving token or permission: ', err);
     return null;
   }
 };
@@ -86,5 +91,6 @@ export const onForegroundMessage = (callback: (payload: any) => void) => {
   if (msg) {
     return onMessage(msg, callback);
   }
-  return () => {}; // Return an empty unsubscribe function if messaging is not available
+  return () => {}; 
 };
+

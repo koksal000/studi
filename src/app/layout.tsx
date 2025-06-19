@@ -11,7 +11,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { SettingsProvider } from '@/contexts/settings-context';
 import { AnnouncementStatusProvider } from '@/contexts/announcement-status-context';
 import { GoogleAdScript } from '@/components/specific/google-ad-script';
-import { FirebaseMessagingProvider } from '@/contexts/firebase-messaging-context'; // New import
 
 export const metadata: Metadata = {
   title: 'KöyümDomaniç - Çamlıca Köyü Portalı',
@@ -33,15 +32,13 @@ export default function RootLayout({
           <UserProvider>
             <SettingsProvider>
               <AnnouncementStatusProvider>
-                <FirebaseMessagingProvider> {/* FCM Provider added */}
-                  <Navbar />
-                  <main className="flex-grow container mx-auto px-4 py-8">
-                    {children}
-                  </main>
-                  <Footer />
-                  <Toaster />
-                  <GoogleAdScript />
-                </FirebaseMessagingProvider>
+                <Navbar />
+                <main className="flex-grow container mx-auto px-4 py-8">
+                  {children}
+                </main>
+                <Footer />
+                <Toaster />
+                <GoogleAdScript />
               </AnnouncementStatusProvider>
             </SettingsProvider>
           </UserProvider>

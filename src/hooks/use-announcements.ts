@@ -135,9 +135,9 @@ export function useAnnouncements() {
         try {
           const notification = new Notification(title, {
             body: body,
-            icon: '/images/logo.png',
-            tag: tag || `ann-${Date.now()}`, // Ensure unique tag or use specific tag
-            renotify: !!tag, // Renotify if tag is reused
+            icon: '/images/logo.png', // Ensure public/images/logo.png exists
+            tag: tag || `ann-${Date.now()}`,
+            renotify: !!tag, 
           });
           notification.onclick = (event) => {
             event.preventDefault();
@@ -148,13 +148,10 @@ export function useAnnouncements() {
           };
         } catch (err: any) {
           console.error("[Notifications] Browser notification construction error:", err);
-          // Fallback to toast if native notification fails
           toast({ title: title, description: body, duration: 8000, variant: "default" });
         }
       } else if (Notification.permission === 'denied') {
         console.log("[Notifications] Browser notification permission denied by user.");
-        // Optionally inform user via toast that notifications are blocked by browser
-        // toast({ title: "Bildirimler Engellendi", description: "Tarayıcı ayarlarınızdan bildirimlere izin vermelisiniz.", variant: "warning" });
       } else if (Notification.permission === 'default') {
         console.log("[Notifications] Browser notification permission is default. Falling back to toast.");
         toast({ title: title, description: body, duration: 8000, variant: "default" });
@@ -215,9 +212,6 @@ export function useAnnouncements() {
       
       if (user && !wasInitialDataLoad) {
         const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-
-        // FCM should handle new announcement notifications via server push.
-        // Client-side detection for replies is still relevant here.
         
         updatedAnnouncementsFromServer.forEach(newAnn => {
           const oldAnnEquivalent = previousAnnouncementsState.find(pa => pa.id === newAnn.id);

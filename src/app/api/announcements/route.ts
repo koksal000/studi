@@ -6,11 +6,9 @@ import type { Announcement, Comment, Reply, Like } from '@/hooks/use-announcemen
 import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
-import admin from 'firebase-admin';
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
-const TOKENS_FILE_PATH = path.join(dataDir, '_fcm_tokens.json'); 
 
 const MAX_IMAGE_RAW_SIZE_MB_API = 5;
 const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
@@ -19,41 +17,6 @@ const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(MAX_VIDEO_CONVERSION_RAW_SIZE_MB_A
 
 let announcementsData: Announcement[] = [];
 let initialized = false;
-
-// Initialize Firebase Admin SDK
-try {
-  const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH;
-  if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-    if (admin.apps.length === 0) { 
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-      console.log("[Firebase Admin] SDK initialized successfully via service account file.");
-    }
-  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
-    if (admin.apps.length === 0) {
-        admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
-        });
-        console.log("[Firebase Admin] SDK initialized successfully via GOOGLE_APPLICATION_CREDENTIALS.");
-    }
-  }
-  else if (admin.apps.length === 0) {
-    if (process.env.NODE_ENV === 'production' && !serviceAccountPath && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      console.warn("[Firebase Admin] Neither FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH nor GOOGLE_APPLICATION_CREDENTIALS is set or valid. Push notifications for new announcements will not be sent.");
-    } else if (serviceAccountPath && !fs.existsSync(serviceAccountPath)) {
-       console.warn(`[Firebase Admin] Service account file not found at: ${serviceAccountPath}. Push notifications will not be sent.`);
-    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && !fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)){
-       console.warn(`[Firebase Admin] GOOGLE_APPLICATION_CREDENTIALS file not found at: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}. Push notifications will not be sent.`);
-    } else {
-        console.warn("[Firebase Admin] Firebase Admin SDK could not be initialized. Push notifications will not be sent.");
-    }
-  }
-} catch (error) {
-  console.error("[Firebase Admin] Failed to initialize SDK:", error);
-}
-
 
 interface ToggleAnnouncementLikeApiPayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
@@ -150,92 +113,6 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
   } catch (error) {
     console.error("[API/Announcements] CRITICAL: Error saving announcements to file:", error);
     return false;
-  }
-};
-
-const sendFcmNotifications = async (title: string, body: string) => {
-  if (admin.apps.length === 0) {
-    console.log("[FCM Send] Firebase Admin SDK not initialized. Skipping notification send.");
-    return;
-  }
-
-  let tokens: string[] = [];
-  try {
-    if (fs.existsSync(TOKENS_FILE_PATH)) {
-      const tokensData = fs.readFileSync(TOKENS_FILE_PATH, 'utf-8');
-      if (tokensData.trim()) {
-        const parsedTokens = JSON.parse(tokensData) as { token: string }[];
-        tokens = parsedTokens.map(t => t.token).filter(Boolean);
-      }
-    }
-    console.log(`[FCM Send] Read ${tokens.length} tokens from file.`);
-  } catch (e) {
-    console.error("[FCM Send] Error reading FCM tokens file:", e);
-    return;
-  }
-
-  if (tokens.length === 0) {
-    console.log("[FCM Send] No FCM tokens found to send notifications.");
-    return;
-  }
-  
-  const uniqueTokens = [...new Set(tokens)];
-  console.log(`[FCM Send] Attempting to send notifications to ${uniqueTokens.length} unique tokens.`);
-  // For debugging, you might want to log tokens, but be careful in production:
-  // console.log("[FCM Send] Unique Tokens:", uniqueTokens.map(t => t.substring(0,10) + "..."));
-
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const clickActionLink = appUrl ? `${appUrl}/announcements` : undefined;
-
-  if (clickActionLink) {
-    console.log(`[FCM Send] Notification click action link will be: ${clickActionLink}`);
-  } else {
-    console.warn(`[FCM Send] NEXT_PUBLIC_APP_URL is not set. Notifications will not have a click action link.`);
-  }
-
-  const messagePayload = {
-    notification: {
-      title: title,
-      body: body,
-    },
-    webpush: {
-      notification: {
-        icon: '/images/logo.png', 
-      },
-      fcmOptions: {
-         link: clickActionLink,
-      }
-    },
-  };
-
-  if (uniqueTokens.length > 0) {
-    const multicastMessage = { ...messagePayload, tokens: uniqueTokens };
-    try {
-      const response = await admin.messaging().sendEachForMulticast(multicastMessage);
-      console.log(`[FCM Send] Multicast Response: ${response.successCount} success, ${response.failureCount} failure.`);
-      
-      if (response.failureCount > 0) {
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            const tokenSnippet = uniqueTokens[idx] ? uniqueTokens[idx].substring(0, 20) + "..." : "UNKNOWN_TOKEN";
-            console.error(`[FCM Send] Failure for token ${tokenSnippet}: ${resp.error?.code} - ${resp.error?.message}`);
-            if (resp.error?.code === 'messaging/registration-token-not-registered' || resp.error?.code === 'messaging/invalid-registration-token') {
-              console.log(`[FCM Send] Suggestion: Token ${tokenSnippet} should be removed from _fcm_tokens.json.`);
-              // TODO: Implement logic to remove this specific token from _fcm_tokens.json
-            }
-          } else {
-            // const tokenSnippet = uniqueTokens[idx] ? uniqueTokens[idx].substring(0, 20) + "..." : "UNKNOWN_TOKEN";
-            // console.log(`[FCM Send] Successfully sent to token ${tokenSnippet}. Message ID: ${resp.messageId}`);
-          }
-        });
-      }
-    } catch (error: any) {
-      console.error('[FCM Send] Error sending multicast notifications:', error);
-      if (error.code === 'messaging/mismatched-credential') {
-        console.error("[FCM Send] CRITICAL: Mismatched credential. Ensure your Firebase Admin SDK service account key is correct and has permissions for FCM.");
-      }
-    }
   }
 };
 
@@ -390,11 +267,8 @@ export async function POST(request: NextRequest) {
       announcementEmitter.emit('update', [...announcementsData]);
       
       if (isNewAnnouncement && modifiedAnnouncement) {
-        console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}". Attempting to send FCM notifications.`);
-        sendFcmNotifications(
-          `Yeni Duyuru: ${modifiedAnnouncement.title}`,
-          modifiedAnnouncement.content.substring(0, 100) + (modifiedAnnouncement.content.length > 100 ? "..." : "")
-        ).catch(e => console.error("[FCM Send] Background error during sendFcmNotifications:", e));
+        console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}".`);
+        // FCM sending logic was here, now removed.
       }
       
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
@@ -432,4 +306,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
-    

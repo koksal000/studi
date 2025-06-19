@@ -1,25 +1,18 @@
 
 "use client";
 
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
-import { useFirebaseMessaging } from '@/contexts/firebase-messaging-context';
-import { NotificationPermissionDialog } from './notification-permission-dialog';
 
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const { login, showEntryForm } = useUser();
-  const { 
-    hasModalBeenShown,
-    isFcmLoading 
-  } = useFirebaseMessaging();
-  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -32,22 +25,8 @@ export function EntryForm() {
       } catch (error) {
         console.error("[EntryForm] Failed to send entry count increment request:", error);
       }
-      
-      // Trigger notification permission modal if it hasn't been shown and FCM context is ready
-      // The actual browser prompt is handled when the user clicks "Evet" in our custom dialog
-      if (!isFcmLoading && !hasModalBeenShown) {
-        console.log("[EntryForm] Conditions met, opening NotificationPermissionDialog. isFcmLoading:", isFcmLoading, "hasModalBeenShown:", hasModalBeenShown);
-        setIsNotificationModalOpen(true);
-      } else {
-        console.log("[EntryForm] Conditions NOT met for NotificationPermissionDialog. isFcmLoading:", isFcmLoading, "hasModalBeenShown:", hasModalBeenShown);
-      }
     }
   };
-
-  useEffect(() => {
-    // This effect is to observe changes, especially for debugging.
-    // console.log("[EntryForm Effect] isFcmLoading:", isFcmLoading, "hasModalBeenShown:", hasModalBeenShown);
-  }, [isFcmLoading, hasModalBeenShown]);
 
   if (!showEntryForm) {
     return null;
@@ -109,10 +88,6 @@ export function EntryForm() {
           </Card>
         </div>
       </div>
-      <NotificationPermissionDialog 
-        isOpen={isNotificationModalOpen} 
-        onOpenChange={setIsNotificationModalOpen} 
-      />
     </>
   );
 }

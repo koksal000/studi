@@ -6,9 +6,11 @@ import type { Announcement, Comment, Reply, Like } from '@/hooks/use-announcemen
 import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
+import admin from 'firebase-admin';
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
+const TOKENS_FILE_PATH = path.join(dataDir, '_fcm_tokens.json'); // For reading tokens
 
 const MAX_IMAGE_RAW_SIZE_MB_API = 5;
 const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
@@ -17,6 +19,27 @@ const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(MAX_VIDEO_CONVERSION_RAW_SIZE_MB_A
 
 let announcementsData: Announcement[] = [];
 let initialized = false;
+
+// Initialize Firebase Admin SDK
+try {
+  const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH;
+  if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    if (admin.apps.length === 0) { // Check if already initialized
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      console.log("[Firebase Admin] SDK initialized successfully.");
+    }
+  } else if (process.env.NODE_ENV === 'production' && !serviceAccountPath) {
+    console.warn("[Firebase Admin] FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH not set. Push notifications for new announcements will not be sent.");
+  } else if (serviceAccountPath && !fs.existsSync(serviceAccountPath)) {
+     console.warn(`[Firebase Admin] Service account file not found at: ${serviceAccountPath}. Push notifications for new announcements will not be sent.`);
+  }
+} catch (error) {
+  console.error("[Firebase Admin] Failed to initialize SDK:", error);
+}
+
 
 interface ToggleAnnouncementLikeApiPayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
@@ -39,14 +62,14 @@ interface DeleteCommentApiPayload {
   action: "DELETE_COMMENT";
   announcementId: string;
   commentId: string;
-  deleterAuthorId: string; // ID of the user attempting to delete
+  deleterAuthorId: string;
 }
 interface DeleteReplyApiPayload {
   action: "DELETE_REPLY";
   announcementId: string;
   commentId: string;
   replyId: string;
-  deleterAuthorId: string; // ID of the user attempting to delete
+  deleterAuthorId: string;
 }
 
 type AnnouncementApiPayload = 
@@ -72,10 +95,10 @@ const loadAnnouncementsFromFile = () => {
           likes: ann.likes || [],
           comments: (ann.comments || []).map(comment => ({
             ...comment,
-            likes: comment.likes || [], // Ensure likes array exists
+            // likes removed from comments
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                likes: reply.likes || [], // Ensure likes array exists
+                // likes removed from replies
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
           })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), 
         })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
@@ -104,10 +127,10 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
         likes: ann.likes || [],
         comments: (ann.comments || []).map(comment => ({
             ...comment,
-            likes: comment.likes || [],
+            // likes removed
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                likes: reply.likes || [],
+                // likes removed
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -119,6 +142,70 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
     return false;
   }
 };
+
+const sendFcmNotifications = async (title: string, body: string) => {
+  if (admin.apps.length === 0) {
+    console.log("[FCM Send] Firebase Admin SDK not initialized. Skipping notification send.");
+    return;
+  }
+
+  let tokens: { token: string }[] = [];
+  try {
+    if (fs.existsSync(TOKENS_FILE_PATH)) {
+      const tokensData = fs.readFileSync(TOKENS_FILE_PATH, 'utf-8');
+      tokens = JSON.parse(tokensData).map((t: any) => t.token).filter(Boolean);
+    }
+  } catch (e) {
+    console.error("[FCM Send] Error reading FCM tokens file:", e);
+    return;
+  }
+
+  if (tokens.length === 0) {
+    console.log("[FCM Send] No FCM tokens found to send notifications.");
+    return;
+  }
+  
+  const uniqueTokens = [...new Set(tokens)];
+
+
+  const message = {
+    notification: {
+      title: title,
+      body: body,
+    },
+    webpush: {
+      notification: {
+        icon: '/images/logo.png', // Ensure this icon exists in public/images
+      },
+      fcmOptions: {
+         link: process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/announcements` : undefined,
+      }
+    },
+    // tokens: uniqueTokens, // This is for multicast
+  };
+
+  // Sending to multiple tokens requires admin.messaging().sendEachForMulticast or sendEach
+  // For simplicity, let's iterate or use sendToDevice if tokens array is small.
+  // sendMulticast is better.
+  if (uniqueTokens.length > 0) {
+    const multicastMessage = { ...message, tokens: uniqueTokens };
+    try {
+      const response = await admin.messaging().sendEachForMulticast(multicastMessage);
+      console.log(`[FCM Send] Notifications sent: ${response.successCount} success, ${response.failureCount} failure.`);
+      if (response.failureCount > 0) {
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.error(`[FCM Send] Failure for token ${uniqueTokens[idx].substring(0,20)}...: ${resp.error}`);
+            // TODO: Handle failed tokens (e.g., remove them from storage if unrecoverable error)
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[FCM Send] Error sending notifications:', error);
+    }
+  }
+};
+
 
 if (!initialized) {
   loadAnnouncementsFromFile();
@@ -141,9 +228,10 @@ export async function POST(request: NextRequest) {
   }
 
   loadAnnouncementsFromFile(); 
-  let currentDataFromFile = [...announcementsData.map(a => ({...a, comments: a.comments?.map(c => ({...c, replies: c.replies?.map(r => ({...r}))}))}))]; 
+  let currentDataFromFile = [...announcementsData.map(a => ({...a, comments: (a.comments || []).map(c => ({...c, replies: (c.replies || []).map(r => ({...r}))}))}))]; 
   let announcementModified = false;
   let modifiedAnnouncement: Announcement | null = null;
+  let isNewAnnouncement = false;
 
 
   if ('action' in payload) {
@@ -158,8 +246,8 @@ export async function POST(request: NextRequest) {
     announcementToUpdate.likes = announcementToUpdate.likes || [];
     announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
         ...c, 
-        likes: c.likes || [],
-        replies: (c.replies || []).map(r => ({...r, likes: r.likes || []})),
+        // likes removed
+        replies: (c.replies || []).map(r => ({...r /* likes removed */ })),
     }));
 
 
@@ -177,7 +265,7 @@ export async function POST(request: NextRequest) {
         id: `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
         replies: [],
-        likes: [],
+        // likes: [], // likes removed
       };
       announcementToUpdate.comments.push(newComment);
       announcementToUpdate.comments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -193,7 +281,7 @@ export async function POST(request: NextRequest) {
         ...actionPayload.reply,
         id: `rpl_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
-        likes: [],
+        // likes: [], // likes removed
       };
       commentToUpdate.replies.push(newReply);
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -247,8 +335,8 @@ export async function POST(request: NextRequest) {
     newAnnouncement.likes = newAnnouncement.likes || [];
     newAnnouncement.comments = (newAnnouncement.comments || []).map(c => ({
         ...c, 
-        likes: c.likes || [],
-        replies: (c.replies || []).map(r => ({...r, likes: r.likes || [] })),
+        // likes removed
+        replies: (c.replies || []).map(r => ({...r /* likes removed */ })),
     })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);
@@ -256,6 +344,7 @@ export async function POST(request: NextRequest) {
       currentDataFromFile[existingIndex] = newAnnouncement; 
     } else {
       currentDataFromFile.unshift(newAnnouncement);
+      isNewAnnouncement = true; // Mark as new announcement
     }
     announcementModified = true;
     modifiedAnnouncement = newAnnouncement;
@@ -265,7 +354,17 @@ export async function POST(request: NextRequest) {
     currentDataFromFile.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (saveAnnouncementsToFile(currentDataFromFile)) {
       announcementsData = currentDataFromFile; 
-      announcementEmitter.emit('update', [...announcementsData]); 
+      announcementEmitter.emit('update', [...announcementsData]);
+      
+      // If it's a new announcement, try to send FCM notifications
+      if (isNewAnnouncement && modifiedAnnouncement) {
+        // Do not await this, let it run in the background
+        sendFcmNotifications(
+          `Yeni Duyuru: ${modifiedAnnouncement.title}`,
+          modifiedAnnouncement.content.substring(0, 100) + (modifiedAnnouncement.content.length > 100 ? "..." : "")
+        ).catch(e => console.error("FCM Send Background Error:", e));
+      }
+      
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
     } else {
       console.error(`[API/Announcements] Failed to save data to file after modification.`);

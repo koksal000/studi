@@ -10,7 +10,8 @@ import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { SettingsProvider } from '@/contexts/settings-context';
 import { AnnouncementStatusProvider } from '@/contexts/announcement-status-context';
-import { GoogleAdScript } from '@/components/specific/google-ad-script'; // Yeni import
+import { GoogleAdScript } from '@/components/specific/google-ad-script';
+import { FirebaseMessagingProvider } from '@/contexts/firebase-messaging-context'; // New import
 
 export const metadata: Metadata = {
   title: 'KöyümDomaniç - Çamlıca Köyü Portalı',
@@ -25,20 +26,22 @@ export default function RootLayout({
   return (
     <html lang="tr" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
-        {/* AdSense script'i buradan kaldırıldı */}
+        {/* AdSense script'i GoogleAdScript bileşenine taşındı */}
       </head>
       <body className={`antialiased flex flex-col min-h-screen`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <UserProvider>
             <SettingsProvider>
               <AnnouncementStatusProvider>
-                <Navbar />
-                <main className="flex-grow container mx-auto px-4 py-8">
-                  {children}
-                </main>
-                <Footer />
-                <Toaster />
-                <GoogleAdScript /> {/* Yeni bileşen buraya eklendi */}
+                <FirebaseMessagingProvider> {/* FCM Provider added */}
+                  <Navbar />
+                  <main className="flex-grow container mx-auto px-4 py-8">
+                    {children}
+                  </main>
+                  <Footer />
+                  <Toaster />
+                  <GoogleAdScript />
+                </FirebaseMessagingProvider>
               </AnnouncementStatusProvider>
             </SettingsProvider>
           </UserProvider>

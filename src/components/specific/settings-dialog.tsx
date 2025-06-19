@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Switch } from "@/components/ui/switch"; // Switch eklendi
+import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/hooks/use-toast';
-import { Moon, Sun, Laptop, Bell, BellOff } from 'lucide-react'; // Bell ikonları eklendi
+import { Moon, Sun, Laptop, Bell, BellOff, BellPlus, BellRing } from 'lucide-react';
 import { VILLAGE_NAME } from '@/lib/constants';
-import { useEffect, useState } from 'react'; // useState eklendi
-
+import { useEffect, useState } from 'react';
+import { useFirebaseMessaging } from '@/contexts/firebase-messaging-context'; // FCM context
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -23,32 +23,79 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
   const { 
     currentTheme, 
     setAppTheme, 
-    siteNotificationsPreference, 
-    setSiteNotificationsPreference 
-  } = useSettings();
+  } = useSettings(); // siteNotificationsPreference removed from here
   const { user, logout } = useUser();
   const { toast } = useToast();
 
-  // Local state for the switch to immediately reflect changes
-  const [localNotificationsEnabled, setLocalNotificationsEnabled] = useState(siteNotificationsPreference);
+  const { 
+    permissionStatus: fcmPermission, 
+    requestPermission: requestFcmPermission,
+    userPreference: fcmUserPreference,
+    setUserPreference: setFcmUserPreference
+  } = useFirebaseMessaging();
+
+  // Local state for the FCM switch to provide immediate UI feedback
+  const [localFcmPreference, setLocalFcmPreference] = useState(fcmUserPreference);
 
   useEffect(() => {
-    // Sync local state if the context value changes (e.g., on initial load)
-    setLocalNotificationsEnabled(siteNotificationsPreference);
-  }, [siteNotificationsPreference]);
+    // Sync local FCM preference switch with context/localStorage value when dialog opens or context changes
+    setLocalFcmPreference(fcmUserPreference);
+  }, [fcmUserPreference, isOpen]);
 
-  const handleNotificationSwitchChange = (checked: boolean) => {
-    setLocalNotificationsEnabled(checked); // Update local state immediately
-    // The actual preference is set in context on save
+
+  const handleFcmSwitchChange = async (checked: boolean) => {
+    setLocalFcmPreference(checked ? 'enabled' : 'disabled'); // Update local UI state first
+    
+    if (checked) { // User wants to enable
+      if (fcmPermission === 'default' || fcmPermission === 'denied' || fcmPermission === 'prompted_declined') {
+        // If permission is default or was previously denied by user (not browser hard-deny), re-request
+        const { permission: newPermission } = await requestFcmPermission();
+        if (newPermission === 'granted') {
+          // User preference is updated to 'enabled' inside requestPermission
+           toast({ title: "FCM Bildirimleri Etkinleştirildi", description: "Artık anlık bildirim alacaksınız."});
+        } else if (newPermission === 'denied') {
+           setFcmUserPreference('disabled'); // Persist this explicit denial
+           setLocalFcmPreference('disabled'); // Revert switch if browser denied
+           toast({ title: "FCM Bildirim İzni Reddedildi", description: "Tarayıcı tarafından izin verilmedi.", variant: "destructive"});
+        } else { // default
+           toast({ title: "FCM Bildirim İzni Beklemede", description: "Tarayıcınızın bildirim çubuğundan izin vermeniz gerekebilir."});
+        }
+      } else if (fcmPermission === 'granted') {
+        // Permission already granted, just update preference if it was 'disabled'
+        setFcmUserPreference('enabled');
+        toast({ title: "FCM Bildirimleri Etkin", description: "Bildirimler zaten etkin."});
+      }
+    } else { // User wants to disable
+      setFcmUserPreference('disabled');
+      toast({ title: "FCM Bildirimleri Devre Dışı Bırakıldı", description: "Artık anlık bildirim almayacaksınız."});
+    }
   };
-
+  
   const handleSaveSettings = () => {
-    setSiteNotificationsPreference(localNotificationsEnabled); // Save the local state to context
+    // Theme is saved by next-themes automatically.
+    // FCM preference is saved by handleFcmSwitchChange already.
+    // This function is mainly to close the dialog and provide unified feedback.
     toast({
       title: "Ayarlar Kaydedildi",
       description: "Tercihleriniz güncellendi.",
     });
     onOpenChange(false);
+  };
+
+  const getFcmStatusIcon = () => {
+    if (localFcmPreference === 'enabled' && fcmPermission === 'granted') return <BellRing className="h-5 w-5 text-green-500" />;
+    if (localFcmPreference === 'enabled' && (fcmPermission === 'default' || fcmPermission === 'prompted_declined')) return <BellPlus className="h-5 w-5 text-yellow-500" />;
+    return <BellOff className="h-5 w-5 text-muted-foreground" />;
+  };
+
+  const getFcmStatusText = () => {
+    if (localFcmPreference === 'enabled') {
+      if (fcmPermission === 'granted') return "Anlık bildirimler etkin.";
+      if (fcmPermission === 'default' || fcmPermission === 'prompted_declined') return "İzin bekleniyor/yeniden istenebilir.";
+      if (fcmPermission === 'denied') return "Tarayıcı tarafından engellendi.";
+      if (fcmPermission === 'not_supported') return "Tarayıcı desteklemiyor.";
+    }
+    return "Anlık bildirimler devre dışı.";
   };
 
 
@@ -65,7 +112,7 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
           <div className="space-y-3">
             <Label className="text-base font-medium">Tema Seçimi</Label>
             <RadioGroup
-              value={currentTheme || "system"} // value prop'u eklendi
+              value={currentTheme || "system"}
               onValueChange={(value) => setAppTheme(value)}
               className="flex space-x-2 sm:space-x-0 sm:grid sm:grid-cols-3 gap-2"
             >
@@ -88,24 +135,27 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
           </div>
 
           <div className="space-y-3">
-            <Label className="text-base font-medium">Site Bildirimleri</Label>
+            <Label className="text-base font-medium">Anlık Bildirimler (FCM)</Label>
             <div className="flex items-center justify-between rounded-lg border p-4">
               <div className="flex items-center space-x-2">
-                {localNotificationsEnabled ? <Bell className="h-5 w-5 text-primary" /> : <BellOff className="h-5 w-5 text-muted-foreground" />}
+                {getFcmStatusIcon()}
                 <span className="text-sm">
-                  Yeni duyurular için tarayıcı bildirimlerini {localNotificationsEnabled ? 'açık' : 'kapalı'}.
+                  {getFcmStatusText()}
                 </span>
               </div>
               <Switch
-                id="site-notifications-switch"
-                checked={localNotificationsEnabled}
-                onCheckedChange={handleNotificationSwitchChange}
-                aria-label="Site bildirimlerini aç/kapat"
+                id="fcm-notifications-switch"
+                checked={localFcmPreference === 'enabled'}
+                onCheckedChange={handleFcmSwitchChange}
+                disabled={fcmPermission === 'denied' || fcmPermission === 'not_supported'}
+                aria-label="Firebase anlık bildirimlerini aç/kapat"
               />
             </div>
              <p className="text-xs text-muted-foreground px-1">
-                Tarayıcı bildirimleri, site açıkken yeni duyurular geldiğinde küçük bir uyarı gösterir. Tarayıcınızdan ayrıca izin vermeniz gerekebilir.
+                Anlık bildirimler (Firebase Cloud Messaging ile), yeni duyurular geldiğinde uygulama kapalıyken veya arka plandayken bile sizi uyarır. Tarayıcınızdan ayrıca izin vermeniz gerekebilir.
             </p>
+            {fcmPermission === 'denied' && <p className="text-xs text-destructive px-1">Tarayıcı bildirimleri engellenmiş. Etkinleştirmek için tarayıcı ayarlarınızı kontrol edin.</p>}
+            {fcmPermission === 'not_supported' && <p className="text-xs text-destructive px-1">Bu tarayıcı anlık bildirimleri desteklemiyor.</p>}
           </div>
           
           {user && (

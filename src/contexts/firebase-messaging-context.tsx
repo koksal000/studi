@@ -17,7 +17,7 @@ interface FirebaseMessagingContextType {
   hasModalBeenShown: boolean;
   setHasModalBeenShown: (shown: boolean) => void;
   userPreference: 'enabled' | 'disabled' | 'unset';
-  setUserPreference: (preference: 'enabled' | 'disabled') => void;
+  setUserPreference: (preference: 'enabled' | 'disabled') => void; // Only for direct user preference changes
 }
 
 interface FCMTokenResponse {
@@ -27,7 +27,7 @@ interface FCMTokenResponse {
 
 const FirebaseMessagingContext = createContext<FirebaseMessagingContextType | undefined>(undefined);
 
-const FCM_PERMISSION_STATUS_KEY = 'fcmPermissionStatus'; // For Notification.permission
+const FCM_PERMISSION_STATUS_KEY = 'fcmActualBrowserPermissionStatus'; // Stores Notification.permission
 const FCM_MODAL_SHOWN_KEY = 'fcmPermissionModalShown';
 const FCM_USER_PREFERENCE_KEY = 'fcmUserPreference'; // 'enabled' or 'disabled' by user in settings
 
@@ -40,47 +40,71 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
   const [userPreference, setUserPreferenceState] = useState<'enabled' | 'disabled' | 'unset'>('unset');
   const { toast } = useToast();
 
-  useEffect(() => {
-    initializeFirebaseApp(); // Initialize Firebase on mount
-
-    // Load states from localStorage
-    const storedModalShown = localStorage.getItem(FCM_MODAL_SHOWN_KEY);
-    const storedPreference = localStorage.getItem(FCM_USER_PREFERENCE_KEY) as 'enabled' | 'disabled' | null;
-    const storedPermission = localStorage.getItem(FCM_PERMISSION_STATUS_KEY) as FcmPermissionStatus | null;
-
-    if (storedModalShown === 'true') {
-      setHasModalBeenShownState(true);
+  const updateFcmToken = useCallback(async () => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const currentToken = await requestNotificationPermissionAndToken(); // This function already handles sending token to backend
+      setFcmToken(currentToken);
+      return currentToken;
     }
-    if (storedPreference) {
-      setUserPreferenceState(storedPreference);
-    }
-    if (storedPermission) {
-      setPermissionStatus(storedPermission);
-    } else if (typeof Notification !== 'undefined') {
-      setPermissionStatus(Notification.permission as FcmPermissionStatus);
-    }
+    setFcmToken(null);
+    return null;
+  }, []);
 
-
-    // If preference is enabled and permission granted, try to get token silently
-    if (storedPreference === 'enabled' && (storedPermission === 'granted' || (typeof Notification !== 'undefined' && Notification.permission === 'granted'))) {
-      requestNotificationPermissionAndToken().then(response => {
-        if (response) {
-            setFcmToken(response);
-            setPermissionStatus('granted');
-            localStorage.setItem(FCM_PERMISSION_STATUS_KEY, 'granted');
-        } else {
-            // This might happen if token retrieval fails but permission was granted
-            setPermissionStatus(Notification.permission as FcmPermissionStatus);
-            localStorage.setItem(FCM_PERMISSION_STATUS_KEY, Notification.permission);
-        }
-      }).catch(err => console.error("Error getting token on initial load:", err))
-      .finally(() => setIsFcmLoading(false));
+  const syncUserPreferenceWithBrowserPermission = useCallback((browserPerm: FcmPermissionStatus, currentPref: 'enabled' | 'disabled' | 'unset') => {
+    let newPref = currentPref;
+    if (browserPerm === 'denied') {
+      if (currentPref !== 'disabled') {
+        console.log("[FCMContext] Browser permission denied, forcing user preference to 'disabled'.");
+        newPref = 'disabled';
+      }
+    } else if (browserPerm === 'granted' && currentPref === 'unset') {
+      // If permission is granted and user hasn't set a preference, default to enabled
+      newPref = 'enabled';
+    }
+    // If no change needed or preference is already aligned
+    if (newPref !== currentPref) {
+      setUserPreferenceState(newPref);
+      localStorage.setItem(FCM_USER_PREFERENCE_KEY, newPref);
     } else {
-        setIsFcmLoading(false);
+        setUserPreferenceState(currentPref === null || currentPref === undefined ? 'unset' : currentPref);
+    }
+  }, []);
+
+
+  useEffect(() => {
+    initializeFirebaseApp();
+    setIsFcmLoading(true);
+
+    const modalShown = localStorage.getItem(FCM_MODAL_SHOWN_KEY) === 'true';
+    setHasModalBeenShownState(modalShown);
+
+    let storedUserPref = localStorage.getItem(FCM_USER_PREFERENCE_KEY) as 'enabled' | 'disabled' | 'unset' | null;
+    if (storedUserPref === null) storedUserPref = 'unset'; // Ensure it's 'unset' not null
+
+    let browserPerm: FcmPermissionStatus = 'default';
+    if (typeof Notification !== 'undefined') {
+      if (!('permission' in Notification)) {
+        browserPerm = 'not_supported';
+      } else {
+        browserPerm = Notification.permission as FcmPermissionStatus;
+      }
+    } else {
+      browserPerm = 'not_supported';
+    }
+    
+    setPermissionStatus(browserPerm);
+    localStorage.setItem(FCM_PERMISSION_STATUS_KEY, browserPerm);
+
+    syncUserPreferenceWithBrowserPermission(browserPerm, storedUserPref);
+    
+    // Initial token fetch if conditions are met
+    if (storedUserPref === 'enabled' && browserPerm === 'granted') {
+      updateFcmToken().finally(() => setIsFcmLoading(false));
+    } else {
+      setIsFcmLoading(false);
     }
 
-    // Set up foreground message listener
-    const unsubscribe = onForegroundMessage((payload) => {
+    const unsubscribeOnMessage = onForegroundMessage((payload) => {
       console.log('Foreground message received. ', payload);
       toast({
         title: payload.notification?.title || "Yeni Bildirim",
@@ -89,9 +113,10 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
     });
 
     return () => {
-      unsubscribe(); // Clean up listener
+      unsubscribeOnMessage();
     };
-  }, [toast]);
+  }, [toast, updateFcmToken, syncUserPreferenceWithBrowserPermission]);
+
 
   const setHasModalBeenShown = (shown: boolean) => {
     localStorage.setItem(FCM_MODAL_SHOWN_KEY, shown.toString());
@@ -105,23 +130,38 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
 
   const requestPermission = useCallback(async (): Promise<FCMTokenResponse> => {
     setIsFcmLoading(true);
-    const currentToken = await requestNotificationPermissionAndToken();
-    const newPermission = typeof Notification !== 'undefined' ? Notification.permission as FcmPermissionStatus : 'default';
+    // requestNotificationPermissionAndToken internally calls Notification.requestPermission()
+    // and then tries to get the token if granted.
+    const receivedToken = await requestNotificationPermissionAndToken(); 
     
-    setFcmToken(currentToken);
-    setPermissionStatus(newPermission);
-    localStorage.setItem(FCM_PERMISSION_STATUS_KEY, newPermission);
-
-    if (newPermission === 'granted' && currentToken) {
-      setUserPreference('enabled'); // If granted, user preference is 'enabled'
-    } else if (newPermission === 'denied') {
-      setUserPreference('disabled'); // If denied, user preference is 'disabled'
+    let newBrowserPermission: FcmPermissionStatus = 'default';
+     if (typeof Notification !== 'undefined') {
+      if (!('permission' in Notification)) {
+        newBrowserPermission = 'not_supported';
+      } else {
+        newBrowserPermission = Notification.permission as FcmPermissionStatus;
+      }
+    } else {
+      newBrowserPermission = 'not_supported';
     }
-    // If 'default', preference remains as is (or 'unset' if not changed yet)
+
+    setPermissionStatus(newBrowserPermission);
+    localStorage.setItem(FCM_PERMISSION_STATUS_KEY, newBrowserPermission);
+    setFcmToken(receivedToken);
+
+    if (newBrowserPermission === 'granted') {
+      setUserPreference('enabled'); // User explicitly granted, so preference is enabled
+    } else if (newBrowserPermission === 'denied') {
+      setUserPreference('disabled'); // User explicitly denied, so preference is disabled
+    } else { // 'default' or 'prompted_declined' (which we treat as 'default' here for re-prompt logic)
+      // Don't change user preference here if it was 'default'. Let it remain 'unset' or as is
+      // until user makes a choice in settings or initial dialog.
+      // If they declined the modal, that sets it to 'disabled'.
+    }
 
     setIsFcmLoading(false);
-    return {token: currentToken, permission: newPermission};
-  }, []);
+    return { token: receivedToken, permission: newBrowserPermission };
+  }, [setUserPreference]);
 
 
   return (
@@ -135,7 +175,7 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
       hasModalBeenShown,
       setHasModalBeenShown,
       userPreference,
-      setUserPreference
+      setUserPreference // Expose this for direct preference changes from settings
     }}>
       {children}
     </FirebaseMessagingContext.Provider>

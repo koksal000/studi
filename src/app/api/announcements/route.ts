@@ -119,8 +119,7 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
 };
 
 async function sendEmailViaEmailJSHttpApi(
-    recipientEmail: string,
-    recipientName: string,
+    recipientProfile: UserProfile,
     announcement: Announcement
 ) {
     const serviceID = process.env.EMAILJS_SERVICE_ID;
@@ -132,17 +131,19 @@ async function sendEmailViaEmailJSHttpApi(
         console.error("[EmailJS Send] EmailJS configuration is missing in .env file (SERVICE_ID, TEMPLATE_ID, or PUBLIC_KEY). Cannot send email.");
         return;
     }
-    if (!accessToken) {
-         console.error("[EmailJS Send] EMAILJS_ACCESS_TOKEN is not configured in .env file. Backend email sending will fail. Please get your Access Token from EmailJS dashboard (Account > API Keys).");
+    if (!accessToken || accessToken === "BURAYA_EMAILJS_ACCESS_TOKENINIZI_GIRIN") {
+         console.error("[EmailJS Send] EMAILJS_ACCESS_TOKEN is not configured in .env file or still has the placeholder value. Backend email sending will fail. Please get your Access Token from EmailJS dashboard (Account > API Keys).");
         return;
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-    const announcementLink = `${appUrl}/announcements`;
+    const announcementLink = `${appUrl}/announcements`; // Link to general announcements page
+    // For a direct link to the specific announcement, you'd need to adjust the announcements page to handle fragment identifiers or query params.
+    // For now, linking to the main announcements page.
 
     const templateParams = {
-        to_email: recipientEmail, // EmailJS handles this if template is correctly set
-        to_name: recipientName,
+        email: recipientProfile.email, // Assuming your EmailJS template uses {{email}} for recipient
+        to_name: `${recipientProfile.name} ${recipientProfile.surname}`,
         from_name: "Çamlıca Köyü Yönetimi",
         subject: `Yeni Duyuru: ${announcement.title}`,
         announcement_title: announcement.title,
@@ -150,16 +151,14 @@ async function sendEmailViaEmailJSHttpApi(
         announcement_link: announcementLink,
         site_url: appUrl,
         current_year: new Date().getFullYear().toString(),
-        // Ensure your EmailJS template 'template_a5i8fuh' uses these exact parameter names.
-        // For example, in your EmailJS template, you would use {{to_name}}, {{announcement_title}}, etc.
     };
 
     const emailJsPayload = {
         service_id: serviceID,
         template_id: templateID,
-        user_id: userID, // This is your Public Key
+        user_id: userID, 
         template_params: templateParams,
-        accessToken: accessToken, // This is your private Access Token
+        accessToken: accessToken,
     };
 
     try {
@@ -172,13 +171,13 @@ async function sendEmailViaEmailJSHttpApi(
         });
 
         if (response.ok) {
-            console.log(`[EmailJS Send] Successfully sent email to ${recipientEmail} for announcement: "${announcement.title}"`);
+            console.log(`[EmailJS Send] Successfully sent email to ${recipientProfile.email} for announcement: "${announcement.title}"`);
         } else {
             const errorText = await response.text();
-            console.error(`[EmailJS Send] Failed to send email to ${recipientEmail}. Status: ${response.status}, Response: ${errorText}. Check EmailJS dashboard for logs and ensure Access Token is correct.`);
+            console.error(`[EmailJS Send] Failed to send email to ${recipientProfile.email}. Status: ${response.status}, Response: ${errorText}. Check EmailJS dashboard for logs and ensure Access Token & template params are correct for template ${templateID}.`);
         }
     } catch (error) {
-        console.error(`[EmailJS Send] Network or other error sending email to ${recipientEmail}:`, error);
+        console.error(`[EmailJS Send] Network or other error sending email to ${recipientProfile.email}:`, error);
     }
 }
 
@@ -211,7 +210,7 @@ async function sendEmailNotifications(announcement: Announcement) {
   for (let i = 0; i < optedInUsers.length; i++) {
     const user = optedInUsers[i];
     if (user.email) {
-      await sendEmailViaEmailJSHttpApi(user.email, `${user.name} ${user.surname}`, announcement);
+      await sendEmailViaEmailJSHttpApi(user, announcement);
       if (i < optedInUsers.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000)); // 1-second delay
       }
@@ -371,10 +370,9 @@ export async function POST(request: NextRequest) {
       announcementEmitter.emit('update', [...announcementsData]);
 
       if (isNewAnnouncement && modifiedAnnouncement) {
-        console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}". Triggering email notifications.`);
-        // No await here, let it run in the background
+        console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}". Triggering EmailJS notifications.`);
         sendEmailNotifications(modifiedAnnouncement).catch(err => {
-            console.error("[API/Announcements] Error during email notification process:", err);
+            console.error("[API/Announcements] Error during EmailJS notification process:", err);
         });
       }
 

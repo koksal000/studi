@@ -245,7 +245,7 @@ export function AnnouncementCard({ announcement: initialAnnouncement, isCompact 
             <AlertDialog>
               <AlertDialogTrigger asChild><Button variant="destructive" size="sm" disabled={isDeletingAnnouncement}><Trash2 className="h-4 w-4 mr-2" /> Sil</Button></AlertDialogTrigger>
               <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle><AlertDialogDescription>"{announcement.title}" başlıklı duyuruyu ve tüm yorumlarını/yanıtlarını kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)</AlertDialogDescription></AlertDialogHeader>
+                <AlertDialogHeader><AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle><AlertDialogDescription>"{announcement.title}" başlıklı duyuruyu ve tüm yorumlarını/yanıtlarını kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.</AlertDialogDescription></AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={isDeletingAnnouncement}>İptal</AlertDialogCancel>
                   <AlertDialogAction 
@@ -271,5 +271,7 @@ export function AnnouncementCard({ announcement: initialAnnouncement, isCompact 
     </>
   );
 }
+
+    
 
     

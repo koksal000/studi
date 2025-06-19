@@ -274,7 +274,7 @@ export default function AdminPage() {
             </Button>
           </CardTitle>
            <CardDescription>
-            Yeni duyurular ekleyin veya mevcut duyuruları yönetin. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklikler kalıcı olacaktır.)
+            Yeni duyurular ekleyin veya mevcut duyuruları yönetin.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -304,7 +304,7 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center"><ImageIcon className="mr-2 h-6 w-6 text-primary" /> Galeri Yönetimi</CardTitle>
            <CardDescription>
-            Sitede gösterilen galeri resimlerini yönetin. (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklikler kalıcı olacaktır.)
+            Sitede gösterilen galeri resimlerini yönetin.
             <br/>
             <span className="text-xs text-muted-foreground">Not: Büyük boyutlu resimler yükleme süresini ve depolama alanını etkileyebilir. Tavsiye edilen maksimum dosya boyutu ~5MB'dir.</span>
           </CardDescription>
@@ -372,7 +372,7 @@ export default function AdminPage() {
                                 <AlertDialogHeader>
                                 <AlertDialogTitle>Resmi Silmeyi Onayla</AlertDialogTitle>
                                  <AlertDialogDescription>
-                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz? (Render.com'da kalıcı disk doğru yapılandırıldıysa değişiklik kalıcı olacaktır.)
+                                    "{image.caption}" başlıklı resmi galeriden kalıcı olarak silmek istediğinizden emin misiniz?
                                 </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -416,5 +416,7 @@ export default function AdminPage() {
   );
 }
 
+
+    
 
     

@@ -19,7 +19,6 @@ export interface Reply {
   date: string;
   replyingToAuthorName?: string;
   replyingToAuthorId?: string;
-  // likes?: Like[]; // Yorum ve yanıt beğenme kaldırıldı
 }
 
 export interface Comment {
@@ -29,7 +28,6 @@ export interface Comment {
   text: string;
   date: string;
   replies?: Reply[];
-  // likes?: Like[]; // Yorum ve yanıt beğenme kaldırıldı
 }
 
 export interface Announcement {
@@ -62,21 +60,21 @@ interface ToggleAnnouncementLikePayload {
 interface AddCommentPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies' | 'likes'>;
+  comment: Omit<Comment, 'id' | 'date' | 'replies'>;
 }
 
 interface AddReplyPayload {
   action: "ADD_REPLY_TO_COMMENT";
   announcementId: string;
   commentId: string;
-  reply: Omit<Reply, 'id' | 'date' | 'likes'>;
+  reply: Omit<Reply, 'id' | 'date'>;
 }
 
 interface DeleteCommentPayload {
   action: "DELETE_COMMENT";
   announcementId: string;
   commentId: string;
-  deleterAuthorId: string; // Added for author check
+  deleterAuthorId: string; 
 }
 
 interface DeleteReplyPayload {
@@ -84,7 +82,7 @@ interface DeleteReplyPayload {
   announcementId: string;
   commentId: string;
   replyId: string;
-  deleterAuthorId: string; // Added for author check
+  deleterAuthorId: string; 
 }
 
 
@@ -126,18 +124,20 @@ export function useAnnouncements() {
     }
   }, [announcements, lastOpenedNotificationTimestamp, updateLastOpenedTimestamp, isNotificationStatusLoading]);
 
-  const showNotification = useCallback((title: string, body: string, tag?: string) => {
+ const showNotification = useCallback((title: string, body: string, tag?: string) => {
     if (!siteNotificationsPreference) {
+      console.log("[Notifications] Site notifications preference is disabled.");
       return;
     }
+
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission === 'granted') {
         try {
           const notification = new Notification(title, {
             body: body,
-            icon: '/images/logo.png', 
-            tag: tag || title, 
-            renotify: !!tag, 
+            icon: '/images/logo.png',
+            tag: tag || `ann-${Date.now()}`, // Ensure unique tag or use specific tag
+            renotify: !!tag, // Renotify if tag is reused
           });
           notification.onclick = (event) => {
             event.preventDefault();
@@ -148,16 +148,19 @@ export function useAnnouncements() {
           };
         } catch (err: any) {
           console.error("[Notifications] Browser notification construction error:", err);
+          // Fallback to toast if native notification fails
           toast({ title: title, description: body, duration: 8000, variant: "default" });
         }
       } else if (Notification.permission === 'denied') {
-         // console.log("[Notifications] Browser notification permission denied by user.");
+        console.log("[Notifications] Browser notification permission denied by user.");
+        // Optionally inform user via toast that notifications are blocked by browser
+        // toast({ title: "Bildirimler Engellendi", description: "Tarayıcı ayarlarınızdan bildirimlere izin vermelisiniz.", variant: "warning" });
       } else if (Notification.permission === 'default') {
-        // console.log("[Notifications] Browser notification permission is default. Falling back to toast.");
+        console.log("[Notifications] Browser notification permission is default. Falling back to toast.");
         toast({ title: title, description: body, duration: 8000, variant: "default" });
       }
     } else {
-      // console.log("[Notifications] Notification API not available. Falling back to toast.");
+      console.log("[Notifications] Notification API not available. Falling back to toast.");
       toast({ title: title, description: body, duration: 8000, variant: "default" });
     }
   }, [siteNotificationsPreference, toast]);
@@ -194,49 +197,43 @@ export function useAnnouncements() {
     };
 
     newEventSource.onmessage = (event) => {
-      const previousAnnouncementsState = [...announcementsRef.current]; 
+      const previousAnnouncementsState = [...announcementsRef.current];
       let updatedAnnouncementsFromServer: Announcement[];
       try {
         updatedAnnouncementsFromServer = JSON.parse(event.data);
       } catch (error) {
         console.error("[SSE Announcements] Error parsing SSE message data:", error);
-        return; 
+        return;
       }
-
-      setAnnouncements(updatedAnnouncementsFromServer); 
+      setAnnouncements(updatedAnnouncementsFromServer);
 
       const wasInitialDataLoad = !initialDataLoadedRef.current;
       if (!initialDataLoadedRef.current) {
-        initialDataLoadedRef.current = true; 
-        setIsLoading(false); 
+        initialDataLoadedRef.current = true;
+        setIsLoading(false);
       }
       
       if (user && !wasInitialDataLoad) {
         const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
+        // FCM should handle new announcement notifications via server push.
+        // Client-side detection for replies is still relevant here.
+        
         updatedAnnouncementsFromServer.forEach(newAnn => {
           const oldAnnEquivalent = previousAnnouncementsState.find(pa => pa.id === newAnn.id);
-          if (!oldAnnEquivalent && newAnn.authorId !== currentUserIdentifier) {
-            // console.log(`[Notification] New announcement detected: ${newAnn.title} by ${newAnn.author}`);
-            showNotification(
-              `Yeni Duyuru: ${newAnn.title}`, 
-              newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : ""),
-              `ann-${newAnn.id}`
-            );
-          }
-
+          
           newAnn.comments?.forEach(newComment => {
             const oldCommentEquivalent = oldAnnEquivalent?.comments?.find(pc => pc.id === newComment.id);
+            
             newComment.replies?.forEach(newReply => {
               const isNewReply = !oldCommentEquivalent?.replies?.find(pr => pr.id === newReply.id);
               const isAuthorSelfReply = newReply.authorId === currentUserIdentifier;
               const isReplyToCurrentUser = newReply.replyingToAuthorId === currentUserIdentifier;
 
               if (isNewReply && isReplyToCurrentUser && !isAuthorSelfReply) {
-                // console.log(`[Notification] New reply to current user: ${newReply.text} by ${newReply.authorName}`);
                 const notificationTitle = `${newReply.authorName} size yanıt verdi`;
                 const notificationBody = `@${newReply.replyingToAuthorName}: "${newReply.text.substring(0, 50)}..."`;
-                showNotification(notificationTitle, notificationBody, `reply-${newReply.id}-${Date.now()}`);
+                showNotification(notificationTitle, notificationBody, `reply-${newReply.id}-${newAnn.id}`);
               }
             });
           });
@@ -264,7 +261,7 @@ export function useAnnouncements() {
   }, [user, isAdmin, siteNotificationsPreference, showNotification, toast]); 
 
   const sendApiRequest = async (payload: AnnouncementApiPayload, method: 'POST' | 'DELETE' = 'POST', queryParams = '') => {
-    if (!user && 'action' in payload && (payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE")) { // TOGGLE_ANNOUNCEMENT_LIKE does not require user for anonymous likes
+    if (!user && 'action' in payload && (payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE")) {
       toast({ title: "Giriş Gerekli", description: "Bu işlemi yapmak için giriş yapmalısınız.", variant: "destructive" });
       throw new Error("User not logged in for this action");
     }
@@ -337,7 +334,7 @@ export function useAnnouncements() {
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
 
-    const commentPayload: Omit<Comment, 'id' | 'date' | 'replies' | 'likes'> = {
+    const commentPayload: Omit<Comment, 'id' | 'date' | 'replies'> = {
       authorName,
       authorId,
       text,
@@ -359,7 +356,7 @@ export function useAnnouncements() {
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
     const replyingToAuthorId = replyingToAuthorName; 
 
-    const replyPayload: Omit<Reply, 'id' | 'date' | 'likes'> = {
+    const replyPayload: Omit<Reply, 'id' | 'date'> = {
         authorName,
         authorId,
         text,

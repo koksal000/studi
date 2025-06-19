@@ -50,13 +50,13 @@ interface ToggleAnnouncementLikeApiPayload {
 interface AddCommentApiPayload {
   action: "ADD_COMMENT_TO_ANNOUNCEMENT";
   announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies' | 'likes'>;
+  comment: Omit<Comment, 'id' | 'date' | 'replies'>;
 }
 interface AddReplyApiPayload {
   action: "ADD_REPLY_TO_COMMENT";
   announcementId: string;
   commentId: string;
-  reply: Omit<Reply, 'id' | 'date' | 'likes'>;
+  reply: Omit<Reply, 'id' | 'date'>;
 }
 interface DeleteCommentApiPayload {
   action: "DELETE_COMMENT";
@@ -95,10 +95,8 @@ const loadAnnouncementsFromFile = () => {
           likes: ann.likes || [],
           comments: (ann.comments || []).map(comment => ({
             ...comment,
-            // likes removed from comments
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                // likes removed from replies
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
           })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), 
         })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); 
@@ -127,10 +125,8 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
         likes: ann.likes || [],
         comments: (ann.comments || []).map(comment => ({
             ...comment,
-            // likes removed
             replies: (comment.replies || []).map(reply => ({
                 ...reply,
-                // likes removed
             })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -246,8 +242,7 @@ export async function POST(request: NextRequest) {
     announcementToUpdate.likes = announcementToUpdate.likes || [];
     announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
         ...c, 
-        // likes removed
-        replies: (c.replies || []).map(r => ({...r /* likes removed */ })),
+        replies: (c.replies || []).map(r => ({...r})),
     }));
 
 
@@ -265,7 +260,6 @@ export async function POST(request: NextRequest) {
         id: `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
         replies: [],
-        // likes: [], // likes removed
       };
       announcementToUpdate.comments.push(newComment);
       announcementToUpdate.comments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -281,7 +275,6 @@ export async function POST(request: NextRequest) {
         ...actionPayload.reply,
         id: `rpl_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
-        // likes: [], // likes removed
       };
       commentToUpdate.replies.push(newReply);
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -335,8 +328,7 @@ export async function POST(request: NextRequest) {
     newAnnouncement.likes = newAnnouncement.likes || [];
     newAnnouncement.comments = (newAnnouncement.comments || []).map(c => ({
         ...c, 
-        // likes removed
-        replies: (c.replies || []).map(r => ({...r /* likes removed */ })),
+        replies: (c.replies || []).map(r => ({...r})),
     })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);

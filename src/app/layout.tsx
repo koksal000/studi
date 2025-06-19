@@ -10,7 +10,6 @@ import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { SettingsProvider } from '@/contexts/settings-context';
 import { AnnouncementStatusProvider } from '@/contexts/announcement-status-context';
-import { GoogleAdScript } from '@/components/specific/google-ad-script';
 
 export const metadata: Metadata = {
   title: 'KöyümDomaniç - Çamlıca Köyü Portalı',
@@ -25,7 +24,11 @@ export default function RootLayout({
   return (
     <html lang="tr" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
-        {/* AdSense script'i GoogleAdScript bileşenine taşındı */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6542591429414591"
+          crossOrigin="anonymous"
+        ></script>
       </head>
       <body className={`antialiased flex flex-col min-h-screen`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
@@ -38,7 +41,6 @@ export default function RootLayout({
                 </main>
                 <Footer />
                 <Toaster />
-                <GoogleAdScript />
               </AnnouncementStatusProvider>
             </SettingsProvider>
           </UserProvider>

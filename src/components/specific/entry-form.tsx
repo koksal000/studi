@@ -12,12 +12,13 @@ import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
+  const [email, setEmail] = useState('');
   const { login, showEntryForm } = useUser();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim() && surname.trim()) {
-      login(name.trim(), surname.trim());
+    if (name.trim() && surname.trim() && email.trim()) {
+      login(name.trim(), surname.trim(), email.trim());
       
       try {
         await fetch('/api/stats/entry-count', { method: 'POST' });
@@ -79,6 +80,21 @@ export function EntryForm() {
                     className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
                     placeholder="Soyadınızı girin"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="userEmail" className="text-neutral-200">E-posta Adresiniz:</Label> 
+                  <Input
+                    id="userEmail"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
+                    placeholder="E-posta adresinizi girin"
+                  />
+                  <p className="text-xs text-neutral-300/80 pt-1">
+                    E-posta adresiniz, sizinle iletişim kurmak ve köy duyurularından haberdar olmanız için kullanılacaktır. Bu bilgiyi gizli tutuyoruz. E-posta bildirimlerini Ayarlar bölümünden kapatabilirsiniz.
+                  </p>
                 </div>
                 <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">
                   Giriş Yap

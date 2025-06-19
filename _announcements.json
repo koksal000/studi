@@ -9,6 +9,23 @@
     "author": "Yönetim Hesabı",
     "authorId": "ADMIN_ACCOUNT",
     "likes": [],
-    "comments": []
+    "comments": [
+      {
+        "authorName": "Deneme Deneme",
+        "authorId": "ADMIN_ACCOUNT",
+        "text": "Deneme",
+        "id": "cmt_1750358073441_wvlomxg",
+        "date": "2025-06-19T18:34:33.441Z",
+        "replies": []
+      },
+      {
+        "authorName": "Deneme Deneme",
+        "authorId": "ADMIN_ACCOUNT",
+        "text": "Deneme",
+        "id": "cmt_1750358045815_xhnqmky",
+        "date": "2025-06-19T18:34:05.815Z",
+        "replies": []
+      }
+    ]
   }
 ]

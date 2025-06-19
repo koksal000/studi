@@ -6,11 +6,11 @@ import { useUser } from '@/contexts/user-context';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Moon, Sun, Laptop } from 'lucide-react';
+import { Moon, Sun, Laptop, Mail } from 'lucide-react'; // Added Mail icon
 import { VILLAGE_NAME } from '@/lib/constants';
-import { useEffect, useState } from 'react';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -21,6 +21,10 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
   const { 
     currentTheme, 
     setAppTheme, 
+    emailNotificationPreference,
+    setEmailNotificationPreference,
+    // siteNotificationsPreference, // Kept for future if needed, but not used in UI now
+    // setSiteNotificationsPreference 
   } = useSettings(); 
   const { user, logout } = useUser();
   const { toast } = useToast();
@@ -39,7 +43,7 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
         <DialogHeader className="p-4 sm:p-6 pb-3 border-b flex-shrink-0">
           <DialogTitle>Site Ayarları</DialogTitle>
           <DialogDescription>
-            Site görünümünü ve diğer tercihlerinizi buradan yönetebilirsiniz.
+            Site görünümünü ve bildirim tercihlerinizi buradan yönetebilirsiniz.
           </DialogDescription>
         </DialogHeader>
         <div className="flex-grow min-h-0 overflow-y-auto">
@@ -68,12 +72,33 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
                     </Label>
                     </RadioGroup>
                 </div>
+
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">Bildirim Ayarları</Label>
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="flex items-center space-x-2">
+                      <Mail className="h-5 w-5 text-primary" />
+                      <Label htmlFor="email-notifications" className="flex flex-col">
+                        <span>E-posta Bildirimleri</span>
+                        <span className="text-xs text-muted-foreground">Yeni duyurulardan e-posta ile haberdar olun.</span>
+                      </Label>
+                    </div>
+                    <Switch
+                      id="email-notifications"
+                      checked={emailNotificationPreference}
+                      onCheckedChange={setEmailNotificationPreference}
+                    />
+                  </div>
+                </div>
                 
                 {user && (
                     <div className="space-y-3">
                     <Label className="text-base font-medium">Kullanıcı Bilgileri</Label>
                     <div className="flex items-center justify-between rounded-lg border p-4">
-                        <p className="text-sm text-muted-foreground">Giriş yapan: {user.name} {user.surname}</p>
+                        <div>
+                            <p className="text-sm text-muted-foreground">Giriş yapan: {user.name} {user.surname}</p>
+                            <p className="text-xs text-muted-foreground">E-posta: {user.email}</p>
+                        </div>
                         <Button variant="outline" size="sm" onClick={() => { logout(); onOpenChange(false); }}>Çıkış Yap</Button>
                     </div>
                     </div>

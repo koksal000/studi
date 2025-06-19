@@ -3,17 +3,17 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ADMIN_PASSWORD } from '@/lib/constants';
-// Removed idb imports
 
 interface User {
   name: string;
   surname: string;
+  email: string; 
 }
 
 interface UserContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (name: string, surname: string) => void; // Email parameter removed previously
+  login: (name: string, surname: string, email: string) => void;
   logout: () => void;
   checkAdminPassword: (password: string) => boolean;
   showEntryForm: boolean;
@@ -22,7 +22,7 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
-const USER_DATA_KEY = 'camlicaKoyuUser'; // localStorage key
+const USER_DATA_KEY = 'camlicaKoyuUser_v2'; // Key updated to ensure fresh start with email
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<User | null>(null);
@@ -37,22 +37,27 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       const storedUserString = localStorage.getItem(USER_DATA_KEY);
       if (storedUserString) {
         const storedUser = JSON.parse(storedUserString) as User;
-        setUserState({ name: storedUser.name, surname: storedUser.surname });
-        setShowEntryForm(false);
+        if (storedUser.name && storedUser.surname && storedUser.email) { // Check for email
+          setUserState(storedUser);
+          setShowEntryForm(false);
+        } else { // Data is old or incomplete
+          localStorage.removeItem(USER_DATA_KEY);
+          setShowEntryForm(true);
+        }
       } else {
         setShowEntryForm(true);
       }
     } catch (error) {
       console.error("Failed to load user data from localStorage", error);
-      localStorage.removeItem(USER_DATA_KEY); // Clear corrupted data
+      localStorage.removeItem(USER_DATA_KEY); 
       setShowEntryForm(true); 
     } finally {
       setIsUserLoading(false);
     }
   }, []);
 
-  const login = (name: string, surname: string) => { // Email parameter removed
-    const newUser: User = { name, surname };
+  const login = (name: string, surname: string, email: string) => {
+    const newUser: User = { name, surname, email };
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);
@@ -97,4 +102,3 @@ export const useUser = (): UserContextType => {
   }
   return context;
 };
-

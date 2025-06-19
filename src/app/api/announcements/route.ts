@@ -15,6 +15,13 @@ const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
 const MAX_IMAGE_PAYLOAD_SIZE_API = Math.floor(MAX_IMAGE_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
 const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
 
+// --- EmailJS Config (from user input) ---
+const EMAILJS_SERVICE_ID = 'service_c8hlgh8';
+const EMAILJS_TEMPLATE_ID = 'template_a5i8fuh';
+const EMAILJS_PUBLIC_KEY = 'V4zUqX1G76vK-6j56'; // This is the User ID / Public Key
+// For server-side sending to users, an Access Token from EmailJS dashboard (Account > API Keys) would be needed.
+// Since it's not provided, this function will be conceptual for sending.
+
 let announcementsData: Announcement[] = [];
 let initialized = false;
 
@@ -115,6 +122,95 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
     return false;
   }
 };
+
+// Conceptual function to send email to a single user via EmailJS REST API
+async function sendEmailNotificationViaEmailJS(
+  recipientEmail: string,
+  announcementTitle: string,
+  announcementContentSummary: string,
+  announcementLink: string
+) {
+  const templateParams = {
+    to_email: recipientEmail,
+    from_name: "Çamlıca Köyü Yönetimi", // Or your desired sender name
+    subject: `Yeni Duyuru: ${announcementTitle}`,
+    announcement_title: announcementTitle,
+    announcement_summary: announcementContentSummary,
+    announcement_link: announcementLink,
+    // Add any other params your EmailJS template expects
+  };
+
+  const emailJsPayload = {
+    service_id: EMAILJS_SERVICE_ID,
+    template_id: EMAILJS_TEMPLATE_ID,
+    user_id: EMAILJS_PUBLIC_KEY, // Public Key (User ID)
+    template_params: templateParams,
+    // accessToken: 'YOUR_EMAILJS_ACCESS_TOKEN' // IMPORTANT: Needed for server-side API calls
+                                                 // This should be stored securely, e.g., as an env variable.
+                                                 // User did not provide this.
+  };
+  
+  console.log(`[EmailJS Send] Conceptual: Preparing to send email to ${recipientEmail} for announcement: ${announcementTitle}`);
+  console.log(`[EmailJS Send] Payload (excluding access token): ${JSON.stringify(emailJsPayload, null, 2)}`);
+
+  try {
+    // IMPORTANT: The 'accessToken' is required for the EmailJS API when sending from the server.
+    // Without it, this call will likely fail or be rejected by EmailJS.
+    // User needs to generate an Access Token in their EmailJS account (Integrations -> API Keys)
+    // and provide it, ideally via an environment variable.
+    
+    // const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify(emailJsPayload),
+    // });
+
+    // if (response.ok) {
+    //   console.log(`[EmailJS Send] Successfully sent email to ${recipientEmail}. Response: ${await response.text()}`);
+    // } else {
+    //   console.error(`[EmailJS Send] Failed to send email to ${recipientEmail}. Status: ${response.status}, Body: ${await response.text()}`);
+    // }
+    console.warn(`[EmailJS Send] SKIPPING ACTUAL EMAIL SEND for ${recipientEmail} as EmailJS Access Token is not configured for server-side use.`);
+
+  } catch (error) {
+    console.error(`[EmailJS Send] Error sending email to ${recipientEmail}:`, error);
+  }
+}
+
+
+async function sendEmailNotifications(announcement: Announcement) {
+  console.log(`[Email Send] Triggered for announcement: "${announcement.title}"`);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002'; // Default if not set
+  const announcementLink = `${appUrl}/announcements`; // Or a more specific link if available
+
+  // PROBLEM: This API route does not have access to all users' emails or their notification preferences,
+  // as that data is stored in client-side localStorage.
+  // To implement this properly, user email and notification preferences would need to be stored
+  // in a server-accessible database.
+
+  console.warn("[Email Send] ARCHITECTURAL LIMITATION: Cannot access all users' emails and notification preferences from client-side localStorage. Conceptual sending logic follows.");
+
+  // Example of how it *would* work if we had a list of opted-in users:
+  const MOCK_OPTED_IN_USERS = [
+    // { email: "user1@example.com", name: "User One" },
+    // { email: "user2@example.com", name: "User Two" },
+  ];
+
+  if (MOCK_OPTED_IN_USERS.length === 0) {
+    console.log("[Email Send] No mock opted-in users to send emails to. Real implementation needs a user database.");
+    return;
+  }
+
+  for (const user of MOCK_OPTED_IN_USERS) {
+    await sendEmailNotificationViaEmailJS(
+      user.email,
+      announcement.title,
+      announcement.content.substring(0, 100) + (announcement.content.length > 100 ? "..." : ""),
+      announcementLink
+    );
+  }
+  console.log(`[Email Send] Conceptual email sending process completed for ${MOCK_OPTED_IN_USERS.length} mock users.`);
+}
 
 
 if (!initialized) {
@@ -268,7 +364,10 @@ export async function POST(request: NextRequest) {
       
       if (isNewAnnouncement && modifiedAnnouncement) {
         console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}".`);
-        // FCM sending logic was here, now removed.
+        // Trigger email notifications
+        sendEmailNotifications(modifiedAnnouncement).catch(err => {
+            console.error("[API/Announcements] Error during email notification process:", err);
+        });
       }
       
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });

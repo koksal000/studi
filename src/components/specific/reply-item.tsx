@@ -6,11 +6,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, Trash2 } from 'lucide-react';
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent } from 'react'; // useEffect removed
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
-// AdminPasswordDialog kaldırıldı
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,39 +23,26 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ReplyItemProps {
-  reply: Reply;
+  reply: Reply; // Renamed from initialReply
   announcementId: string;
   commentId: string;
-  onReplyAction?: () => void; 
+  // onReplyAction?: () => void; // Removed
 }
 
-export function ReplyItem({ reply: initialReply, announcementId, commentId, onReplyAction }: ReplyItemProps) {
+export function ReplyItem({ reply: replyProp, announcementId, commentId }: ReplyItemProps) {
   const { user, isAdmin } = useUser();
-  const { addReplyToComment, deleteReply, getAnnouncementById } = useAnnouncements();
+  // getAnnouncementById removed
+  const { addReplyToComment, deleteReply } = useAnnouncements();
   const { toast } = useToast();
 
-  const [reply, setReply] = useState<Reply>(initialReply);
-
-  useEffect(() => {
-    const parentAnnouncement = getAnnouncementById(announcementId);
-    const parentComment = parentAnnouncement?.comments?.find(c => c.id === commentId);
-    const updatedReply = parentComment?.replies?.find(r => r.id === initialReply.id);
-    if (updatedReply) {
-      setReply(updatedReply);
-    } else {
-      setReply(initialReply); 
-    }
-  }, [initialReply, announcementId, commentId, getAnnouncementById]);
-
+  // No local useState for reply, use replyProp directly
 
   const [showReplyToReplyForm, setShowReplyToReplyForm] = useState(false);
   const [replyToReplyText, setReplyToReplyText] = useState('');
   const [isSubmittingReplyToReply, setIsSubmittingReplyToReply] = useState(false);
   const [isDeletingReply, setIsDeletingReply] = useState(false);
-  // AdminPasswordDialog state'i kaldırıldı
-  // const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
-  
-  const formattedDate = new Date(reply.date).toLocaleDateString('tr-TR', {
+
+  const formattedDate = new Date(replyProp.date).toLocaleDateString('tr-TR', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
@@ -80,10 +66,10 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
     }
     setIsSubmittingReplyToReply(true);
     try {
-      await addReplyToComment(announcementId, commentId, replyToReplyText, reply.authorName);
+      await addReplyToComment(announcementId, commentId, replyToReplyText, replyProp.authorName);
       setReplyToReplyText('');
       setShowReplyToReplyForm(false);
-      if (onReplyAction) onReplyAction();
+      // Removed onReplyAction call
     } catch (error) {
     } finally {
       setIsSubmittingReplyToReply(false);
@@ -96,29 +82,28 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
         return;
     }
     const currentUserAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    if (currentUserAuthorId !== reply.authorId) {
+    if (currentUserAuthorId !== replyProp.authorId) {
         toast({ title: "Yetki Hatası", description: "Bu yanıtı silme yetkiniz yok.", variant: "destructive" });
         return;
     }
     setIsDeletingReply(true);
     try {
-      await deleteReply(announcementId, commentId, reply.id);
+      await deleteReply(announcementId, commentId, replyProp.id);
       toast({ title: "Yanıt Silindi", description: "Yanıtınız başarıyla kaldırıldı." });
-      if (onReplyAction) onReplyAction();
+      // Removed onReplyAction call
     } catch (error: any) {
       if (!error.message?.includes("Bu yanıtı silme yetkiniz yok")) {
         toast({ title: "Silme Başarısız", description: error.message || "Yanıt silinirken bir sorun oluştu.", variant: "destructive"});
       }
     } finally {
       setIsDeletingReply(false);
-      // setIsAdminPasswordDialogOpenForDelete(false); // Kaldırıldı
     }
   };
-  
-  const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
-  const canDeleteThisReply = currentUserAuthorId === reply.authorId; 
 
-  if (!reply) return null;
+  const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
+  const canDeleteThisReply = currentUserAuthorId === replyProp.authorId;
+
+  if (!replyProp) return null;
 
   return (
     <>
@@ -126,20 +111,20 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
       <CornerDownRight className="h-3.5 w-3.5 mt-1 text-muted-foreground flex-shrink-0" />
       <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
         <AvatarFallback className="bg-accent text-accent-foreground text-[10px]">
-          {getInitials(reply.authorName)}
+          {getInitials(replyProp.authorName)}
         </AvatarFallback>
       </Avatar>
       <div className="flex-1 space-y-0.5 min-w-0">
         <p className="text-foreground/90 whitespace-pre-wrap break-words">
-          <span className="font-semibold text-primary">{reply.authorName}</span>
-          {reply.replyingToAuthorName && <span className="text-muted-foreground"> yanıtladı (@{reply.replyingToAuthorName})</span>}
-          : {reply.text}
+          <span className="font-semibold text-primary">{replyProp.authorName}</span>
+          {replyProp.replyingToAuthorName && <span className="text-muted-foreground"> yanıtladı (@{replyProp.replyingToAuthorName})</span>}
+          : {replyProp.text}
         </p>
         <div className="flex items-center space-x-2 text-muted-foreground text-[10px]">
           <span>{formattedDate}</span>
-          <Button 
-            variant="ghost" 
-            size="xs" 
+          <Button
+            variant="ghost"
+            size="xs"
             className="p-0 h-auto text-[10px] text-muted-foreground hover:text-primary"
             onClick={() => setShowReplyToReplyForm(!showReplyToReplyForm)}
             disabled={!user || isSubmittingReplyToReply}
@@ -163,8 +148,8 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={isDeletingReply}>İptal</AlertDialogCancel>
-                    <AlertDialogAction 
-                        onClick={handleDeleteReply} // Direkt silme işlemi
+                    <AlertDialogAction
+                        onClick={handleDeleteReply}
                         className="bg-destructive hover:bg-destructive/90"
                         disabled={isDeletingReply}
                     >
@@ -179,7 +164,7 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
         {showReplyToReplyForm && user && (
           <form onSubmit={handleReplyToReplySubmit} className="space-y-1 mt-1.5">
             <Textarea
-              placeholder={`${user.name} ${user.surname} olarak @${reply.authorName} adlı kişiye yanıt ver...`}
+              placeholder={`${user.name} ${user.surname} olarak @${replyProp.authorName} adlı kişiye yanıt ver...`}
               value={replyToReplyText}
               onChange={(e) => setReplyToReplyText(e.target.value)}
               rows={1}
@@ -194,7 +179,6 @@ export function ReplyItem({ reply: initialReply, announcementId, commentId, onRe
         )}
       </div>
     </div>
-    {/* AdminPasswordDialog kaldırıldı */}
     </>
   );
 }

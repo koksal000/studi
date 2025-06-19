@@ -6,12 +6,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, Trash2 } from 'lucide-react';
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent } from 'react'; // useEffect removed
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
 import { ReplyItem } from './reply-item';
-// AdminPasswordDialog kaldırıldı, artık self-deletion için kullanılmayacak
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,38 +24,25 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface CommentItemProps {
-  comment: Comment;
+  comment: Comment; // Renamed from initialComment
   announcementId: string;
-  onCommentOrReplyAction?: () => void; 
+  // onCommentOrReplyAction?: () => void; // Removed
 }
 
-export function CommentItem({ comment: initialComment, announcementId, onCommentOrReplyAction }: CommentItemProps) {
+export function CommentItem({ comment: commentProp, announcementId }: CommentItemProps) {
   const { user, isAdmin } = useUser();
-  const { addReplyToComment, deleteComment, getAnnouncementById } = useAnnouncements();
+  // getAnnouncementById removed, not needed if using direct props
+  const { addReplyToComment, deleteComment } = useAnnouncements();
   const { toast } = useToast();
 
-  const [comment, setComment] = useState<Comment>(initialComment);
-
-  useEffect(() => {
-    const parentAnnouncement = getAnnouncementById(announcementId);
-    const updatedComment = parentAnnouncement?.comments?.find(c => c.id === initialComment.id);
-    if (updatedComment) {
-      setComment(updatedComment);
-    } else {
-       setComment(initialComment); 
-    }
-  }, [initialComment, announcementId, getAnnouncementById]);
-
+  // No local useState for comment, use commentProp directly
 
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
-  // AdminPasswordDialog state'i kaldırıldı
-  // const [isAdminPasswordDialogOpenForDelete, setIsAdminPasswordDialogOpenForDelete] = useState(false);
 
-
-  const formattedDate = new Date(comment.date).toLocaleDateString('tr-TR', {
+  const formattedDate = new Date(commentProp.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
@@ -80,46 +66,45 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
     }
     setIsSubmittingReply(true);
     try {
-      await addReplyToComment(announcementId, comment.id, replyText, comment.authorName);
+      await addReplyToComment(announcementId, commentProp.id, replyText, commentProp.authorName);
       setReplyText('');
       setShowReplyForm(false);
-      if (onCommentOrReplyAction) onCommentOrReplyAction();
+      // Removed onCommentOrReplyAction call
     } catch (error) {
     } finally {
       setIsSubmittingReply(false);
     }
   };
-  
+
   const handleDeleteComment = async () => {
     if (!user) {
         toast({ title: "Giriş Gerekli", description: "Yorum silmek için giriş yapmalısınız.", variant: "destructive" });
         return;
     }
     const currentUserAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    if (currentUserAuthorId !== comment.authorId) {
+    if (currentUserAuthorId !== commentProp.authorId) {
         toast({ title: "Yetki Hatası", description: "Bu yorumu silme yetkiniz yok.", variant: "destructive" });
         return;
     }
 
     setIsDeletingComment(true);
     try {
-      await deleteComment(announcementId, comment.id);
+      await deleteComment(announcementId, commentProp.id);
       toast({ title: "Yorum Silindi", description: "Yorumunuz başarıyla kaldırıldı."});
-      if (onCommentOrReplyAction) onCommentOrReplyAction();
+      // Removed onCommentOrReplyAction call
     } catch (error: any) {
       if (!error.message?.includes("Bu yorumu silme yetkiniz yok")) {
         toast({ title: "Silme Başarısız", description: error.message || "Yorum silinirken bir sorun oluştu.", variant: "destructive"});
       }
     } finally {
       setIsDeletingComment(false);
-      // setIsAdminPasswordDialogOpenForDelete(false); // Kaldırıldı
     }
   };
 
   const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
-  const canDeleteThisComment = currentUserAuthorId === comment.authorId; 
+  const canDeleteThisComment = currentUserAuthorId === commentProp.authorId;
 
-  if (!comment) return null;
+  if (!commentProp) return null;
 
   return (
     <>
@@ -127,27 +112,27 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
       <div className="flex space-x-3">
         <Avatar className="h-8 w-8">
           <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            {getInitials(comment.authorName)}
+            {getInitials(commentProp.authorName)}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 space-y-1 min-w-0">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-primary">{comment.authorName}</h4>
+            <h4 className="text-sm font-semibold text-primary">{commentProp.authorName}</h4>
             <p className="text-xs text-muted-foreground flex items-center">
               <CalendarDays className="h-3 w-3 mr-1" />
               {formattedDate}
             </p>
           </div>
-          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{comment.text}</p>
+          <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{commentProp.text}</p>
           <div className="flex items-center space-x-2 pt-1">
-            <Button 
-              variant="ghost" 
-              size="xs" 
+            <Button
+              variant="ghost"
+              size="xs"
               className="text-xs text-muted-foreground hover:text-primary"
               onClick={() => setShowReplyForm(!showReplyForm)}
               disabled={!user || isSubmittingReply}
             >
-              <MessageSquare className="h-3.5 w-3.5 mr-1" /> Yanıtla ({comment.replies?.length || 0})
+              <MessageSquare className="h-3.5 w-3.5 mr-1" /> Yanıtla ({commentProp.replies?.length || 0})
             </Button>
             {canDeleteThisComment && (
                <AlertDialog>
@@ -166,8 +151,8 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={isDeletingComment}>İptal</AlertDialogCancel>
-                    <AlertDialogAction 
-                      onClick={handleDeleteComment} // Admin şifre adımı kaldırıldı, direkt silme işlemi çağrılıyor
+                    <AlertDialogAction
+                      onClick={handleDeleteComment}
                       className="bg-destructive hover:bg-destructive/90"
                       disabled={isDeletingComment}
                     >
@@ -182,7 +167,7 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
           {showReplyForm && user && (
             <form onSubmit={handleReplySubmit} className="space-y-2 mt-2 ml-4 pl-4 border-l border-primary/50">
               <Textarea
-                placeholder={`${user.name} ${user.surname} olarak @${comment.authorName} adlı kişiye yanıt ver...`}
+                placeholder={`${user.name} ${user.surname} olarak @${commentProp.authorName} adlı kişiye yanıt ver...`}
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 rows={2}
@@ -198,21 +183,20 @@ export function CommentItem({ comment: initialComment, announcementId, onComment
         </div>
       </div>
 
-      {comment.replies && comment.replies.length > 0 && (
+      {commentProp.replies && commentProp.replies.length > 0 && (
         <div className="mt-3 ml-4 sm:ml-8 pl-2 sm:pl-4 border-l border-primary/30 space-y-3">
-          {comment.replies.map(reply => (
-            <ReplyItem 
-                key={reply.id} 
-                reply={reply} 
-                announcementId={announcementId} 
-                commentId={comment.id} 
-                onReplyAction={onCommentOrReplyAction}
+          {commentProp.replies.map(reply => (
+            <ReplyItem
+                key={reply.id}
+                reply={reply}
+                announcementId={announcementId}
+                commentId={commentProp.id}
+                // onReplyAction removed
             />
           ))}
         </div>
       )}
     </div>
-    {/* AdminPasswordDialog kaldırıldı */}
     </>
   );
 }

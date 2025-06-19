@@ -16,33 +16,35 @@ import { CommentItem } from './comment-item';
 interface AnnouncementDetailDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  announcement: Announcement | null; 
+  announcement: Announcement | null;
 }
 
-export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: initialAnnouncement }: AnnouncementDetailDialogProps) {
+export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: annProp }: AnnouncementDetailDialogProps) {
   const { user, isAdmin } = useUser();
-  const { getAnnouncementById, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
+  // getAnnouncementById is removed as we use prop directly
+  const { toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
-  
-  const [announcement, setAnnouncement] = useState<Announcement | null>(initialAnnouncement);
-  
-  useEffect(() => {
-    if (initialAnnouncement && isOpen) {
-      const updatedAnn = getAnnouncementById(initialAnnouncement.id);
-      setAnnouncement(updatedAnn || initialAnnouncement); 
-    } else if (!isOpen) {
-      setShowCommentInput(false);
-      setCommentText('');
-    }
-  }, [initialAnnouncement, getAnnouncementById, isOpen]);
 
+  // No local useState for announcement, use annProp directly
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [showCommentInput, setShowCommentInput] = useState(false); 
+  const [showCommentInput, setShowCommentInput] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowCommentInput(false);
+      setCommentText('');
+      if (videoRef.current) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    }
+  }, [isOpen]);
+
 
   const handleDialogClose = (openState: boolean) => {
     if (!openState && videoRef.current) {
@@ -52,25 +54,25 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     onOpenChange(openState);
   };
 
-  if (!announcement) return null; 
+  if (!annProp) return null;
 
   const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
-  const hasLiked = announcement.likes && announcement.likes.some(like => like.userId === currentUserIdentifier);
+  const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
 
-  const formattedDate = new Date(announcement.date).toLocaleDateString('tr-TR', {
+  const formattedDate = new Date(annProp.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
   const renderAuthorInfoDialog = () => {
-    if (announcement.authorId === "ADMIN_ACCOUNT") {
+    if (annProp.authorId === "ADMIN_ACCOUNT") {
       return (
         <span className="flex items-center">
           <Image src="https://files.catbox.moe/4dmtuq.png" alt="Yönetim Hesabı Logosu" width={24} height={24} className="mr-1.5 rounded-sm" />
-          {announcement.author}
+          {annProp.author}
         </span>
       );
     }
-    return (<span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {announcement.author}</span>);
+    return (<span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {annProp.author}</span>);
   };
 
   const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); } else { videoRef.current.pause(); setIsPlaying(false); }}};
@@ -79,7 +81,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
   const handleLikeToggle = async () => {
     if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); return; }
     try {
-      await toggleAnnouncementLike(announcement.id);
+      await toggleAnnouncementLike(annProp.id);
     } catch (error) {/* Hook toasts */}
   };
 
@@ -89,40 +91,26 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     if (!commentText.trim()) { toast({ title: "Yorum Boş", variant: "destructive" }); return; }
     setIsSubmittingComment(true);
     try {
-      await addCommentToAnnouncement(announcement.id, commentText);
+      await addCommentToAnnouncement(annProp.id, commentText);
       setCommentText('');
       setShowCommentInput(false);
-    } catch (error) {/* Hook toasts */} 
+    } catch (error) {/* Hook toasts */}
     finally { setIsSubmittingComment(false); }
   };
-  
-  const handleCommentOrReplyActionInDialog = () => {
-    // This forces a re-fetch of the announcement data for the dialog
-    if (announcement) {
-        const updatedAnn = getAnnouncementById(announcement.id);
-        if (updatedAnn) {
-            setAnnouncement(updatedAnn);
-        } else {
-            // Announcement was deleted, close dialog
-            onOpenChange(false);
-        }
-    }
-  };
-
 
   const renderMedia = () => {
-    if (!announcement.media) return null;
-    const isDirectVideoFile = announcement.mediaType === 'video/mp4' || announcement.mediaType === 'video/webm' || announcement.mediaType === 'video/ogg' || (announcement.mediaType === 'video/url' && /\.(mp4|webm|ogg)(\?|$)/i.test(announcement.media));
-    const isYouTube = announcement.mediaType === 'video/url' && (announcement.media.includes("youtube.com/watch?v=") || announcement.media.includes("youtu.be/"));
-    const isVimeo = announcement.mediaType === 'video/url' && announcement.media.includes("vimeo.com/");
+    if (!annProp.media) return null;
+    const isDirectVideoFile = annProp.mediaType === 'video/mp4' || annProp.mediaType === 'video/webm' || annProp.mediaType === 'video/ogg' || (annProp.mediaType === 'video/url' && /\.(mp4|webm|ogg)(\?|$)/i.test(annProp.media));
+    const isYouTube = annProp.mediaType === 'video/url' && (annProp.media.includes("youtube.com/watch?v=") || annProp.media.includes("youtu.be/"));
+    const isVimeo = annProp.mediaType === 'video/url' && annProp.media.includes("vimeo.com/");
 
-    if (announcement.mediaType?.startsWith('image/')) {
-      return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><Image src={announcement.media} alt={announcement.title} layout="fill" objectFit="contain" data-ai-hint="announcement media detail"/></div>;
+    if (annProp.mediaType?.startsWith('image/')) {
+      return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><Image src={annProp.media} alt={annProp.title} layout="fill" objectFit="contain" data-ai-hint="announcement media detail"/></div>;
     }
-    if (isDirectVideoFile || (announcement.mediaType?.startsWith('video/') && announcement.media.startsWith('data:video/'))) {
+    if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
       return (
         <div className="my-4 rounded-md overflow-hidden relative bg-black group w-full">
-          <video ref={videoRef} src={announcement.media} className="w-full max-h-[400px] aspect-video" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted); }} onClick={togglePlayPause} />
+          <video ref={videoRef} src={annProp.media} className="w-full max-h-[400px] aspect-video" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted); }} onClick={togglePlayPause} />
           <div className="absolute bottom-2 left-2 right-2 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-300 bg-black/50 p-2 rounded">
             <Button onClick={togglePlayPause} variant="ghost" size="icon" className="text-white hover:bg-white/20">{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}</Button>
             <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20">{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
@@ -131,16 +119,16 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
       );
     }
     if (isYouTube) {
-      const videoId = announcement.media.includes("youtu.be/") ? announcement.media.split("youtu.be/")[1].split("?")[0] : new URL(announcement.media).searchParams.get("v");
+      const videoId = annProp.media.includes("youtu.be/") ? annProp.media.split("youtu.be/")[1].split("?")[0] : new URL(annProp.media).searchParams.get("v");
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${videoId}`} title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
     if (isVimeo) {
-      const videoIdMatch = announcement.media.match(/vimeo\.com\/(\d+)/);
+      const videoIdMatch = annProp.media.match(/vimeo\.com\/(\d+)/);
       const videoId = videoIdMatch ? videoIdMatch[1] : null;
       if (videoId) return <div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><iframe src={`https://player.vimeo.com/video/${videoId}`} width="100%" height="100%" frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title="Vimeo video player" className="absolute top-0 left-0 w-full h-full"></iframe></div>;
     }
-    if (announcement.mediaType === 'video/url' || announcement.mediaType === 'url/link') {
-        return (<div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={announcement.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/><span className="truncate">{announcement.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {announcement.media}</span></a></div>);
+    if (annProp.mediaType === 'video/url' || annProp.mediaType === 'url/link') {
+        return (<div className="my-4 p-3 bg-muted rounded-md w-full overflow-hidden"><a href={annProp.media} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center w-full"><Link2 className="h-4 w-4 mr-2 flex-shrink-0"/><span className="truncate">{annProp.mediaType === 'video/url' ? 'Video Bağlantısı' : 'Medyayı Görüntüle'}: {annProp.media}</span></a></div>);
     }
     return null;
   };
@@ -149,7 +137,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0">
         <DialogHeader className="p-4 sm:p-6 pb-3 border-b flex-shrink-0">
-          <DialogTitle className="text-xl sm:text-2xl">{announcement.title}</DialogTitle>
+          <DialogTitle className="text-xl sm:text-2xl">{annProp.title}</DialogTitle>
           <DialogDescription asChild className="text-xs pt-1">
             <div className="text-muted-foreground">
               <div className="flex flex-wrap gap-x-3 gap-y-1 items-center mt-1 text-muted-foreground">
@@ -161,17 +149,17 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
         </DialogHeader>
         <div className="flex-grow min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4">
           {renderMedia()}
-          <p className="text-sm text-foreground/90 whitespace-pre-wrap">{announcement.content}</p>
-          
+          <p className="text-sm text-foreground/90 whitespace-pre-wrap">{annProp.content}</p>
+
           <div className="mt-4 pt-4 border-t">
             <div className="flex items-center space-x-4 mb-4">
               <Button variant={hasLiked ? "default" : "outline"} size="sm" onClick={handleLikeToggle} disabled={!user}>
                 <ThumbsUp className={`mr-2 h-4 w-4 ${hasLiked ? '' : 'text-primary'}`} />
-                {hasLiked ? "Beğenildi" : "Beğen"} ({announcement.likes?.length || 0})
+                {hasLiked ? "Beğenildi" : "Beğen"} ({annProp.likes?.length || 0})
               </Button>
               <Button variant="outline" size="sm" onClick={() => setShowCommentInput(!showCommentInput)} disabled={!user || isSubmittingComment}>
                 <MessageCircle className="mr-2 h-4 w-4 text-primary" />
-                Yorum Yap ({announcement.comments?.length || 0})
+                Yorum Yap ({annProp.comments?.length || 0})
               </Button>
             </div>
 
@@ -185,15 +173,15 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
               </form>
             )}
 
-            {announcement.comments && announcement.comments.length > 0 && (
+            {annProp.comments && annProp.comments.length > 0 && (
               <div className="space-y-3 mt-4">
-                <h4 className="text-md font-semibold text-primary">Yorumlar ({announcement.comments.length})</h4>
-                {announcement.comments.map(comment => (
-                  <CommentItem 
-                    key={comment.id} 
-                    comment={comment} 
-                    announcementId={announcement.id} 
-                    onCommentOrReplyAction={handleCommentOrReplyActionInDialog}
+                <h4 className="text-md font-semibold text-primary">Yorumlar ({annProp.comments.length})</h4>
+                {annProp.comments.map(comment => (
+                  <CommentItem
+                    key={comment.id}
+                    comment={comment}
+                    announcementId={annProp.id}
+                    // onCommentOrReplyAction removed
                   />
                 ))}
               </div>
@@ -204,5 +192,3 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: i
     </Dialog>
   );
 }
-
-    

@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react'; // useEffect removed
+import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -24,24 +24,21 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface CommentItemProps {
-  comment: Comment; // Renamed from initialComment
+  comment: Comment; // Use 'comment' prop directly
   announcementId: string;
-  // onCommentOrReplyAction?: () => void; // Removed
 }
 
 export function CommentItem({ comment: commentProp, announcementId }: CommentItemProps) {
   const { user, isAdmin } = useUser();
-  // getAnnouncementById removed, not needed if using direct props
   const { addReplyToComment, deleteComment } = useAnnouncements();
   const { toast } = useToast();
-
-  // No local useState for comment, use commentProp directly
 
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
 
+  // Directly use commentProp for rendering and logic
   const formattedDate = new Date(commentProp.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
@@ -69,7 +66,6 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
       await addReplyToComment(announcementId, commentProp.id, replyText, commentProp.authorName);
       setReplyText('');
       setShowReplyForm(false);
-      // Removed onCommentOrReplyAction call
     } catch (error) {
     } finally {
       setIsSubmittingReply(false);
@@ -91,7 +87,6 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
     try {
       await deleteComment(announcementId, commentProp.id);
       toast({ title: "Yorum Silindi", description: "Yorumunuz başarıyla kaldırıldı."});
-      // Removed onCommentOrReplyAction call
     } catch (error: any) {
       if (!error.message?.includes("Bu yorumu silme yetkiniz yok")) {
         toast({ title: "Silme Başarısız", description: error.message || "Yorum silinirken bir sorun oluştu.", variant: "destructive"});
@@ -104,7 +99,7 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
   const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
   const canDeleteThisComment = currentUserAuthorId === commentProp.authorId;
 
-  if (!commentProp) return null;
+  if (!commentProp) return null; // Guard against null comment prop
 
   return (
     <>
@@ -191,7 +186,6 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
                 reply={reply}
                 announcementId={announcementId}
                 commentId={commentProp.id}
-                // onReplyAction removed
             />
           ))}
         </div>
@@ -200,3 +194,5 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
     </>
   );
 }
+
+    

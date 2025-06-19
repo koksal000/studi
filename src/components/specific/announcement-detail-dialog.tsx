@@ -16,16 +16,13 @@ import { CommentItem } from './comment-item';
 interface AnnouncementDetailDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  announcement: Announcement | null;
+  announcement: Announcement | null; // Use 'announcement' prop directly
 }
 
 export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: annProp }: AnnouncementDetailDialogProps) {
   const { user, isAdmin } = useUser();
-  // getAnnouncementById is removed as we use prop directly
   const { toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
-
-  // No local useState for announcement, use annProp directly
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -45,7 +42,6 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     }
   }, [isOpen]);
 
-
   const handleDialogClose = (openState: boolean) => {
     if (!openState && videoRef.current) {
       videoRef.current.pause();
@@ -54,8 +50,9 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     onOpenChange(openState);
   };
 
-  if (!annProp) return null;
+  if (!annProp) return null; // Guard against null announcement prop
 
+  // Directly use annProp for rendering and logic
   const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
   const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
 
@@ -181,7 +178,6 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
                     key={comment.id}
                     comment={comment}
                     announcementId={annProp.id}
-                    // onCommentOrReplyAction removed
                   />
                 ))}
               </div>
@@ -192,3 +188,5 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     </Dialog>
   );
 }
+
+    

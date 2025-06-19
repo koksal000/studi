@@ -21,15 +21,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-// AdminPasswordDialog is not used here for deletion directly, but kept for consistency if other admin actions were added.
-// For announcement deletion, it's handled by the hook which checks admin status.
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
-import { useState, useRef, type FormEvent, useEffect } from 'react';
+import { useState, useRef, type FormEvent } from 'react';
 import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog';
 import { CommentItem } from './comment-item';
 
 interface AnnouncementCardProps {
-  announcement: Announcement; // Renamed from initialAnnouncement for clarity
+  announcement: Announcement; // Use 'announcement' prop directly
   isCompact?: boolean;
   allowDelete?: boolean;
 }
@@ -38,8 +36,6 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
   const { user, isAdmin } = useUser();
   const { deleteAnnouncement: removeAnnouncementHook, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
-
-  // No local useState for announcement, use annProp directly
 
   const [isAdminPasswordDialogOpenForAnnDelete, setIsAdminPasswordDialogOpenForAnnDelete] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -52,6 +48,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
   const [isMuted, setIsMuted] = useState(false);
   const [isDeletingAnnouncement, setIsDeletingAnnouncement] = useState(false);
 
+  // Directly use annProp for rendering and logic
   const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
   const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
 
@@ -156,7 +153,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     return <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya</>;
   };
 
-  if (!annProp) return null;
+  if (!annProp) return null; // Guard against null announcement prop
 
   return (
     <>
@@ -205,7 +202,6 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
                         key={comment.id}
                         comment={comment}
                         announcementId={annProp.id}
-                        // onCommentOrReplyAction is removed as direct prop usage should handle updates
                     />
                   ))}
                 </div>
@@ -240,7 +236,9 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
         onOpenChange={setIsAdminPasswordDialogOpenForAnnDelete}
         onVerified={performDeleteAnnouncement}
       />
-      {isCompact && <AnnouncementDetailDialog isOpen={isDetailModalOpen} onOpenChange={setIsDetailModalOpen} announcement={annProp} />}
+      {isCompact && annProp && <AnnouncementDetailDialog isOpen={isDetailModalOpen} onOpenChange={setIsDetailModalOpen} announcement={annProp} />}
     </>
   );
 }
+
+    

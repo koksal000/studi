@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react'; // useEffect removed
+import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -23,25 +23,22 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ReplyItemProps {
-  reply: Reply; // Renamed from initialReply
+  reply: Reply; // Use 'reply' prop directly
   announcementId: string;
   commentId: string;
-  // onReplyAction?: () => void; // Removed
 }
 
 export function ReplyItem({ reply: replyProp, announcementId, commentId }: ReplyItemProps) {
   const { user, isAdmin } = useUser();
-  // getAnnouncementById removed
   const { addReplyToComment, deleteReply } = useAnnouncements();
   const { toast } = useToast();
-
-  // No local useState for reply, use replyProp directly
 
   const [showReplyToReplyForm, setShowReplyToReplyForm] = useState(false);
   const [replyToReplyText, setReplyToReplyText] = useState('');
   const [isSubmittingReplyToReply, setIsSubmittingReplyToReply] = useState(false);
   const [isDeletingReply, setIsDeletingReply] = useState(false);
 
+  // Directly use replyProp for rendering and logic
   const formattedDate = new Date(replyProp.date).toLocaleDateString('tr-TR', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
@@ -69,7 +66,6 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
       await addReplyToComment(announcementId, commentId, replyToReplyText, replyProp.authorName);
       setReplyToReplyText('');
       setShowReplyToReplyForm(false);
-      // Removed onReplyAction call
     } catch (error) {
     } finally {
       setIsSubmittingReplyToReply(false);
@@ -90,7 +86,6 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
     try {
       await deleteReply(announcementId, commentId, replyProp.id);
       toast({ title: "Yanıt Silindi", description: "Yanıtınız başarıyla kaldırıldı." });
-      // Removed onReplyAction call
     } catch (error: any) {
       if (!error.message?.includes("Bu yanıtı silme yetkiniz yok")) {
         toast({ title: "Silme Başarısız", description: error.message || "Yanıt silinirken bir sorun oluştu.", variant: "destructive"});
@@ -103,7 +98,7 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
   const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
   const canDeleteThisReply = currentUserAuthorId === replyProp.authorId;
 
-  if (!replyProp) return null;
+  if (!replyProp) return null; // Guard against null reply prop
 
   return (
     <>
@@ -182,3 +177,5 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
     </>
   );
 }
+
+    

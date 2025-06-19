@@ -10,7 +10,7 @@ import admin from 'firebase-admin';
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
-const TOKENS_FILE_PATH = path.join(dataDir, '_fcm_tokens.json'); // For reading tokens
+const TOKENS_FILE_PATH = path.join(dataDir, '_fcm_tokens.json'); 
 
 const MAX_IMAGE_RAW_SIZE_MB_API = 5;
 const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
@@ -25,16 +25,30 @@ try {
   const serviceAccountPath = process.env.FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH;
   if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
-    if (admin.apps.length === 0) { // Check if already initialized
+    if (admin.apps.length === 0) { 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
-      console.log("[Firebase Admin] SDK initialized successfully.");
+      console.log("[Firebase Admin] SDK initialized successfully via service account file.");
     }
-  } else if (process.env.NODE_ENV === 'production' && !serviceAccountPath) {
-    console.warn("[Firebase Admin] FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH not set. Push notifications for new announcements will not be sent.");
-  } else if (serviceAccountPath && !fs.existsSync(serviceAccountPath)) {
-     console.warn(`[Firebase Admin] Service account file not found at: ${serviceAccountPath}. Push notifications for new announcements will not be sent.`);
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+    if (admin.apps.length === 0) {
+        admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+        });
+        console.log("[Firebase Admin] SDK initialized successfully via GOOGLE_APPLICATION_CREDENTIALS.");
+    }
+  }
+  else if (admin.apps.length === 0) {
+    if (process.env.NODE_ENV === 'production' && !serviceAccountPath && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.warn("[Firebase Admin] Neither FIREBASE_ADMIN_SDK_SERVICE_ACCOUNT_PATH nor GOOGLE_APPLICATION_CREDENTIALS is set or valid. Push notifications for new announcements will not be sent.");
+    } else if (serviceAccountPath && !fs.existsSync(serviceAccountPath)) {
+       console.warn(`[Firebase Admin] Service account file not found at: ${serviceAccountPath}. Push notifications will not be sent.`);
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && !fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)){
+       console.warn(`[Firebase Admin] GOOGLE_APPLICATION_CREDENTIALS file not found at: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}. Push notifications will not be sent.`);
+    } else {
+        console.warn("[Firebase Admin] Firebase Admin SDK could not be initialized. Push notifications will not be sent.");
+    }
   }
 } catch (error) {
   console.error("[Firebase Admin] Failed to initialize SDK:", error);
@@ -145,12 +159,16 @@ const sendFcmNotifications = async (title: string, body: string) => {
     return;
   }
 
-  let tokens: { token: string }[] = [];
+  let tokens: string[] = [];
   try {
     if (fs.existsSync(TOKENS_FILE_PATH)) {
       const tokensData = fs.readFileSync(TOKENS_FILE_PATH, 'utf-8');
-      tokens = JSON.parse(tokensData).map((t: any) => t.token).filter(Boolean);
+      if (tokensData.trim()) {
+        const parsedTokens = JSON.parse(tokensData) as { token: string }[];
+        tokens = parsedTokens.map(t => t.token).filter(Boolean);
+      }
     }
+    console.log(`[FCM Send] Read ${tokens.length} tokens from file.`);
   } catch (e) {
     console.error("[FCM Send] Error reading FCM tokens file:", e);
     return;
@@ -162,42 +180,61 @@ const sendFcmNotifications = async (title: string, body: string) => {
   }
   
   const uniqueTokens = [...new Set(tokens)];
+  console.log(`[FCM Send] Attempting to send notifications to ${uniqueTokens.length} unique tokens.`);
+  // For debugging, you might want to log tokens, but be careful in production:
+  // console.log("[FCM Send] Unique Tokens:", uniqueTokens.map(t => t.substring(0,10) + "..."));
 
 
-  const message = {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const clickActionLink = appUrl ? `${appUrl}/announcements` : undefined;
+
+  if (clickActionLink) {
+    console.log(`[FCM Send] Notification click action link will be: ${clickActionLink}`);
+  } else {
+    console.warn(`[FCM Send] NEXT_PUBLIC_APP_URL is not set. Notifications will not have a click action link.`);
+  }
+
+  const messagePayload = {
     notification: {
       title: title,
       body: body,
     },
     webpush: {
       notification: {
-        icon: '/images/logo.png', // Ensure this icon exists in public/images
+        icon: '/images/logo.png', 
       },
       fcmOptions: {
-         link: process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL}/announcements` : undefined,
+         link: clickActionLink,
       }
     },
-    // tokens: uniqueTokens, // This is for multicast
   };
 
-  // Sending to multiple tokens requires admin.messaging().sendEachForMulticast or sendEach
-  // For simplicity, let's iterate or use sendToDevice if tokens array is small.
-  // sendMulticast is better.
   if (uniqueTokens.length > 0) {
-    const multicastMessage = { ...message, tokens: uniqueTokens };
+    const multicastMessage = { ...messagePayload, tokens: uniqueTokens };
     try {
       const response = await admin.messaging().sendEachForMulticast(multicastMessage);
-      console.log(`[FCM Send] Notifications sent: ${response.successCount} success, ${response.failureCount} failure.`);
+      console.log(`[FCM Send] Multicast Response: ${response.successCount} success, ${response.failureCount} failure.`);
+      
       if (response.failureCount > 0) {
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
-            console.error(`[FCM Send] Failure for token ${uniqueTokens[idx].substring(0,20)}...: ${resp.error}`);
-            // TODO: Handle failed tokens (e.g., remove them from storage if unrecoverable error)
+            const tokenSnippet = uniqueTokens[idx] ? uniqueTokens[idx].substring(0, 20) + "..." : "UNKNOWN_TOKEN";
+            console.error(`[FCM Send] Failure for token ${tokenSnippet}: ${resp.error?.code} - ${resp.error?.message}`);
+            if (resp.error?.code === 'messaging/registration-token-not-registered' || resp.error?.code === 'messaging/invalid-registration-token') {
+              console.log(`[FCM Send] Suggestion: Token ${tokenSnippet} should be removed from _fcm_tokens.json.`);
+              // TODO: Implement logic to remove this specific token from _fcm_tokens.json
+            }
+          } else {
+            // const tokenSnippet = uniqueTokens[idx] ? uniqueTokens[idx].substring(0, 20) + "..." : "UNKNOWN_TOKEN";
+            // console.log(`[FCM Send] Successfully sent to token ${tokenSnippet}. Message ID: ${resp.messageId}`);
           }
         });
       }
-    } catch (error) {
-      console.error('[FCM Send] Error sending notifications:', error);
+    } catch (error: any) {
+      console.error('[FCM Send] Error sending multicast notifications:', error);
+      if (error.code === 'messaging/mismatched-credential') {
+        console.error("[FCM Send] CRITICAL: Mismatched credential. Ensure your Firebase Admin SDK service account key is correct and has permissions for FCM.");
+      }
     }
   }
 };
@@ -284,7 +321,9 @@ export async function POST(request: NextRequest) {
       if (commentIndex === -1) {
         return NextResponse.json({ message: 'Silinecek yorum bulunamadı.' }, { status: 404 });
       }
-      if (announcementToUpdate.comments[commentIndex].authorId !== actionPayload.deleterAuthorId) {
+      const commentToDelete = announcementToUpdate.comments[commentIndex];
+      if (commentToDelete.authorId !== actionPayload.deleterAuthorId) {
+         console.warn(`[API/Announcements] Unauthorized attempt to delete comment ${actionPayload.commentId} by ${actionPayload.deleterAuthorId}. Owner is ${commentToDelete.authorId}`);
         return NextResponse.json({ message: 'Bu yorumu silme yetkiniz yok.' }, { status: 403 });
       }
       announcementToUpdate.comments.splice(commentIndex, 1);
@@ -300,7 +339,9 @@ export async function POST(request: NextRequest) {
       if (replyIndex === -1) {
         return NextResponse.json({ message: 'Silinecek yanıt bulunamadı.' }, { status: 404 });
       }
-      if (commentToUpdate.replies[replyIndex].authorId !== actionPayload.deleterAuthorId) {
+      const replyToDelete = commentToUpdate.replies[replyIndex];
+      if (replyToDelete.authorId !== actionPayload.deleterAuthorId) {
+        console.warn(`[API/Announcements] Unauthorized attempt to delete reply ${actionPayload.replyId} by ${actionPayload.deleterAuthorId}. Owner is ${replyToDelete.authorId}`);
         return NextResponse.json({ message: 'Bu yanıtı silme yetkiniz yok.' }, { status: 403 });
       }
       commentToUpdate.replies.splice(replyIndex, 1);
@@ -336,7 +377,7 @@ export async function POST(request: NextRequest) {
       currentDataFromFile[existingIndex] = newAnnouncement; 
     } else {
       currentDataFromFile.unshift(newAnnouncement);
-      isNewAnnouncement = true; // Mark as new announcement
+      isNewAnnouncement = true; 
     }
     announcementModified = true;
     modifiedAnnouncement = newAnnouncement;
@@ -348,13 +389,12 @@ export async function POST(request: NextRequest) {
       announcementsData = currentDataFromFile; 
       announcementEmitter.emit('update', [...announcementsData]);
       
-      // If it's a new announcement, try to send FCM notifications
       if (isNewAnnouncement && modifiedAnnouncement) {
-        // Do not await this, let it run in the background
+        console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}". Attempting to send FCM notifications.`);
         sendFcmNotifications(
           `Yeni Duyuru: ${modifiedAnnouncement.title}`,
           modifiedAnnouncement.content.substring(0, 100) + (modifiedAnnouncement.content.length > 100 ? "..." : "")
-        ).catch(e => console.error("FCM Send Background Error:", e));
+        ).catch(e => console.error("[FCM Send] Background error during sendFcmNotifications:", e));
       }
       
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
@@ -392,3 +432,4 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
+    

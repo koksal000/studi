@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
 import { STORES, idbGetAll, idbSetAll } from '@/lib/idb';
 
@@ -14,46 +14,62 @@ export interface ContactMessage {
   date: string;
 }
 
+let contactChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && window.BroadcastChannel) {
+  contactChannel = new BroadcastChannel('contact-messages-channel');
+}
+
 export function useContactMessages() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const isSyncing = useRef(false);
 
   const syncWithServer = useCallback(async () => {
-    if (isSyncing.current) return;
-    isSyncing.current = true;
-    
     try {
       const response = await fetch('/api/contact');
       if (!response.ok) throw new Error('Mesajlar sunucudan alınamadı.');
       const serverData: ContactMessage[] = await response.json();
-      setMessages(serverData);
       await idbSetAll(STORES.contactMessages, serverData);
+      contactChannel?.postMessage('update');
+      return serverData;
     } catch (error: any) {
-      toast({ title: 'Mesajlar Senkronize Edilemedi', description: error.message, variant: 'destructive' });
-    } finally {
-      isSyncing.current = false;
+      console.error("[useContactMessages] Sync with server failed:", error.message);
+      return null;
     }
-  }, [toast]);
-  
+  }, []);
+
   const refetchMessages = useCallback(() => {
-    setIsLoading(true);
-    syncWithServer().finally(() => setIsLoading(false));
+      setIsLoading(true);
+      syncWithServer().finally(() => setIsLoading(false));
   }, [syncWithServer]);
 
   useEffect(() => {
-    const loadFromCacheAndSync = async () => {
-      setIsLoading(true);
-      const cachedData = await idbGetAll<ContactMessage>(STORES.contactMessages);
+    const refreshFromIdb = () => {
+      idbGetAll<ContactMessage>(STORES.contactMessages).then(data => {
+        if (data) setMessages(data);
+      });
+    };
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'update') {
+        refreshFromIdb();
+      }
+    };
+
+    contactChannel?.addEventListener('message', handleMessage);
+
+    setIsLoading(true);
+    idbGetAll<ContactMessage>(STORES.contactMessages).then((cachedData) => {
       if (cachedData && cachedData.length > 0) {
         setMessages(cachedData);
       }
-      setIsLoading(false);
-      await syncWithServer();
-    };
+      // Initial sync for admins to get latest messages.
+      syncWithServer();
+    }).finally(() => setIsLoading(false));
 
-    loadFromCacheAndSync();
+    return () => {
+      contactChannel?.removeEventListener('message', handleMessage);
+    };
   }, [syncWithServer]);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
@@ -74,14 +90,13 @@ export function useContactMessages() {
         const errorData = await response.json().catch(() => ({ message: "Sunucu hatası" }));
         throw new Error(errorData.message);
       }
-      // No need to sync here for the user sending the message.
-      // Admin will see it on their next sync/load.
+      // Notify admin panel if open
+      syncWithServer();
     } catch (error: any) {
-      const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
-      toast({ title: "Mesaj Gönderilemedi", description: rawErrorMessage, variant: "destructive" });
-      throw new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
+      toast({ title: "Mesaj Gönderilemedi", description: error.message, variant: "destructive" });
+      throw new Error(String(error.message).replace(/[^\x00-\x7F]/g, ""));
     }
-  }, [toast]);
+  }, [toast, syncWithServer]);
 
   return { 
     messages,

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
 import { useToast } from './use-toast';
@@ -50,6 +50,11 @@ export interface NewAnnouncementPayload {
   mediaType?: string | null;
 }
 
+let announcementChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && window.BroadcastChannel) {
+  announcementChannel = new BroadcastChannel('announcements-channel');
+}
+
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,86 +62,64 @@ export function useAnnouncements() {
   const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
   const { toast } = useToast();
-  const isSyncing = useRef(false);
 
   const syncWithServer = useCallback(async () => {
-    if (isSyncing.current) return;
-    isSyncing.current = true;
-    
     try {
       const response = await fetch('/api/announcements');
       if (!response.ok) throw new Error('Duyurular sunucudan alınamadı.');
       const serverData: Announcement[] = await response.json();
-      setAnnouncements(serverData);
       await idbSetAll(STORES.announcements, serverData);
+      announcementChannel?.postMessage('update');
+      return serverData;
     } catch (error: any) {
-      toast({ title: 'Veri Senkronizasyon Hatası', description: error.message, variant: 'destructive' });
-    } finally {
-      isSyncing.current = false;
+      console.error("[useAnnouncements] Sync with server failed:", error.message);
+      return null;
     }
-  }, [toast]);
-  
+  }, []);
+
   useEffect(() => {
-    const loadFromCacheAndSync = async () => {
-      setIsLoading(true);
-      const cachedData = await idbGetAll<Announcement>(STORES.announcements);
+    const refreshFromIdb = () => {
+      idbGetAll<Announcement>(STORES.announcements).then(data => {
+        if (data) setAnnouncements(data);
+      });
+    };
+    
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'update') {
+        refreshFromIdb();
+      }
+    };
+
+    announcementChannel?.addEventListener('message', handleMessage);
+    
+    setIsLoading(true);
+    idbGetAll<Announcement>(STORES.announcements).then((cachedData) => {
       if (cachedData && cachedData.length > 0) {
         setAnnouncements(cachedData);
       }
-      setIsLoading(false);
-      await syncWithServer();
-    };
+      syncWithServer(); 
+    }).finally(() => setIsLoading(false));
 
-    loadFromCacheAndSync();
+    return () => {
+      announcementChannel?.removeEventListener('message', handleMessage);
+    };
   }, [syncWithServer]);
 
   useEffect(() => {
     if (announcements.length > 0 && lastOpenedNotificationTimestamp) {
         setUnreadCount(announcements.filter(ann => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp).length);
-    } else if (announcements.length > 0) {
+    } else if (announcements.length > 0 && !lastOpenedNotificationTimestamp) {
         setUnreadCount(announcements.length);
     } else {
         setUnreadCount(0);
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
 
-  const performApiAction = useCallback(async (
-    endpoint: string, 
-    method: 'POST' | 'DELETE', 
-    body?: any,
-    successToast?: { title: string; description?: string }
-  ) => {
-    try {
-      const response = await fetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
-        throw new Error(errorData.message);
-      }
-      
-      if (successToast) toast(successToast);
-      await syncWithServer();
-    } catch (error: any) {
-      const rawErrorMessage = error.message || 'Bilinmeyen bir ağ hatası oluştu.';
-      toast({ title: 'İşlem Başarısız', description: rawErrorMessage, variant: 'destructive' });
-      throw new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
-    }
-  }, [toast, syncWithServer]);
-
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
     if (!user) {
         toast({ title: "Giriş Gerekli", variant: "destructive" });
-        return;
+        throw new Error("Giriş Gerekli");
     }
-     if (!payload.title?.trim() || !payload.content?.trim()) {
-        toast({ title: 'Eksik Bilgi', description: 'Lütfen başlık ve içerik alanlarını doldurun.', variant: 'destructive' });
-        return;
-    }
-
     const newAnnouncementData: Announcement = {
       id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       title: payload.title,
@@ -149,73 +132,245 @@ export function useAnnouncements() {
       likes: [],
       comments: [],
     };
+    const originalData = [...announcements];
+    const optimisticData = [newAnnouncementData, ...originalData];
+    
+    setAnnouncements(optimisticData);
+    await idbSetAll(STORES.announcements, optimisticData);
+    announcementChannel?.postMessage('update');
 
-    await performApiAction('/api/announcements', 'POST', newAnnouncementData, { title: "Duyuru Eklendi", description: `"${newAnnouncementData.title}" başarıyla yayınlandı.` });
-  }, [user, isAdmin, performApiAction, toast]);
-
+    try {
+      const response = await fetch('/api/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAnnouncementData),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        throw new Error(error.message);
+      }
+      await syncWithServer(); 
+    } catch (error: any) {
+      toast({ title: 'Duyuru Eklenemedi', description: error.message, variant: 'destructive' });
+      setAnnouncements(originalData);
+      await idbSetAll(STORES.announcements, originalData);
+      announcementChannel?.postMessage('update');
+      throw error;
+    }
+  }, [user, isAdmin, announcements, toast, syncWithServer]);
 
   const deleteAnnouncement = useCallback(async (id: string) => {
-    if (!user || !isAdmin) { 
-        toast({ title: "Yetki Gerekli", description: "Duyuru silmek için yönetici olmalısınız.", variant: "destructive"});
-        return;
+    if (!user || !isAdmin) {
+      toast({ title: "Yetki Gerekli", variant: "destructive" });
+      throw new Error("Yetki Gerekli");
     }
-    await performApiAction(`/api/announcements?id=${id}`, 'DELETE');
-  }, [user, isAdmin, performApiAction]);
+    const originalData = [...announcements];
+    const optimisticData = originalData.filter(a => a.id !== id);
+    setAnnouncements(optimisticData);
+    await idbSetAll(STORES.announcements, optimisticData);
+    announcementChannel?.postMessage('update');
+
+    try {
+      const response = await fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        throw new Error(error.message);
+      }
+      // No need to sync on delete as it's already removed
+    } catch (error: any) {
+      toast({ title: "Duyuru Silinemedi", description: error.message, variant: "destructive"});
+      setAnnouncements(originalData);
+      await idbSetAll(STORES.announcements, originalData);
+      announcementChannel?.postMessage('update');
+      throw error;
+    }
+  }, [user, isAdmin, announcements, toast]);
 
   const toggleAnnouncementLike = useCallback(async (announcementId: string) => {
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive"});
-      return;
-    }
-    const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const payload = { action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId };
-    await performApiAction('/api/announcements', 'POST', payload);
-  }, [user, isAdmin, performApiAction, toast]);
+      if (!user) {
+        toast({ title: "Giriş Gerekli", variant: "destructive" });
+        return;
+      }
+      const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+      const originalData = [...announcements];
+      const optimisticData = originalData.map(ann => {
+          if (ann.id === announcementId) {
+              const newLikes = ann.likes ? [...ann.likes] : [];
+              const likeIndex = newLikes.findIndex(l => l.userId === userId);
+              if (likeIndex > -1) {
+                  newLikes.splice(likeIndex, 1);
+              } else {
+                  newLikes.push({ userId });
+              }
+              return { ...ann, likes: newLikes };
+          }
+          return ann;
+      });
+      setAnnouncements(optimisticData);
+      await idbSetAll(STORES.announcements, optimisticData);
+      announcementChannel?.postMessage('update');
 
+      try {
+          const payload = { action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId };
+          const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+            throw new Error(error.message);
+          }
+      } catch (error: any) {
+          toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
+          setAnnouncements(originalData);
+          await idbSetAll(STORES.announcements, originalData);
+          announcementChannel?.postMessage('update');
+      }
+  }, [user, isAdmin, announcements, toast]);
+  
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Yorum yapmak için giriş yapmalısınız.", variant: "destructive"});
-      return;
-    }
-    if (!text.trim()) {
-      toast({ title: "Yorum Boş Olamaz", description: "Lütfen bir yorum yazın.", variant: "destructive"});
-      return;
-    }
+    if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); throw new Error("Not logged in"); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const commentPayload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: { authorName, authorId, text } };
-    await performApiAction('/api/announcements', 'POST', commentPayload, { title: "Yorum Eklendi", description: "Yorumunuz başarıyla gönderildi." });
-  }, [user, isAdmin, performApiAction, toast]);
+    const newComment: Omit<Comment, 'id'|'date'> = { authorName, authorId, text, replies: [] };
+    const tempCommentId = `cmt_temp_${Date.now()}`;
+    
+    const originalData = [...announcements];
+    const optimisticData = originalData.map(ann => {
+        if (ann.id === announcementId) {
+            const newComments = ann.comments ? [{ ...newComment, id: tempCommentId, date: new Date().toISOString() }, ...ann.comments] : [{ ...newComment, id: tempCommentId, date: new Date().toISOString() }];
+            return { ...ann, comments: newComments };
+        }
+        return ann;
+    });
+
+    setAnnouncements(optimisticData);
+    await idbSetAll(STORES.announcements, optimisticData);
+    announcementChannel?.postMessage('update');
+
+    try {
+        const payload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: newComment };
+        const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+          throw new Error(error.message);
+        }
+        await syncWithServer();
+    } catch (error: any) {
+        toast({ title: 'Yorum Eklenemedi', description: error.message, variant: 'destructive' });
+        setAnnouncements(originalData);
+        await idbSetAll(STORES.announcements, originalData);
+        announcementChannel?.postMessage('update');
+        throw error;
+    }
+  }, [user, isAdmin, announcements, toast, syncWithServer]);
 
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Yanıtlamak için giriş yapmalısınız.", variant: "destructive"});
-      return;
-    }
-    if (!text.trim()) {
-      toast({ title: "Yanıt Boş Olamaz", description: "Lütfen bir yanıt yazın.", variant: "destructive"});
-      return;
-    }
+    if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); throw new Error("Not logged in"); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const replyPayload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName } };
-    await performApiAction('/api/announcements', 'POST', replyPayload, { title: "Yanıt Eklendi", description: "Yanıtınız başarıyla gönderildi." });
-  }, [user, isAdmin, performApiAction, toast]);
+    const newReply: Omit<Reply, 'id'|'date'> = { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName };
+    const tempReplyId = `rpl_temp_${Date.now()}`;
+
+    const originalData = [...announcements];
+    const optimisticData = originalData.map(ann => {
+      if (ann.id === announcementId) {
+        const newComments = (ann.comments || []).map(c => {
+          if (c.id === commentId) {
+            const newReplies = c.replies ? [{...newReply, id: tempReplyId, date: new Date().toISOString()}, ...c.replies] : [{...newReply, id: tempReplyId, date: new Date().toISOString()}];
+            return {...c, replies: newReplies};
+          }
+          return c;
+        });
+        return {...ann, comments: newComments};
+      }
+      return ann;
+    });
+    setAnnouncements(optimisticData);
+    await idbSetAll(STORES.announcements, optimisticData);
+    announcementChannel?.postMessage('update');
+
+    try {
+      const payload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: newReply };
+      const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        throw new Error(error.message);
+      }
+      await syncWithServer();
+    } catch (error: any) {
+      toast({ title: 'Yanıt Eklenemedi', description: error.message, variant: 'destructive' });
+      setAnnouncements(originalData);
+      await idbSetAll(STORES.announcements, originalData);
+      announcementChannel?.postMessage('update');
+      throw error;
+    }
+  }, [user, isAdmin, announcements, toast, syncWithServer]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
-    if (!user) { throw new Error("User not logged in"); }
+    if (!user) { throw new Error("Giriş gerekli"); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const payload = { action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId };
-    await performApiAction('/api/announcements', 'POST', payload);
-  }, [user, isAdmin, performApiAction]);
+    const originalData = [...announcements];
+    const optimisticData = originalData.map(ann => {
+      if (ann.id === announcementId) {
+        const newComments = (ann.comments || []).filter(c => c.id !== commentId);
+        return {...ann, comments: newComments};
+      }
+      return ann;
+    });
+    setAnnouncements(optimisticData);
+    await idbSetAll(STORES.announcements, optimisticData);
+    announcementChannel?.postMessage('update');
+    
+    try {
+      const payload = { action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId };
+      const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        throw new Error(error.message);
+      }
+    } catch (error: any) {
+      toast({ title: "Yorum Silinemedi", description: error.message, variant: "destructive" });
+      setAnnouncements(originalData);
+      await idbSetAll(STORES.announcements, originalData);
+      announcementChannel?.postMessage('update');
+      throw error;
+    }
+  }, [user, isAdmin, announcements, toast]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
-    if (!user) { throw new Error("User not logged in"); }
+    if (!user) { throw new Error("Giriş gerekli"); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const payload = { action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId };
-    await performApiAction('/api/announcements', 'POST', payload);
-  }, [user, isAdmin, performApiAction]);
+    const originalData = [...announcements];
+    const optimisticData = originalData.map(ann => {
+      if (ann.id === announcementId) {
+        const newComments = (ann.comments || []).map(c => {
+          if (c.id === commentId) {
+            const newReplies = (c.replies || []).filter(r => r.id !== replyId);
+            return {...c, replies: newReplies};
+          }
+          return c;
+        });
+        return {...ann, comments: newComments};
+      }
+      return ann;
+    });
+    setAnnouncements(optimisticData);
+    await idbSetAll(STORES.announcements, optimisticData);
+    announcementChannel?.postMessage('update');
 
+    try {
+      const payload = { action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId };
+      const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+       if (!response.ok) {
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        throw new Error(error.message);
+      }
+    } catch (error: any) {
+      toast({ title: "Yanıt Silinemedi", description: error.message, variant: "destructive" });
+      setAnnouncements(originalData);
+      await idbSetAll(STORES.announcements, originalData);
+      announcementChannel?.postMessage('update');
+      throw error;
+    }
+  }, [user, isAdmin, announcements, toast]);
 
   return {
     announcements,

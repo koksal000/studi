@@ -9,16 +9,16 @@ import { idbGet, idbSet, STORES } from '@/lib/idb';
 const MESSAGES_KEY = 'all-contact-messages';
 
 export function useContactMessages() {
-  const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [messages, setMessages] = useState<ContactMessage[] | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const { toast } = useToast();
+  
+  const isLoading = messages === null;
   
   useEffect(() => {
     let stillMounted = true;
     
-    async function initialize() {
-      setIsLoading(true);
+    const initializeAndConnect = async () => {
       try {
         const cachedMessages = await idbGet<ContactMessage[]>(STORES.CONTACT_MESSAGES, MESSAGES_KEY);
         if (stillMounted && cachedMessages && Array.isArray(cachedMessages)) {
@@ -44,18 +44,18 @@ export function useContactMessages() {
           idbSet(STORES.CONTACT_MESSAGES, MESSAGES_KEY, sortedMessages).catch(e => console.error("Failed to cache contact messages in IndexedDB", e));
         } catch (error) {
           console.error("Error processing SSE message for contact messages:", error);
-        } finally {
-          if (stillMounted) setIsLoading(false);
         }
       };
 
       newEventSource.onerror = (error) => {
           console.error("[SSE Contact] Connection error:", error);
-          if (stillMounted) setIsLoading(false);
+          if (stillMounted) {
+            setMessages(msgs => msgs === null ? [] : msgs);
+          }
       };
     }
     
-    initialize();
+    initializeAndConnect();
 
     return () => {
       stillMounted = false;
@@ -93,5 +93,9 @@ export function useContactMessages() {
     }
   }, [toast]);
 
-  return { messages, isLoading, addContactMessage };
+  return { 
+    messages: messages ?? [],
+    isLoading, 
+    addContactMessage 
+  };
 }

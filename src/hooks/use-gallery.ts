@@ -56,23 +56,25 @@ const gallerySortFn = (a: GalleryImage, b: GalleryImage): number => {
 };
 
 export function useGallery() {
-  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[] | null>(null);
   const { user } = useUser();
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const isLoading = galleryImages === null;
 
   useEffect(() => {
     let stillMounted = true;
     
-    async function initialize() {
-      setIsLoading(true);
+    const initializeAndConnect = async () => {
       try {
         const cachedImages = await idbGet<GalleryImage[]>(STORES.GALLERY, GALLERY_KEY);
-        if (stillMounted && cachedImages && Array.isArray(cachedImages) && cachedImages.length > 0) {
-            setGalleryImages(cachedImages.sort(gallerySortFn));
-        } else if (stillMounted) {
-            setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
+        if (stillMounted) {
+            if (cachedImages && Array.isArray(cachedImages) && cachedImages.length > 0) {
+                setGalleryImages(cachedImages.sort(gallerySortFn));
+            } else {
+                setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
+            }
         }
       } catch(e) {
         console.warn("Could not load gallery from IndexedDB, using static seeds:", e);
@@ -95,18 +97,18 @@ export function useGallery() {
           idbSet(STORES.GALLERY, GALLERY_KEY, sortedImages).catch(e => console.error("Failed to cache gallery images in IndexedDB", e));
         } catch (error) {
           console.error("Error processing gallery SSE message:", error);
-        } finally {
-          if (stillMounted) setIsLoading(false);
         }
       };
 
       newEventSource.onerror = (error) => {
         console.error("[SSE Gallery] Connection error:", error);
-        if (stillMounted) setIsLoading(false);
+        if (stillMounted) {
+            setGalleryImages(images => images === null ? [] : images);
+        }
       };
     }
     
-    initialize();
+    initializeAndConnect();
 
     return () => {
       stillMounted = false;
@@ -196,5 +198,10 @@ export function useGallery() {
     }
   }, [user, toast]);
 
-  return { galleryImages, addGalleryImage, deleteGalleryImage, isLoading };
+  return { 
+    galleryImages: galleryImages ?? [],
+    addGalleryImage, 
+    deleteGalleryImage, 
+    isLoading 
+  };
 }

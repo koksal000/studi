@@ -1,5 +1,3 @@
 
-// This file is no longer used as the SSE stream has been disabled.
-// It can be safely removed.
-const dummyEmitter = {};
-export default dummyEmitter;
+// This file is intentionally left empty as it is no longer used by the new data fetching architecture.
+// It can be safely deleted.

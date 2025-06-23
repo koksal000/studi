@@ -2,7 +2,6 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// Removed idb imports
 
 interface AnnouncementStatusContextType {
   lastOpenedNotificationTimestamp: number | null;
@@ -28,14 +27,14 @@ export const AnnouncementStatusProvider = ({ children }: { children: ReactNode }
           setLastOpenedState(storedTimestamp);
         } else {
           setLastOpenedState(null);
-          localStorage.removeItem(LAST_OPENED_KEY_LOCALSTORAGE); // Clear corrupted data
+          localStorage.removeItem(LAST_OPENED_KEY_LOCALSTORAGE); 
         }
       } else {
         setLastOpenedState(null); 
       }
     } catch (error) {
       console.error("Failed to load lastOpenedNotificationTimestamp from localStorage", error);
-      localStorage.removeItem(LAST_OPENED_KEY_LOCALSTORAGE); // Clear potentially corrupted data
+      localStorage.removeItem(LAST_OPENED_KEY_LOCALSTORAGE); 
       setLastOpenedState(null);
     } finally {
       setIsStatusLoading(false);
@@ -48,16 +47,11 @@ export const AnnouncementStatusProvider = ({ children }: { children: ReactNode }
       setLastOpenedState(timestamp);
     } catch (error) {
       console.error("Failed to save lastOpenedNotificationTimestamp to localStorage", error);
-      // Optionally, handle quota exceeded or other storage errors
     }
   };
 
-  // UserProvider's loader should cover the initial app load.
-  // This context's loading is very fast with localStorage.
   if (isStatusLoading && typeof window === 'undefined') { 
-    // Avoid rendering children until status loaded on server, though localStorage is client-side.
-    // This might be more relevant if this context was truly async.
-    // For localStorage, it's mostly to prevent flicker if state changes immediately.
+      return null;
   }
 
   return (

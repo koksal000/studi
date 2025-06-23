@@ -1,10 +1,11 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
 import { useToast } from './use-toast';
+import { STORES, idbGetAll, idbSetAll } from '@/lib/idb';
 
 export interface Like {
   userId: string;
@@ -49,51 +50,6 @@ export interface NewAnnouncementPayload {
   mediaType?: string | null;
 }
 
-interface ToggleAnnouncementLikePayload {
-  action: "TOGGLE_ANNOUNCEMENT_LIKE";
-  announcementId: string;
-  userId: string; 
-  userName: string; 
-}
-
-interface AddCommentPayload {
-  action: "ADD_COMMENT_TO_ANNOUNCEMENT";
-  announcementId: string;
-  comment: Omit<Comment, 'id' | 'date' | 'replies'>;
-}
-
-interface AddReplyPayload {
-  action: "ADD_REPLY_TO_COMMENT";
-  announcementId: string;
-  commentId: string;
-  reply: Omit<Reply, 'id' | 'date'>;
-}
-
-interface DeleteCommentPayload {
-  action: "DELETE_COMMENT";
-  announcementId: string;
-  commentId: string;
-  deleterAuthorId: string; 
-}
-
-interface DeleteReplyPayload {
-  action: "DELETE_REPLY";
-  announcementId: string;
-  commentId: string;
-  replyId: string;
-  deleterAuthorId: string; 
-}
-
-
-type AnnouncementApiPayload =
-  | ToggleAnnouncementLikePayload
-  | AddCommentPayload
-  | AddReplyPayload
-  | DeleteCommentPayload
-  | DeleteReplyPayload
-  | Announcement; 
-
-
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,47 +57,55 @@ export function useAnnouncements() {
   const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
   const { toast } = useToast();
+  const isSyncing = useRef(false);
 
-  const fetchAnnouncements = useCallback(async () => {
-    setIsLoading(true);
+  const syncWithServer = useCallback(async () => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+    
     try {
       const response = await fetch('/api/announcements');
-      if (!response.ok) {
-        throw new Error('Duyurular sunucudan alınamadı.');
-      }
-      const data: Announcement[] = await response.json();
-      setAnnouncements(data);
+      if (!response.ok) throw new Error('Duyurular sunucudan alınamadı.');
+      const serverData: Announcement[] = await response.json();
+      setAnnouncements(serverData);
+      await idbSetAll(STORES.announcements, serverData);
     } catch (error: any) {
-      toast({ title: 'Veri Yükleme Hatası', description: error.message, variant: 'destructive' });
-      setAnnouncements([]); // Set to empty array on error to avoid broken state
+      toast({ title: 'Veri Senkronizasyon Hatası', description: error.message, variant: 'destructive' });
     } finally {
-      setIsLoading(false);
+      isSyncing.current = false;
     }
   }, [toast]);
-
+  
   useEffect(() => {
-    fetchAnnouncements();
-  }, [fetchAnnouncements]);
+    const loadFromCacheAndSync = async () => {
+      setIsLoading(true);
+      const cachedData = await idbGetAll<Announcement>(STORES.announcements);
+      if (cachedData && cachedData.length > 0) {
+        setAnnouncements(cachedData);
+      }
+      setIsLoading(false);
+      await syncWithServer();
+    };
+
+    loadFromCacheAndSync();
+  }, [syncWithServer]);
 
   useEffect(() => {
     if (announcements.length > 0 && lastOpenedNotificationTimestamp) {
-      const newUnreadCount = announcements.filter(
-        (ann) => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp
-      ).length;
-      setUnreadCount(newUnreadCount);
+        setUnreadCount(announcements.filter(ann => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp).length);
     } else if (announcements.length > 0) {
-      setUnreadCount(announcements.length);
+        setUnreadCount(announcements.length);
     } else {
-      setUnreadCount(0);
+        setUnreadCount(0);
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
-  
+
   const performApiAction = useCallback(async (
     endpoint: string, 
     method: 'POST' | 'DELETE', 
     body?: any,
     successToast?: { title: string; description?: string }
-  ) => { // Removed boolean return, will throw on error
+  ) => {
     try {
       const response = await fetch(endpoint, {
         method,
@@ -151,27 +115,17 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
-        throw new Error(errorData.message || 'Bilinmeyen bir sunucu hatası oluştu.');
+        throw new Error(errorData.message);
       }
       
-      if (successToast) {
-        toast(successToast);
-      }
-
-      await fetchAnnouncements(); 
-
+      if (successToast) toast(successToast);
+      await syncWithServer();
     } catch (error: any) {
       const rawErrorMessage = error.message || 'Bilinmeyen bir ağ hatası oluştu.';
-      // Show original Turkish message to user
       toast({ title: 'İşlem Başarısız', description: rawErrorMessage, variant: 'destructive' });
-      
-      // Sanitize the error before throwing it to the system to prevent crashes
-      const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
-      sanitizedError.stack = error.stack;
-      throw sanitizedError;
+      throw new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
     }
-  }, [toast, fetchAnnouncements]);
-
+  }, [toast, syncWithServer]);
 
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
     if (!user) {
@@ -214,7 +168,7 @@ export function useAnnouncements() {
       return;
     }
     const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const payload: ToggleAnnouncementLikePayload = { action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId };
+    const payload = { action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId };
     await performApiAction('/api/announcements', 'POST', payload);
   }, [user, isAdmin, performApiAction, toast]);
 
@@ -229,7 +183,7 @@ export function useAnnouncements() {
     }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const commentPayload: AddCommentPayload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: { authorName, authorId, text } };
+    const commentPayload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: { authorName, authorId, text } };
     await performApiAction('/api/announcements', 'POST', commentPayload, { title: "Yorum Eklendi", description: "Yorumunuz başarıyla gönderildi." });
   }, [user, isAdmin, performApiAction, toast]);
 
@@ -244,21 +198,21 @@ export function useAnnouncements() {
     }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const replyPayload: AddReplyPayload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName } };
+    const replyPayload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName } };
     await performApiAction('/api/announcements', 'POST', replyPayload, { title: "Yanıt Eklendi", description: "Yanıtınız başarıyla gönderildi." });
   }, [user, isAdmin, performApiAction, toast]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
     if (!user) { throw new Error("User not logged in"); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const payload: DeleteCommentPayload = { action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId };
+    const payload = { action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId };
     await performApiAction('/api/announcements', 'POST', payload);
   }, [user, isAdmin, performApiAction]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
     if (!user) { throw new Error("User not logged in"); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const payload: DeleteReplyPayload = { action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId };
+    const payload = { action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId };
     await performApiAction('/api/announcements', 'POST', payload);
   }, [user, isAdmin, performApiAction]);
 

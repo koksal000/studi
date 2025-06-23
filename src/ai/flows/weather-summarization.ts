@@ -69,11 +69,19 @@ const WeatherSummaryOutputSchema = z.object({
   windSpeed: z.string().describe('The current wind speed in km/h, formatted with km/h (e.g., "15.3 km/h").'),
   conditions: z.string().describe('Overall current weather conditions in Turkish (e.g., "Güneşli", "Parçalı Bulutlu", "Yağmurlu").'),
   currentWeatherCode: z.number().describe("Original WMO weather code for current conditions for icon mapping"),
-  hourlyForecast: z.array(HourlyForecastItemSchema).optional().describe("Array of hourly forecast items for the first 12 available hours. Format time in 'HH:mm'. Temperature with °C. Precipitation probability with '%'. Wind speed with 'km/h'. Translate conditions to Turkish."),
-  dailyForecast: z.array(DailyForecastItemSchema).optional().describe("Array of daily forecast items for the next 7 days. Format date as 'KısaGünAdı, Gün AyAdıKısaltılmış' (e.g., 'Sal, 25 Tem') in Turkish. Temperatures with °C. Precipitation sum with 'mm'. Translate conditions to Turkish."),
+  hourlyForecast: z.array(HourlyForecastItemSchema).optional().describe("Array of hourly forecast items for the first 12 available hours."),
+  dailyForecast: z.array(DailyForecastItemSchema).optional().describe("Array of daily forecast items for the next 7 days."),
   dataTimestamp: z.string().describe('ISO string timestamp of when the data was fetched/generated.'),
 });
 export type WeatherSummaryOutput = z.infer<typeof WeatherSummaryOutputSchema>;
+
+// Intermediate schema for what the AI will actually generate.
+const AIWeatherProcessingSchema = z.object({
+  summary: z.string().describe('A concise summary of the current weather conditions in Turkish.'),
+  currentConditions: z.string().describe('The current weather conditions in Turkish, translated from the provided WMO code.'),
+  hourlyForecastConditions: z.array(z.string()).describe("An array of Turkish weather conditions for the hourly forecast, translated from the WMO codes. The array length must match the input array length."),
+  dailyForecastConditions: z.array(z.string()).describe("An array of Turkish weather conditions for the daily forecast, translated from the WMO codes. The array length must match the input array length."),
+});
 
 let lastSuccessfulWeather: WeatherSummaryOutput | null = null;
 let lastSuccessfulFetchTime: Date | null = null;
@@ -86,33 +94,22 @@ export async function summarizeWeather(input: WeatherSummaryInput): Promise<Weat
 const formatOpenMeteoDataPrompt = ai.definePrompt({
   name: 'formatOpenMeteoDataPrompt',
   input: {schema: OpenMeteoApiDataSchema},
-  output: {schema: WeatherSummaryOutputSchema.omit({ dataTimestamp: true })}, // AI doesn't need to generate dataTimestamp
-  prompt: `You are a weather report formatter. Based on the following real-time data for {{{location}}}:
-Current Weather Data:
-  Raw Temperature: {{current.temperature}}°C
-  Raw Humidity: {{current.humidity}}%
-  Raw Wind Speed: {{current.windspeed}} km/h
-  Raw Weather Code: {{current.weathercode}}
+  output: {schema: AIWeatherProcessingSchema}, // AI outputs the intermediate schema
+  prompt: `You are a weather report assistant. Your job is to summarize and translate weather data into TURKISH.
+
+Based on the following real-time data for {{{location}}}:
+Current Weather Code: {{current.weathercode}}
+Current Temperature: {{current.temperature}}°C
 
 {{#if hourly}}
-Hourly Forecast Data (process first 12 entries if available):
-  Times: {{#each hourly.time as |t|}}{{t}}, {{/each}}
-  Temperatures: {{#each hourly.temperature_2m as |t|}}{{t}}°C, {{/each}}
-  Precipitation Probabilities: {{#each hourly.precipitation_probability as |p|}}{{p}}%, {{/each}}
-  Weather Codes: {{#each hourly.weathercode as |wc|}}{{wc}}, {{/each}}
-  Wind Speeds: {{#each hourly.windspeed_10m as |ws|}}{{ws}} km/h, {{/each}}
+Hourly Forecast Weather Codes: {{#each hourly.weathercode as |wc|}}{{wc}}, {{/each}}
 {{/if}}
 
 {{#if daily}}
-Daily Forecast Data (for all available days, up to 7):
-  Dates: {{#each daily.time as |d|}}{{d}}, {{/each}}
-  Max Temperatures: {{#each daily.temperature_2m_max as |tmax|}}{{tmax}}°C, {{/each}}
-  Min Temperatures: {{#each daily.temperature_2m_min as |tmin|}}{{tmin}}°C, {{/each}}
-  Precipitation Sums: {{#each daily.precipitation_sum as |psum|}}{{psum}}mm, {{/each}}
-  Weather Codes: {{#each daily.weathercode as |dwc|}}{{dwc}}, {{/each}}
+Daily Forecast Weather Codes: {{#each daily.weathercode as |dwc|}}{{dwc}}, {{/each}}
 {{/if}}
 
-Use the WMO Weather Interpretation Codes (Turkish translations provided) to determine the 'conditions' string:
+Use this WMO Weather Code to Turkish translation map:
 0: Açık
 1: Genellikle Açık
 2: Parçalı Bulutlu
@@ -138,40 +135,15 @@ Use the WMO Weather Interpretation Codes (Turkish translations provided) to dete
 82: Şiddetli Sağanak Yağmur
 85: Hafif Kar Sağanağı
 86: Yoğun Kar Sağanağı
-95: Gök Gürültülü Fırtına (hafif veya orta)
+95: Gök Gürültülü Fırtına
 96: Hafif Dolu ile Gök Gürültülü Fırtına
 99: Şiddetli Dolu ile Gök Gürültülü Fırtına
 
-Generate a weather report in TURKISH, strictly conforming to the output schema.
-
-For CURRENT weather:
-- 'temperature': Raw temperature value formatted as a string with '°C' (e.g., "22.5°C").
-- 'humidity': Raw humidity value formatted as a string with '%' (e.g., "60%").
-- 'windSpeed': Raw wind speed value formatted as a string with 'km/h' (e.g., "15.3 km/h").
-- 'conditions': Human-readable Turkish string derived from the current weather code.
-- 'currentWeatherCode': The raw WMO weather code for current conditions.
-- 'summary': Concise, human-readable Turkish sentence describing the overall current weather, incorporating conditions and temperature. Example: "Parçalı bulutlu ve sıcaklık 22.5°C."
-
-For 'hourlyForecast' array (process the first 12 entries from the provided hourly data arrays, if available):
-  For each item:
-  - 'time': Format the ISO time string from 'hourly.time[i]' to 'HH:mm' (e.g., '14:00').
-  - 'temperature': Format 'hourly.temperature_2m[i]' as a string with '°C'.
-  - 'precipitationProbability': Format 'hourly.precipitation_probability[i]' as a string with '%'.
-  - 'conditions': Convert 'hourly.weathercode[i]' to a concise Turkish weather description using the WMO code list.
-  - 'windSpeed': Format 'hourly.windspeed_10m[i]' as a string with ' km/h'.
-  - 'weatherCode': The raw WMO code 'hourly.weathercode[i]'.
-
-For 'dailyForecast' array (for the next 7 days from the provided daily data arrays, if available):
-  For each item:
-  - 'date': Format the ISO date string from 'daily.time[i]' to 'KısaGünAdı, Gün AyAdıKısaltılmış' (e.g., 'Sal, 25 Tem') in Turkish. For example, 2024-07-25 should be 'Per, 25 Tem'.
-  - 'maxTemperature': Format 'daily.temperature_2m_max[i]' as a string with '°C'.
-  - 'minTemperature': Format 'daily.temperature_2m_min[i]' as a string with '°C'.
-  - 'precipitationSum': Format 'daily.precipitation_sum[i]' as a string with ' mm'. If 0, use "Yağış yok".
-  - 'conditions': Convert 'daily.weathercode[i]' to a concise Turkish weather description using the WMO code list.
-  - 'weatherCode': The raw WMO code 'daily.weathercode[i]'.
-
-If hourly or daily forecast data is not available in the input, return empty or undefined arrays for 'hourlyForecast' and 'dailyForecast' respectively in the output.
-Provide all text in Turkish.
+Your tasks:
+1.  Generate a concise, one-sentence 'summary' in TURKISH about the current weather, incorporating the current conditions and temperature. Example: "Parçalı bulutlu ve sıcaklık 22.5°C."
+2.  Provide the Turkish translation for the 'currentConditions' based on the 'current.weathercode'.
+3.  For each code in 'hourly.weathercode', provide a corresponding array of Turkish translations in 'hourlyForecastConditions'. The output array length must match the input array length. If hourly data is not present, return an empty array.
+4.  For each code in 'daily.weathercode', provide a corresponding array of Turkish translations in 'dailyForecastConditions'. The output array length must match the input array length. If daily data is not present, return an empty array.
 `,
 });
 
@@ -249,11 +221,11 @@ const summarizeWeatherFlow = ai.defineFlow(
         weathercode: apiResponseData.current.weathercode,
       },
       hourly: hasHourly ? {
-        time: apiResponseData.hourly.time,
-        temperature_2m: apiResponseData.hourly.temperature_2m,
-        precipitation_probability: apiResponseData.hourly.precipitation_probability,
-        weathercode: apiResponseData.hourly.weathercode,
-        windspeed_10m: apiResponseData.hourly.windspeed_10m,
+        time: apiResponseData.hourly.time.slice(0, 12),
+        temperature_2m: apiResponseData.hourly.temperature_2m.slice(0, 12),
+        precipitation_probability: apiResponseData.hourly.precipitation_probability.slice(0, 12),
+        weathercode: apiResponseData.hourly.weathercode.slice(0, 12),
+        windspeed_10m: apiResponseData.hourly.windspeed_10m.slice(0, 12),
       } : undefined,
       daily: hasDaily ? {
         time: apiResponseData.daily.time,
@@ -267,25 +239,18 @@ const summarizeWeatherFlow = ai.defineFlow(
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 2000;
     let attempts = 0;
-    let aiOutput: WeatherSummaryOutput | undefined;
+    let aiOutput: z.infer<typeof AIWeatherProcessingSchema> | undefined;
 
     while (attempts < MAX_RETRIES) {
       try {
         const {output} = await formatOpenMeteoDataPrompt(promptInputData);
-        aiOutput = output; // Assign to aiOutput
-        if (!aiOutput) { // Check aiOutput
+        aiOutput = output;
+        if (!aiOutput) {
             throw new Error("The weather summarization prompt did not return an output.");
         }
         
-        const currentTimestamp = new Date().toISOString();
-        lastSuccessfulWeather = { 
-            ...aiOutput, 
-            currentWeatherCode: apiResponseData.current.weathercode, 
-            dataTimestamp: currentTimestamp 
-        };
-        lastSuccessfulFetchTime = new Date(currentTimestamp); // This is the actual fetch time of this successful operation
-        console.log(`[WeatherSummarization] Successfully fetched and processed new weather data at ${lastSuccessfulFetchTime.toISOString()}.`);
-        return { ...lastSuccessfulWeather }; // Return a copy
+        // AI call was successful, break the loop
+        break;
 
       } catch (e: any) {
         attempts++;
@@ -298,20 +263,17 @@ const summarizeWeatherFlow = ai.defineFlow(
           console.warn(`[WeatherSummarization] AI Model error (Attempt ${attempts}/${MAX_RETRIES}): ${rawErrorMessage}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
         } else {
-           // Log the original, potentially non-ASCII error for debugging purposes.
           console.error(`[WeatherSummarization] AI processing error after ${attempts} attempts:`, rawErrorMessage);
           
           if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
             console.warn("[WeatherSummarization] AI processing failed, serving stale data.");
             return { 
               ...lastSuccessfulWeather, 
-              // The user-facing summary can safely contain Turkish characters.
               summary: `(Veriler güncellenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla) ${lastSuccessfulWeather.summary}`,
               dataTimestamp: lastSuccessfulFetchTime.toISOString() 
             };
           }
           
-          // Throw a generic, ASCII-safe error to prevent the ByteString crash.
           if (isServiceUnavailable) {
             throw new Error("AI weather service is unavailable and no cached data exists.");
           }
@@ -319,19 +281,51 @@ const summarizeWeatherFlow = ai.defineFlow(
         }
       }
     }
-    // Fallback if loop finishes - should be caught by error throwing inside, but for safety:
-    if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
-        console.warn("[WeatherSummarization] Reached end of AI retry loop, serving stale data.");
-        return { 
-          ...lastSuccessfulWeather, 
-          summary: `(Veriler alınamadı/işlenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla) ${lastSuccessfulWeather.summary}`,
-          dataTimestamp: lastSuccessfulFetchTime.toISOString()
-        };
+
+    if (!aiOutput) {
+        if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
+            console.warn("[WeatherSummarization] Reached end of AI retry loop, serving stale data.");
+            return { 
+              ...lastSuccessfulWeather, 
+              summary: `(Veriler alınamadı/işlenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla) ${lastSuccessfulWeather.summary}`,
+              dataTimestamp: lastSuccessfulFetchTime.toISOString()
+            };
+        }
+        throw new Error("Could not generate weather summary after maximum retries and no cache is available.");
     }
-    throw new Error("Could not generate weather summary after maximum retries and no cache is available.");
+    
+    // AI call was successful, now format the data in TypeScript
+    const currentTimestamp = new Date();
+    const formattedOutput: WeatherSummaryOutput = {
+        summary: aiOutput.summary,
+        temperature: `${promptInputData.current.temperature}°C`,
+        humidity: `${promptInputData.current.humidity}%`,
+        windSpeed: `${promptInputData.current.windSpeed} km/h`,
+        conditions: aiOutput.currentConditions,
+        currentWeatherCode: promptInputData.current.weathercode,
+        hourlyForecast: promptInputData.hourly?.time.map((t, i) => ({
+            time: new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            temperature: `${promptInputData.hourly!.temperature_2m[i]}°C`,
+            precipitationProbability: `${promptInputData.hourly!.precipitation_probability[i]}%`,
+            conditions: aiOutput.hourlyForecastConditions[i] || 'Bilinmiyor',
+            windSpeed: `${promptInputData.hourly!.windspeed_10m[i]} km/h`,
+            weatherCode: promptInputData.hourly!.weathercode[i],
+        })) || [],
+        dailyForecast: promptInputData.daily?.time.map((d, i) => ({
+            date: new Date(d).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' }),
+            maxTemperature: `${promptInputData.daily!.temperature_2m_max[i]}°C`,
+            minTemperature: `${promptInputData.daily!.temperature_2m_min[i]}°C`,
+            precipitationSum: promptInputData.daily!.precipitation_sum[i] > 0 ? `${promptInputData.daily!.precipitation_sum[i]} mm` : "Yağış yok",
+            conditions: aiOutput.dailyForecastConditions[i] || 'Bilinmiyor',
+            weatherCode: promptInputData.daily!.weathercode[i],
+        })) || [],
+        dataTimestamp: currentTimestamp.toISOString(),
+    };
+
+    lastSuccessfulWeather = formattedOutput;
+    lastSuccessfulFetchTime = currentTimestamp;
+    console.log(`[WeatherSummarization] Successfully fetched and processed new weather data at ${lastSuccessfulFetchTime.toISOString()}.`);
+    
+    return formattedOutput;
   }
 );
-
-    
-
-

@@ -99,21 +99,32 @@ const ANNOUNCEMENTS_KEY = 'all-announcements';
 
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { user, isAdmin } = useUser();
-  const { toast } = useToast();
   const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
   const { siteNotificationsPreference } = useSettings();
+  const { toast } = useToast();
 
   const eventSourceRef = useRef<EventSource | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const announcementsRef = useRef<Announcement[]>(announcements);
   
+  // Use a ref to hold the latest value of siteNotificationsPreference
+  // This avoids re-running the main effect when the preference changes.
+  const siteNotificationsPrefRef = useRef(siteNotificationsPreference);
+  useEffect(() => {
+    siteNotificationsPrefRef.current = siteNotificationsPreference;
+  }, [siteNotificationsPreference]);
+
+  // Use a ref for the user info as well to use inside the main effect.
+  const userInfoRef = useRef({ user, isAdmin });
+  useEffect(() => {
+      userInfoRef.current = { user, isAdmin };
+  }, [user, isAdmin]);
+
+  // This effect calculates unread count and should react to its dependencies
   useEffect(() => {
     announcementsRef.current = announcements;
-  }, [announcements]);
-
-  useEffect(() => {
     if (!lastOpenedNotificationTimestamp) {
       setUnreadCount(announcements.length);
     } else {
@@ -124,27 +135,29 @@ export function useAnnouncements() {
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
 
-  const showNotification = useCallback((title: string, body: string, tag?: string) => {
-    if (!siteNotificationsPreference) {
-      return;
-    }
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === 'granted') {
-      const notification = new Notification(title, {
-        body: body,
-        icon: '/images/logo.png', 
-        tag: tag || `ann-${Date.now()}`,
-        renotify: !!tag, 
-      });
-      notification.onclick = (event) => {
-        event.preventDefault();
-        window.open(window.location.origin + '/announcements', '_blank');
-        notification.close();
-      };
-    }
-  }, [siteNotificationsPreference]);
-  
+  // This is the main SSE effect. It should only run once on mount.
   useEffect(() => {
     let stillMounted = true;
+
+    const showNotification = (title: string, body: string, tag?: string) => {
+        // Use the ref to get the latest preference without causing a dependency loop
+        if (!siteNotificationsPrefRef.current) {
+          return;
+        }
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === 'granted') {
+          const notification = new Notification(title, {
+            body: body,
+            icon: '/images/logo.png', 
+            tag: tag || `ann-${Date.now()}`,
+            renotify: !!tag, 
+          });
+          notification.onclick = (event) => {
+            event.preventDefault();
+            window.open(window.location.origin + '/announcements', '_blank');
+            notification.close();
+          };
+        }
+      };
     
     async function initialize() {
       setIsLoading(true);
@@ -155,9 +168,6 @@ export function useAnnouncements() {
         }
       } catch (e) {
         console.warn("Could not load announcements from IndexedDB:", e);
-      } finally {
-        // We will wait for the SSE to set loading to false to ensure we have the freshest data.
-        // If there's a cache, it will show up, and be replaced by fresh data without a flicker.
       }
 
       if (eventSourceRef.current) {
@@ -172,13 +182,15 @@ export function useAnnouncements() {
         
         try {
           const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-          
           const previousState = announcementsRef.current;
+          
           setAnnouncements(updatedAnnouncementsFromServer);
           idbSet(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY, updatedAnnouncementsFromServer).catch(e => console.error("Failed to cache announcements in IndexedDB", e));
 
-          if (user && previousState.length > 0) {
-            const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+          const { user: currentUser, isAdmin: currentIsAdmin } = userInfoRef.current;
+
+          if (currentUser && previousState.length > 0) {
+            const currentUserIdentifier = currentIsAdmin ? "ADMIN_ACCOUNT" : `${currentUser.name} ${currentUser.surname}`;
             updatedAnnouncementsFromServer.forEach(newAnn => {
               const isGenuinelyNew = !previousState.find(pa => pa.id === newAnn.id);
               const isAuthorSelf = newAnn.authorId === currentUserIdentifier;
@@ -213,7 +225,7 @@ export function useAnnouncements() {
         eventSourceRef.current = null;
       }
     };
-  }, [user, isAdmin, showNotification]); 
+  }, []); // EMPTY DEPENDENCY ARRAY IS THE KEY FIX
 
   const sendApiRequest = async (payload: AnnouncementApiPayload, method: 'POST' | 'DELETE' = 'POST', queryParams = '') => {
     if (!user && 'action' in payload && (payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE")) {

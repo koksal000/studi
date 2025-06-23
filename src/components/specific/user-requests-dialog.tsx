@@ -2,6 +2,7 @@
 // src/components/specific/user-requests-dialog.tsx
 "use client";
 
+import { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle as CardTitlePrimitive, CardDescription as CardDesc } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
 import { useContactMessages, type ContactMessage } from '@/hooks/use-contact-messages';
@@ -14,7 +15,15 @@ interface UserRequestsDialogProps {
 }
 
 export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogProps) {
-  const { messages, isLoading } = useContactMessages();
+  const { messages, isLoading, refetchMessages } = useContactMessages();
+
+  useEffect(() => {
+    // When the dialog is opened, refetch the messages to ensure they are up-to-date.
+    if (isOpen) {
+      refetchMessages();
+    }
+  }, [isOpen, refetchMessages]);
+
 
   const formatMessageDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('tr-TR', {
@@ -74,7 +83,7 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
           </div>
         </div>
         
-        <div className="p-4 sm:p-6 border-t flex-shrink-0"> {/* Footer section, removed mt-auto as flex-grow handles space */}
+        <div className="p-4 sm:p-6 border-t flex-shrink-0">
           <DialogClose asChild>
             <Button type="button" variant="outline" className="w-full">Kapat</Button>
           </DialogClose>

@@ -1,9 +1,5 @@
 
-// src/lib/gallery-emitter.ts
-import { EventEmitter } from 'events';
-
-// This emitter will be shared across API route instances (on the same server process)
-// to notify SSE stream connections about updates to gallery images.
-const galleryEmitter = new EventEmitter();
-
-export default galleryEmitter;
+// This file is no longer used as the SSE stream has been disabled.
+// It can be safely removed.
+const dummyEmitter = {};
+export default dummyEmitter;

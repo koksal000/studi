@@ -10,10 +10,10 @@
     "authorId": "ADMIN_ACCOUNT",
     "likes": [
       {
-        "userId": "ADMIN_ACCOUNT"
+        "userId": "Mücteba Köksal"
       },
       {
-        "userId": "Mücteba Köksal"
+        "userId": "ADMIN_ACCOUNT"
       }
     ],
     "comments": []

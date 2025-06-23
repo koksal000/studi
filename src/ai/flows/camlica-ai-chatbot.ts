@@ -92,7 +92,20 @@ const camlicaAIChatbotFlow = ai.defineFlow(
     outputSchema: CamlicaAIChatbotOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return {answer: output!.answer};
+    try {
+      const {output} = await prompt(input);
+      if (!output || !output.answer) {
+        console.error("[camlicaAIChatbotFlow] AI did not return a valid output object.");
+        throw new Error("AI chatbot did not return a valid output.");
+      }
+      return {answer: output.answer};
+    } catch (error: any) {
+        const rawErrorMessage = error.message || "An unknown error occurred in the AI chatbot flow.";
+        console.error("[camlicaAIChatbotFlow] AI Error:", rawErrorMessage); 
+
+        // Sanitize the error message for throwing to avoid the ByteString issue in Next.js error overlay.
+        const sanitizedErrorMessage = String(rawErrorMessage).replace(/[^\x00-\x7F]/g, "");
+        throw new Error(sanitizedErrorMessage || "AI chatbot request failed.");
+    }
   }
 );

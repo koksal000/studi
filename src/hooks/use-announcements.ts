@@ -6,6 +6,7 @@ import { useUser } from '@/contexts/user-context';
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
 import { useSettings } from '@/contexts/settings-context';
 import { useToast } from './use-toast';
+import { idbGet, idbSet, STORES } from '@/lib/idb';
 
 export interface Like {
   userId: string;
@@ -94,6 +95,8 @@ type AnnouncementApiPayload =
   | DeleteReplyPayload
   | Announcement; 
 
+const ANNOUNCEMENTS_KEY = 'all-announcements';
+
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const { user, isAdmin } = useUser();
@@ -104,83 +107,57 @@ export function useAnnouncements() {
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const initialDataLoadedRef = useRef(false);
   const announcementsRef = useRef<Announcement[]>(announcements);
 
   useEffect(() => {
     announcementsRef.current = announcements;
-    if (isNotificationStatusLoading) return;
+    if (isNotificationStatusLoading || !announcementsRef.current) return;
 
-    if (lastOpenedNotificationTimestamp === null && announcements.length > 0 && initialDataLoadedRef.current) {
-      updateLastOpenedTimestamp(Date.now());
-      setUnreadCount(0);
-    } else if (lastOpenedNotificationTimestamp) {
-      const newUnreadCount = announcements.filter(
+    if (lastOpenedNotificationTimestamp) {
+      const newUnreadCount = announcementsRef.current.filter(
         (ann) => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp
       ).length;
       setUnreadCount(newUnreadCount);
     } else {
-      setUnreadCount(announcements.length > 0 && initialDataLoadedRef.current ? announcements.length : 0);
+        setUnreadCount(announcementsRef.current.length);
     }
-  }, [announcements, lastOpenedNotificationTimestamp, updateLastOpenedTimestamp, isNotificationStatusLoading]);
+  }, [announcements, lastOpenedNotificationTimestamp, isNotificationStatusLoading]);
 
  const showNotification = useCallback((title: string, body: string, tag?: string) => {
     if (!siteNotificationsPreference) {
-      // console.log("[Notifications] Site notifications preference is disabled.");
       return;
     }
-
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === 'granted') {
-        try {
-          const notification = new Notification(title, {
-            body: body,
-            icon: '/images/logo.png', 
-            tag: tag || `ann-${Date.now()}`,
-            renotify: !!tag, 
-          });
-          notification.onclick = (event) => {
-            event.preventDefault();
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-            window.open(appUrl + '/announcements', '_blank');
-            if (window.focus) window.focus();
-            notification.close();
-          };
-        } catch (err: any) {
-          console.error("[Notifications] Browser notification construction error:", err);
-          toast({ title: title, description: body, duration: 8000, variant: "default" });
-        }
-      } else if (Notification.permission === 'denied') {
-        // console.log("[Notifications] Browser notification permission denied by user.");
-      } else if (Notification.permission === 'default') {
-        // console.log("[Notifications] Browser notification permission is default. Falling back to toast.");
-        toast({ title: title, description: body, duration: 8000, variant: "default" });
-      }
-    } else {
-      // console.log("[Notifications] Notification API not available. Falling back to toast.");
-      toast({ title: title, description: body, duration: 8000, variant: "default" });
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body: body,
+        icon: '/images/logo.png', 
+        tag: tag || `ann-${Date.now()}`,
+        renotify: !!tag, 
+      });
+      notification.onclick = (event) => {
+        event.preventDefault();
+        window.open(window.location.origin + '/announcements', '_blank');
+        notification.close();
+      };
     }
-  }, [siteNotificationsPreference, toast]);
+  }, [siteNotificationsPreference]);
   
   useEffect(() => {
-    initialDataLoadedRef.current = false;
-    setIsLoading(true);
-
-    fetch('/api/announcements')
-      .then(res => {
-        if (!res.ok) {
-          console.error(`[Announcements] Failed to fetch initial announcements: ${res.status} ${res.statusText}`);
-          return [];
+    async function loadInitialData() {
+      setIsLoading(true);
+      try {
+        const cachedAnnouncements = await idbGet<Announcement[]>(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY);
+        if (cachedAnnouncements && Array.isArray(cachedAnnouncements)) {
+          setAnnouncements(cachedAnnouncements);
         }
-        return res.json();
-      })
-      .then((data: Announcement[]) => {
-        setAnnouncements(Array.isArray(data) ? data : []);
-      })
-      .catch(err => {
-        console.error("[Announcements] Error fetching or parsing initial announcements:", err);
-        setAnnouncements([]);
-      });
+      } catch (e) {
+        console.warn("Could not load announcements from IndexedDB:", e);
+      }
+      // We don't set loading to false here, SSE will do it.
+      // This provides a fast initial paint, but we still show loading until fresh data arrives.
+    }
+
+    loadInitialData();
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -189,80 +166,46 @@ export function useAnnouncements() {
     const newEventSource = new EventSource('/api/announcements/stream');
     eventSourceRef.current = newEventSource;
 
-    newEventSource.onopen = () => {
-      // console.log('[SSE Announcements] Connection opened.');
-    };
-
     newEventSource.onmessage = (event) => {
-      const previousAnnouncementsState = [...announcementsRef.current]; // Capture state BEFORE update
-      let updatedAnnouncementsFromServer: Announcement[];
+      const previousAnnouncementsState = [...announcementsRef.current];
       try {
-        updatedAnnouncementsFromServer = JSON.parse(event.data);
+        const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
+        
+        // Update React state and IndexedDB cache
+        setAnnouncements(updatedAnnouncementsFromServer);
+        idbSet(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY, updatedAnnouncementsFromServer).catch(e => console.error("Failed to cache announcements in IndexedDB", e));
+
+        if (isLoading) setIsLoading(false);
+
+        // Notification logic
+        if (user && previousAnnouncementsState.length > 0) { // Only notify after initial load
+            const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+            updatedAnnouncementsFromServer.forEach(newAnn => {
+                const isGenuinelyNew = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
+                const isAuthorSelf = newAnn.authorId === currentUserIdentifier;
+
+                if (isGenuinelyNew && !isAuthorSelf) {
+                    const notificationTitle = `Yeni Duyuru: ${newAnn.title}`;
+                    const notificationBody = newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : "");
+                    showNotification(notificationTitle, notificationBody, `new-ann-${newAnn.id}`);
+                }
+            });
+        }
       } catch (error) {
         console.error("[SSE Announcements] Error parsing SSE message data:", error);
-        return;
-      }
-      
-      const wasInitialDataLoad = !initialDataLoadedRef.current;
-      if (!initialDataLoadedRef.current) {
-        initialDataLoadedRef.current = true;
-        setIsLoading(false);
-      }
-      
-      // Update main state after checking wasInitialDataLoad, but before notification logic
-      setAnnouncements(updatedAnnouncementsFromServer); 
-
-      if (user && !wasInitialDataLoad) { // Only process notifications after initial load and if user exists
-        const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-        
-        updatedAnnouncementsFromServer.forEach(newAnn => {
-          const isGenuinelyNew = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
-          const isAuthorSelf = newAnn.authorId === currentUserIdentifier;
-
-          if (isGenuinelyNew && !isAuthorSelf) {
-            const notificationTitle = `Yeni Duyuru: ${newAnn.title}`;
-            const notificationBody = newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : "");
-            showNotification(notificationTitle, notificationBody, `new-ann-${newAnn.id}`);
-          }
-
-          const oldAnnEquivalent = previousAnnouncementsState.find(pa => pa.id === newAnn.id);
-          newAnn.comments?.forEach(newComment => {
-            const oldCommentEquivalent = oldAnnEquivalent?.comments?.find(pc => pc.id === newComment.id);
-            
-            newComment.replies?.forEach(newReply => {
-              const isNewReply = !oldCommentEquivalent?.replies?.find(pr => pr.id === newReply.id);
-              const isAuthorSelfReply = newReply.authorId === currentUserIdentifier;
-              const isReplyToCurrentUser = newReply.replyingToAuthorId === currentUserIdentifier;
-
-              if (isNewReply && isReplyToCurrentUser && !isAuthorSelfReply) {
-                const replyNotificationTitle = `${newReply.authorName} size yanıt verdi`;
-                const replyNotificationBody = `@${newReply.replyingToAuthorName}: "${newReply.text.substring(0, 50)}..."`;
-                showNotification(replyNotificationTitle, replyNotificationBody, `reply-${newReply.id}-${newAnn.id}`);
-              }
-            });
-          });
-        });
       }
     };
 
-    newEventSource.onerror = (errorEvent: Event) => {
-       const target = errorEvent.target as EventSource;
-      if (eventSourceRef.current !== target) return; 
-      
-      const readyState = target?.readyState;
-      if (!initialDataLoadedRef.current) { 
-        setIsLoading(false); 
-        initialDataLoadedRef.current = true; 
-      }
+    newEventSource.onerror = (error) => {
+      console.error("[SSE Announcements] Connection error:", error);
+      if (isLoading) setIsLoading(false); // Stop loading on error if we never got a message
     };
 
     return () => {
-      if (newEventSource) {
-        newEventSource.close();
-      }
+      if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
     };
-  }, [user, isAdmin, siteNotificationsPreference, showNotification, toast]); 
+  }, [user, isAdmin, siteNotificationsPreference, showNotification, isLoading]); 
 
   const sendApiRequest = async (payload: AnnouncementApiPayload, method: 'POST' | 'DELETE' = 'POST', queryParams = '') => {
     if (!user && 'action' in payload && (payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE")) {
@@ -408,6 +351,3 @@ export function useAnnouncements() {
     deleteReply,
   };
 }
-
-
-    

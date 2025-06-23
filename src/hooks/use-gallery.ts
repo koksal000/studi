@@ -2,16 +2,28 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { GalleryImage, NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useUser } from '@/contexts/user-context';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from './use-toast';
 import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
+import { idbGet, idbSet, STORES } from '@/lib/idb';
 
-// Re-exporting for use in other files if necessary
-export type { GalleryImage, NewGalleryImagePayload };
+export interface GalleryImage {
+  id: string;
+  src: string; 
+  alt: string;
+  caption: string;
+  hint: string;
+}
 
-const GALLERY_LOCAL_STORAGE_KEY = 'camlicaKoyuGallery_localStorage';
+export interface NewGalleryImagePayload {
+  imageDataUri: string;
+  caption: string;
+  alt: string;
+  hint: string;
+}
+
 const MAX_IMAGE_DATA_URI_LENGTH_HOOK = Math.floor(5 * 1024 * 1024 * 1.37 * 1.05); // Approx 7.2MB for 5MB raw image
+const GALLERY_KEY = 'all-gallery-images';
 
 const gallerySortFn = (a: GalleryImage, b: GalleryImage): number => {
   const aIsSeed = a.id.startsWith('seed_');
@@ -43,53 +55,33 @@ const gallerySortFn = (a: GalleryImage, b: GalleryImage): number => {
   return a.id.localeCompare(b.id);
 };
 
-
 export function useGallery() {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const { user } = useUser();
   const { toast } = useToast();
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const initialDataLoadedRef = useRef(false); 
-  const galleryImagesRef = useRef<GalleryImage[]>(galleryImages);
 
   useEffect(() => {
-    galleryImagesRef.current = galleryImages;
-  }, [galleryImages]);
-
-  useEffect(() => {
-    initialDataLoadedRef.current = false;
-    setIsLoading(true);
-
-    fetch('/api/gallery')
-      .then(res => {
-        if (!res.ok) {
-          throw new Error(`Failed to fetch initial gallery: ${res.status} ${res.statusText}`);
-        }
-        return res.json();
-      })
-      .then((data: GalleryImage[]) => {
-        if (Array.isArray(data)) {
-            if (data.length === 0) {
-                // API returned empty, seed with static images if local storage is also empty
-                // This part is now less relevant as localStorage is removed
-                setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
-            } else {
-                setGalleryImages(data.sort(gallerySortFn));
-            }
+    async function loadInitialData() {
+      setIsLoading(true);
+      try {
+        const cachedImages = await idbGet<GalleryImage[]>(STORES.GALLERY, GALLERY_KEY);
+        if (cachedImages && Array.isArray(cachedImages) && cachedImages.length > 0) {
+            setGalleryImages(cachedImages.sort(gallerySortFn));
         } else {
-            console.warn("[Gallery] API did not return an array for initial gallery data, using static seeds.");
+            // Fallback to static if cache is empty
             setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
         }
-      })
-      .catch(err => {
-        console.error("[Gallery] Failed to fetch initial gallery, using static seeds:", err);
+      } catch(e) {
+        console.warn("Could not load gallery from IndexedDB, using static seeds:", e);
         setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
-      })
-      .finally(() => {
-        // setIsLoading(false); // SSE will handle this
-      });
-
+      }
+      // SSE will set loading to false
+    }
+    
+    loadInitialData();
+    
     if (eventSourceRef.current) {
         eventSourceRef.current.close();
     }
@@ -97,61 +89,29 @@ export function useGallery() {
     const newEventSource = new EventSource('/api/gallery/stream');
     eventSourceRef.current = newEventSource;
 
-    newEventSource.onopen = () => {
-      // console.log('[SSE Gallery] Connection opened.');
-    };
-
     newEventSource.onmessage = (event) => {
       try {
         const updatedGalleryFromServer: GalleryImage[] = JSON.parse(event.data);
-        setGalleryImages(updatedGalleryFromServer.sort(gallerySortFn));
+        const sortedImages = updatedGalleryFromServer.sort(gallerySortFn);
+        setGalleryImages(sortedImages);
+        idbSet(STORES.GALLERY, GALLERY_KEY, sortedImages).catch(e => console.error("Failed to cache gallery images in IndexedDB", e));
       } catch (error) {
         console.error("Error processing gallery SSE message:", error);
       } finally {
-        if (!initialDataLoadedRef.current) {
-            setIsLoading(false);
-            initialDataLoadedRef.current = true;
-        }
+        if (isLoading) setIsLoading(false);
       }
     };
 
-    newEventSource.onerror = (errorEvent: Event) => {
-      const target = errorEvent.target as EventSource;
-      if (eventSourceRef.current !== target) {
-        return; 
-      }
-      const readyState = target?.readyState;
-      const eventType = errorEvent.type || 'unknown event type';
-      
-      if (readyState === 0) { // CONNECTING
-        console.warn(
-          `[SSE Gallery] Initial connection failed or connection attempt error. EventSource readyState: ${readyState}, Event Type: ${eventType}. Full Event:`, errorEvent,
-          "Check NEXT_PUBLIC_APP_URL in your deployment environment, or if the stream API endpoint is running correctly."
-        );
-      } else {
-        console.warn( // Changed to warn for other errors as well, to be less alarming
-          `[SSE Gallery] Connection error/closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
-        );
-      }
-
-      if (!initialDataLoadedRef.current) {
-        setIsLoading(false);
-        initialDataLoadedRef.current = true;
-        // Fallback to static seeds if SSE fails to provide initial data and current gallery is empty
-        if (galleryImagesRef.current.length === 0) {
-             console.warn("[Gallery] SSE connection error, and no gallery data loaded. Using static seeds as fallback.");
-             setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
-        }
-      }
+    newEventSource.onerror = (error) => {
+      console.error("[SSE Gallery] Connection error:", error);
+      if (isLoading) setIsLoading(false);
     };
 
     return () => {
-      if (newEventSource) {
-        newEventSource.close();
-      }
+      if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
     };
-  }, []);
+  }, [isLoading]);
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {
@@ -182,8 +142,6 @@ export function useGallery() {
       hint: payload.hint?.trim() || 'uploaded image',
     };
 
-    // No optimistic UI update here, wait for SSE or API response
-
     try {
       const response = await fetch('/api/gallery', {
         method: 'POST',
@@ -194,23 +152,18 @@ export function useGallery() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
         let userMessage = errorData.message || "Sunucu hatası oluştu.";
-        if (response.status === 413) { // Payload Too Large
+        if (response.status === 413) {
             userMessage = errorData.message || "Sunucuya gönderilen resim dosyası çok büyük.";
         }
         toast({ title: "Yükleme Başarısız", description: userMessage, variant: "destructive" });
         throw new Error(userMessage);
       }
-      // Successful API call, UI will update via SSE from the server broadcasting the change
-      // toast({ title: "Resim Başarıyla Gönderildi", description: "Galeri kısa süre içinde güncellenecektir." });
     } catch (error: any) {
       console.error("Failed to send new gallery image to server:", error);
-      // Toast for this error is already shown if it's from the API response
-      // If it's a network error or other, the generic catch in admin page might handle it, or we can add one here
       if (!error.message?.includes("sunucu") && !error.message?.includes("payload") && !error.message?.includes("büyük")) {
-        // Only toast if it's not a server-originated message we already handled
         toast({ title: "Resim Yüklenemedi", description: error.message || "Ağ hatası veya beklenmedik bir sorun oluştu.", variant: "destructive" });
       }
-      throw error; // Re-throw to be caught by the calling component if needed
+      throw error;
     }
   }, [user, toast]);
 
@@ -219,8 +172,6 @@ export function useGallery() {
       toast({ title: "Giriş Gerekli", description: "Resim silmek için giriş yapmalısınız.", variant: "destructive" });
       throw new Error("User not logged in");
     }
-
-    // No optimistic UI update here
 
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
@@ -232,18 +183,14 @@ export function useGallery() {
         toast({ title: "Resim Silinemedi", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
         throw new Error(errorData.message || 'Resim silme bilgisi sunucuya iletilemedi');
       }
-      // Successful API call, UI will update via SSE
-      // toast({ title: "Resim Silme İsteği Gönderildi", description: "Galeri kısa süre içinde güncellenecektir." });
     } catch (error: any) {
       console.error("Failed to notify server about deleted gallery image:", error);
        if (!error.message?.includes("sunucu")) {
         toast({ title: "Resim Silinemedi", description: error.message || "Resim silme işlemi sırasında bir sorun oluştu.", variant: "destructive" });
       }
-      throw error; // Re-throw
+      throw error;
     }
   }, [user, toast]);
 
   return { galleryImages, addGalleryImage, deleteGalleryImage, isLoading };
 }
-
-    

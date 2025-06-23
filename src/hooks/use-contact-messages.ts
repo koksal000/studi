@@ -1,41 +1,34 @@
 
-// src/hooks/use-contact-messages.ts
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ContactMessage } from '@/app/api/contact/route';
 import { useToast } from './use-toast';
+import { idbGet, idbSet, STORES } from '@/lib/idb';
+
+const MESSAGES_KEY = 'all-contact-messages';
 
 export function useContactMessages() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
-  const initialDataLoadedRef = useRef(false);
   const { toast } = useToast();
-  const messagesRef = useRef<ContactMessage[]>(messages);
-
+  
   useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+    async function loadInitialData() {
+      setIsLoading(true);
+      try {
+        const cachedMessages = await idbGet<ContactMessage[]>(STORES.CONTACT_MESSAGES, MESSAGES_KEY);
+        if (cachedMessages && Array.isArray(cachedMessages)) {
+            setMessages(cachedMessages);
+        }
+      } catch (e) {
+          console.warn("Could not load contact messages from IndexedDB:", e);
+      }
+      // SSE will handle setting loading to false
+    }
 
-  useEffect(() => {
-    setIsLoading(true);
-    initialDataLoadedRef.current = false;
-
-    fetch('/api/contact')
-      .then(res => {
-        if (!res.ok) throw new Error(`Failed to fetch initial contact messages: ${res.status}`);
-        return res.json();
-      })
-      .then((data: ContactMessage[]) => {
-        setMessages(data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-      })
-      .catch(err => {
-        console.error("[ContactMessages] Failed to fetch initial messages:", err);
-      })
-      .finally(() => {
-        // SSE will handle final isLoading=false
-      });
+    loadInitialData();
 
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -44,60 +37,29 @@ export function useContactMessages() {
     const newEventSource = new EventSource('/api/contact/stream');
     eventSourceRef.current = newEventSource;
 
-    newEventSource.onopen = () => {
-      // console.log('[SSE Contact] Connection opened.');
-    };
-
     newEventSource.onmessage = (event) => {
       try {
         const updatedMessages: ContactMessage[] = JSON.parse(event.data);
-        setMessages(updatedMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        const sortedMessages = updatedMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setMessages(sortedMessages);
+        idbSet(STORES.CONTACT_MESSAGES, MESSAGES_KEY, sortedMessages).catch(e => console.error("Failed to cache contact messages in IndexedDB", e));
       } catch (error) {
         console.error("Error processing SSE message for contact messages:", error);
       } finally {
-         if (!initialDataLoadedRef.current) {
-            setIsLoading(false);
-            initialDataLoadedRef.current = true;
-        }
+         if (isLoading) setIsLoading(false);
       }
     };
 
-    newEventSource.onerror = (errorEvent: Event) => {
-      const target = errorEvent.target as EventSource;
-      if (eventSourceRef.current !== target) {
-        return; // Error from an old EventSource instance
-      }
-      const readyState = target?.readyState;
-      const eventType = errorEvent.type || 'unknown event type';
-
-      if (readyState === EventSource.CLOSED) {
-         console.warn(
-          `[SSE Contact] Connection closed. EventSource readyState: ${readyState}, Event Type: ${eventType}. Browser will attempt to reconnect. Full Event:`, errorEvent
-        );
-      } else if (readyState === EventSource.CONNECTING) {
-        console.warn(
-          `[SSE Contact] Initial connection failed or connection attempt error. EventSource readyState: ${readyState}, Event Type: ${eventType}. Full Event:`, errorEvent,
-          "This might be due to NEXT_PUBLIC_APP_URL not being set correctly in your deployment environment, or the stream API endpoint having issues."
-        );
-      }
-      else {
-        console.error(
-          `[SSE Contact] Connection error. EventSource readyState: ${readyState}, Event Type: ${eventType}, Full Event:`, errorEvent
-        );
-      }
-      if (!initialDataLoadedRef.current) {
-        setIsLoading(false);
-        initialDataLoadedRef.current = true;
-      }
+    newEventSource.onerror = (error) => {
+        console.error("[SSE Contact] Connection error:", error);
+        if (isLoading) setIsLoading(false);
     };
 
     return () => {
-      if (newEventSource) {
-        newEventSource.close();
-      }
+      if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
     };
-  }, [toast]); // Removed isLoading from dependencies
+  }, [isLoading]);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
     const newMessage: ContactMessage = {
@@ -127,10 +89,5 @@ export function useContactMessages() {
     }
   }, [toast]);
 
-
-  const getMessageById = useCallback((id: string): ContactMessage | undefined => {
-    return messagesRef.current.find(msg => msg.id === id);
-  }, []);
-
-  return { messages, isLoading, getMessageById, addContactMessage };
+  return { messages, isLoading, addContactMessage };
 }

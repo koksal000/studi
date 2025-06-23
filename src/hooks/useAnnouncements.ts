@@ -145,9 +145,14 @@ export function useAnnouncements() {
         if (stillMounted && cachedAnnouncements && Array.isArray(cachedAnnouncements)) {
           setAnnouncements(cachedAnnouncements);
           previousAnnouncementsState = cachedAnnouncements;
+        } else if (stillMounted) {
+          setAnnouncements([]);
         }
       } catch (e) {
         console.warn("Could not load announcements from IndexedDB:", e);
+        if (stillMounted) {
+            setAnnouncements([]);
+        }
       }
 
       if (eventSourceRef.current) {
@@ -199,7 +204,7 @@ export function useAnnouncements() {
         eventSourceRef.current = null;
       }
     };
-  }, []); // This effect should only run once on mount.
+  }, []);
 
   useEffect(() => {
     if (announcements === null) return;
@@ -337,6 +342,7 @@ export function useAnnouncements() {
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
     await sendApiRequest({ action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId });
   }, [user, isAdmin, toast, sendApiRequest]);
+
 
   return {
     announcements: announcements ?? [],

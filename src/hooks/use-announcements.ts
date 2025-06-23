@@ -146,12 +146,13 @@ export function useAnnouncements() {
         body: JSON.stringify(newAnnouncementData),
       });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
         throw new Error(error.message);
       }
-      await syncWithServer(); 
+       toast({ title: "Duyuru Eklendi", description: "Duyurunuz başarıyla yayınlandı."});
+       await syncWithServer(); 
     } catch (error: any) {
-      toast({ title: 'Duyuru Eklenemedi', description: error.message, variant: 'destructive' });
+      toast({ title: 'Duyuru Eklenemedi', description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: 'destructive' });
       setAnnouncements(originalData);
       await idbSetAll(STORES.announcements, originalData);
       announcementChannel?.postMessage('update');
@@ -173,12 +174,11 @@ export function useAnnouncements() {
     try {
       const response = await fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
         throw new Error(error.message);
       }
-      // No need to sync on delete as it's already removed
     } catch (error: any) {
-      toast({ title: "Duyuru Silinemedi", description: error.message, variant: "destructive"});
+      toast({ title: "Duyuru Silinemedi", description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: "destructive"});
       setAnnouncements(originalData);
       await idbSetAll(STORES.announcements, originalData);
       announcementChannel?.postMessage('update');
@@ -214,11 +214,11 @@ export function useAnnouncements() {
           const payload = { action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId };
           const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
           if (!response.ok) {
-            const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+            const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
             throw new Error(error.message);
           }
       } catch (error: any) {
-          toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
+          toast({ title: 'İşlem Başarısız', description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: 'destructive' });
           setAnnouncements(originalData);
           await idbSetAll(STORES.announcements, originalData);
           announcementChannel?.postMessage('update');
@@ -229,13 +229,13 @@ export function useAnnouncements() {
     if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); throw new Error("Not logged in"); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const newComment: Omit<Comment, 'id'|'date'> = { authorName, authorId, text, replies: [] };
+    const newCommentData: Omit<Comment, 'id'|'date'> = { authorName, authorId, text, replies: [] };
     const tempCommentId = `cmt_temp_${Date.now()}`;
     
     const originalData = [...announcements];
     const optimisticData = originalData.map(ann => {
         if (ann.id === announcementId) {
-            const newComments = ann.comments ? [{ ...newComment, id: tempCommentId, date: new Date().toISOString() }, ...ann.comments] : [{ ...newComment, id: tempCommentId, date: new Date().toISOString() }];
+            const newComments = ann.comments ? [{ ...newCommentData, id: tempCommentId, date: new Date().toISOString() }, ...ann.comments] : [{ ...newCommentData, id: tempCommentId, date: new Date().toISOString() }];
             return { ...ann, comments: newComments };
         }
         return ann;
@@ -246,15 +246,15 @@ export function useAnnouncements() {
     announcementChannel?.postMessage('update');
 
     try {
-        const payload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: newComment };
+        const payload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: newCommentData };
         const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
         if (!response.ok) {
-          const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+          const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
           throw new Error(error.message);
         }
         await syncWithServer();
     } catch (error: any) {
-        toast({ title: 'Yorum Eklenemedi', description: error.message, variant: 'destructive' });
+        toast({ title: 'Yorum Eklenemedi', description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: 'destructive' });
         setAnnouncements(originalData);
         await idbSetAll(STORES.announcements, originalData);
         announcementChannel?.postMessage('update');
@@ -266,7 +266,7 @@ export function useAnnouncements() {
     if (!user) { toast({ title: "Giriş Gerekli", variant: "destructive" }); throw new Error("Not logged in"); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const newReply: Omit<Reply, 'id'|'date'> = { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName };
+    const newReplyData: Omit<Reply, 'id'|'date'> = { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName };
     const tempReplyId = `rpl_temp_${Date.now()}`;
 
     const originalData = [...announcements];
@@ -274,7 +274,7 @@ export function useAnnouncements() {
       if (ann.id === announcementId) {
         const newComments = (ann.comments || []).map(c => {
           if (c.id === commentId) {
-            const newReplies = c.replies ? [{...newReply, id: tempReplyId, date: new Date().toISOString()}, ...c.replies] : [{...newReply, id: tempReplyId, date: new Date().toISOString()}];
+            const newReplies = c.replies ? [{...newReplyData, id: tempReplyId, date: new Date().toISOString()}, ...c.replies] : [{...newReplyData, id: tempReplyId, date: new Date().toISOString()}];
             return {...c, replies: newReplies};
           }
           return c;
@@ -288,15 +288,15 @@ export function useAnnouncements() {
     announcementChannel?.postMessage('update');
 
     try {
-      const payload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: newReply };
+      const payload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: newReplyData };
       const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
         throw new Error(error.message);
       }
       await syncWithServer();
     } catch (error: any) {
-      toast({ title: 'Yanıt Eklenemedi', description: error.message, variant: 'destructive' });
+      toast({ title: 'Yanıt Eklenemedi', description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: 'destructive' });
       setAnnouncements(originalData);
       await idbSetAll(STORES.announcements, originalData);
       announcementChannel?.postMessage('update');
@@ -323,11 +323,11 @@ export function useAnnouncements() {
       const payload = { action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId };
       const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
         throw new Error(error.message);
       }
     } catch (error: any) {
-      toast({ title: "Yorum Silinemedi", description: error.message, variant: "destructive" });
+      toast({ title: "Yorum Silinemedi", description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: "destructive" });
       setAnnouncements(originalData);
       await idbSetAll(STORES.announcements, originalData);
       announcementChannel?.postMessage('update');
@@ -360,11 +360,11 @@ export function useAnnouncements() {
       const payload = { action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId };
       const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
        if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
         throw new Error(error.message);
       }
     } catch (error: any) {
-      toast({ title: "Yanıt Silinemedi", description: error.message, variant: "destructive" });
+      toast({ title: "Yanıt Silinemedi", description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: "destructive" });
       setAnnouncements(originalData);
       await idbSetAll(STORES.announcements, originalData);
       announcementChannel?.postMessage('update');

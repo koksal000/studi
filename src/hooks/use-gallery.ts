@@ -113,14 +113,14 @@ export function useGallery() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
         throw new Error(error.message);
       }
       toast({ title: "Yükleme Başarılı", description: "Resim galeriye eklendi." });
       await syncWithServer();
 
     } catch (error: any) {
-      toast({ title: "Yükleme Başarısız", description: error.message, variant: "destructive" });
+      toast({ title: "Yükleme Başarısız", description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: "destructive" });
       setGalleryImages(originalData);
       await idbSetAll(STORES.gallery, originalData);
       galleryChannel?.postMessage('update');
@@ -145,12 +145,11 @@ export function useGallery() {
         method: 'DELETE',
       });
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatası"}));
+        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
         throw new Error(error.message);
       }
-      // Toast is handled in the component for user feedback
     } catch (error: any) {
-      toast({ title: "Silme Başarısız", description: error.message, variant: "destructive" });
+      toast({ title: "Silme Başarısız", description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: "destructive" });
       setGalleryImages(originalData);
       await idbSetAll(STORES.gallery, originalData);
       galleryChannel?.postMessage('update');

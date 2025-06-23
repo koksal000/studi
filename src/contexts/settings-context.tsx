@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useTheme } from 'next-themes';
 
 interface SettingsContextType {
@@ -9,19 +9,16 @@ interface SettingsContextType {
   setAppTheme: (theme: string) => void;
   siteNotificationsPreference: boolean; 
   setSiteNotificationsPreference: (enabled: boolean) => void;
-  // emailNotificationPreference ve setEmailNotificationPreference kaldırıldı
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 const SITE_NOTIFICATIONS_KEY = 'camlicaKoyuSiteNotificationsEnabled';
-// EMAIL_NOTIFICATIONS_PREFERENCE_KEY kaldırıldı
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { theme, setTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [siteNotificationsPreference, setSiteNotificationsPreferenceState] = useState(true);
-  // emailNotificationPreference state'i kaldırıldı
 
   useEffect(() => {
     setIsLoading(true); 
@@ -33,17 +30,15 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem(SITE_NOTIFICATIONS_KEY, 'true'); // Default to true
       setSiteNotificationsPreferenceState(true);
     }
-
-    // emailNotificationPreference ile ilgili localStorage okuma/yazma işlemleri kaldırıldı
     
     setIsLoading(false); 
   }, []); 
 
-  const setAppTheme = (newTheme: string) => {
+  const setAppTheme = useCallback((newTheme: string) => {
     setTheme(newTheme);
-  };
+  }, [setTheme]);
 
-  const handleSetSiteNotificationsPreference = (enabled: boolean) => {
+  const handleSetSiteNotificationsPreference = useCallback((enabled: boolean) => {
     localStorage.setItem(SITE_NOTIFICATIONS_KEY, enabled.toString());
     setSiteNotificationsPreferenceState(enabled);
     if (enabled && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -55,9 +50,14 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         }
       });
     }
-  };
+  }, []);
 
-  // handleSetEmailNotificationPreference kaldırıldı
+  const contextValue = useMemo(() => ({
+    currentTheme: theme, 
+    setAppTheme,
+    siteNotificationsPreference, 
+    setSiteNotificationsPreference: handleSetSiteNotificationsPreference,
+  }), [theme, setAppTheme, siteNotificationsPreference, handleSetSiteNotificationsPreference]);
 
   if (isLoading && typeof window !== 'undefined') { 
      return (
@@ -71,13 +71,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <SettingsContext.Provider value={{ 
-      currentTheme: theme, 
-      setAppTheme,
-      siteNotificationsPreference, 
-      setSiteNotificationsPreference: handleSetSiteNotificationsPreference,
-      // emailNotificationPreference ve setEmailNotificationPreference context değerinden kaldırıldı
-    }}>
+    <SettingsContext.Provider value={contextValue}>
       {children}
     </SettingsContext.Provider>
   );

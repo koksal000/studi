@@ -64,8 +64,9 @@ export function useGallery() {
 
   useEffect(() => {
     let stillMounted = true;
-    async function loadInitialData() {
-      if(stillMounted) setIsLoading(true);
+    
+    async function initialize() {
+      setIsLoading(true);
       try {
         const cachedImages = await idbGet<GalleryImage[]>(STORES.GALLERY, GALLERY_KEY);
         if (stillMounted && cachedImages && Array.isArray(cachedImages) && cachedImages.length > 0) {
@@ -77,40 +78,42 @@ export function useGallery() {
         console.warn("Could not load gallery from IndexedDB, using static seeds:", e);
         if(stillMounted) setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
       }
-    }
-    
-    loadInitialData();
-    
-    if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-    }
-    
-    const newEventSource = new EventSource('/api/gallery/stream');
-    eventSourceRef.current = newEventSource;
 
-    newEventSource.onmessage = (event) => {
-      if(!stillMounted) return;
-      try {
-        const updatedGalleryFromServer: GalleryImage[] = JSON.parse(event.data);
-        const sortedImages = updatedGalleryFromServer.sort(gallerySortFn);
-        setGalleryImages(sortedImages);
-        idbSet(STORES.GALLERY, GALLERY_KEY, sortedImages).catch(e => console.error("Failed to cache gallery images in IndexedDB", e));
-      } catch (error) {
-        console.error("Error processing gallery SSE message:", error);
-      } finally {
-        if (stillMounted && isLoading) setIsLoading(false);
+      if (eventSourceRef.current) {
+          eventSourceRef.current.close();
       }
-    };
+      
+      const newEventSource = new EventSource('/api/gallery/stream');
+      eventSourceRef.current = newEventSource;
 
-    newEventSource.onerror = (error) => {
-      console.error("[SSE Gallery] Connection error:", error);
-      if (stillMounted && isLoading) setIsLoading(false);
-    };
+      newEventSource.onmessage = (event) => {
+        if(!stillMounted) return;
+        try {
+          const updatedGalleryFromServer: GalleryImage[] = JSON.parse(event.data);
+          const sortedImages = updatedGalleryFromServer.sort(gallerySortFn);
+          setGalleryImages(sortedImages);
+          idbSet(STORES.GALLERY, GALLERY_KEY, sortedImages).catch(e => console.error("Failed to cache gallery images in IndexedDB", e));
+        } catch (error) {
+          console.error("Error processing gallery SSE message:", error);
+        } finally {
+          if (stillMounted) setIsLoading(false);
+        }
+      };
+
+      newEventSource.onerror = (error) => {
+        console.error("[SSE Gallery] Connection error:", error);
+        if (stillMounted) setIsLoading(false);
+      };
+    }
+    
+    initialize();
 
     return () => {
       stillMounted = false;
-      if (newEventSource) newEventSource.close();
-      eventSourceRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, []);
 

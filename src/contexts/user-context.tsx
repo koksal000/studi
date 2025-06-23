@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { ADMIN_PASSWORD } from '@/lib/constants';
 
 interface User {
@@ -22,7 +22,7 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
-const USER_DATA_KEY = 'camlicaKoyuUser_v2'; // Key updated to ensure fresh start with email
+const USER_DATA_KEY = 'camlicaKoyuUser_v2';
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<User | null>(null);
@@ -37,10 +37,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       const storedUserString = localStorage.getItem(USER_DATA_KEY);
       if (storedUserString) {
         const storedUser = JSON.parse(storedUserString) as User;
-        if (storedUser.name && storedUser.surname && storedUser.email) { // Check for email
+        if (storedUser.name && storedUser.surname && storedUser.email) {
           setUserState(storedUser);
           setShowEntryForm(false);
-        } else { // Data is old or incomplete
+        } else {
           localStorage.removeItem(USER_DATA_KEY);
           setShowEntryForm(true);
         }
@@ -56,29 +56,40 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const login = (name: string, surname: string, email: string) => {
+  const login = useCallback((name: string, surname: string, email: string) => {
     const newUser: User = { name, surname, email };
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUserState(null);
     setIsAdmin(false);
     localStorage.removeItem(USER_DATA_KEY);
     setShowEntryForm(true);
-  };
+  }, []);
 
-  const checkAdminPassword = (password: string) => {
+  const checkAdminPassword = useCallback((password: string) => {
     if (password === ADMIN_PASSWORD) {
       setIsAdmin(true);
       return true;
     }
     setIsAdmin(false);
     return false;
-  };
+  }, []);
   
+  const contextValue = useMemo(() => ({
+    user,
+    isAdmin,
+    login,
+    logout,
+    checkAdminPassword,
+    showEntryForm,
+    setShowEntryForm,
+    isUserLoading
+  }), [user, isAdmin, login, logout, checkAdminPassword, showEntryForm, isUserLoading]);
+
   if (isUserLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -89,7 +100,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
 
   return (
-    <UserContext.Provider value={{ user, isAdmin, login, logout, checkAdminPassword, showEntryForm, setShowEntryForm, isUserLoading }}>
+    <UserContext.Provider value={contextValue}>
       {children}
     </UserContext.Provider>
   );

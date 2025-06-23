@@ -191,7 +191,7 @@ const summarizeWeatherFlow = ai.defineFlow(
     console.log(`[WeatherSummarization] Cache expired or no cache (last fetch: ${lastSuccessfulFetchTime?.toISOString() || 'N/A'}). Attempting to fetch new weather data.`);
 
     if (flowInput.location.toLowerCase() !== 'domaniç') {
-      throw new Error('Weather data is currently only available for Domaniç.');
+      throw new Error('Weather data is only available for the Domanic location.');
     }
 
     const lat = 39.80; // Domaniç, Kütahya
@@ -289,17 +289,19 @@ const summarizeWeatherFlow = ai.defineFlow(
 
       } catch (e: any) {
         attempts++;
-        const errorMessage = e.message || "";
+        const rawErrorMessage = e.message || "";
+        // Sanitize the error message to remove non-ASCII characters before throwing.
+        const errorMessage = rawErrorMessage.replace(/[^\\x00-\\x7F]/g, ""); 
         const isServiceUnavailable = errorMessage.includes("503") && errorMessage.includes("Service Unavailable");
         const isEmptyOutput = errorMessage.includes("The weather summarization prompt did not return an output.");
 
         if ((isServiceUnavailable || isEmptyOutput) && attempts < MAX_RETRIES) {
-          console.warn(`[WeatherSummarization] AI Model error (Attempt ${attempts}/${MAX_RETRIES}): ${errorMessage}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+          console.warn(`[WeatherSummarization] AI Model error (Attempt ${attempts}/${MAX_RETRIES}): ${rawErrorMessage}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
         } else {
           console.error("[WeatherSummarization] Error calling formatOpenMeteoDataPrompt after all retries or for non-retryable error:", e);
           if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
-            console.warn("[WeatherSummarization] AI processing failed, serving stale data due to error:", e.message);
+            console.warn("[WeatherSummarization] AI processing failed, serving stale data due to error:", rawErrorMessage);
             return { 
               ...lastSuccessfulWeather, 
               summary: `(Veriler işlenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla) ${lastSuccessfulWeather.summary}`,
@@ -325,3 +327,4 @@ const summarizeWeatherFlow = ai.defineFlow(
 );
 
     
+

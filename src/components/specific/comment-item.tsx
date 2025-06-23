@@ -63,7 +63,7 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
     }
     setIsSubmittingReply(true);
     try {
-      await addReplyToComment(announcementId, commentProp.id, replyText, commentProp.authorName);
+      await addReplyToComment(announcementId, commentProp.id, replyText, commentProp.authorName, commentProp.authorId);
       setReplyText('');
       setShowReplyForm(false);
     } catch (error) {
@@ -162,7 +162,7 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
           {showReplyForm && user && (
             <form onSubmit={handleReplySubmit} className="space-y-2 mt-2 ml-4 pl-4 border-l border-primary/50">
               <Textarea
-                placeholder={`${user.name} ${user.surname} olarak @${commentProp.authorName} adlı kişiye yanıt ver...`}
+                placeholder={`@${commentProp.authorName} adlı kişiye yanıt ver...`}
                 value={replyText}
                 onChange={(e) => setReplyText(e.target.value)}
                 rows={2}
@@ -194,5 +194,3 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
     </>
   );
 }
-
-    

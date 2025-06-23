@@ -63,7 +63,7 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
     }
     setIsSubmittingReplyToReply(true);
     try {
-      await addReplyToComment(announcementId, commentId, replyToReplyText, replyProp.authorName);
+      await addReplyToComment(announcementId, commentId, replyToReplyText, replyProp.authorName, replyProp.authorId);
       setReplyToReplyText('');
       setShowReplyToReplyForm(false);
     } catch (error) {
@@ -159,7 +159,7 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
         {showReplyToReplyForm && user && (
           <form onSubmit={handleReplyToReplySubmit} className="space-y-1 mt-1.5">
             <Textarea
-              placeholder={`${user.name} ${user.surname} olarak @${replyProp.authorName} adlı kişiye yanıt ver...`}
+              placeholder={`@${replyProp.authorName} adlı kişiye yanıt ver...`}
               value={replyToReplyText}
               onChange={(e) => setReplyToReplyText(e.target.value)}
               rows={1}
@@ -177,5 +177,3 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
     </>
   );
 }
-
-    

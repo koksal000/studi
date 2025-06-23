@@ -256,16 +256,15 @@ export function useAnnouncements() {
     }
   }, [user, isAdmin, announcements, toast]);
   
-  const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
+  const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string, replyingToAuthorId?: string) => {
     if (!user) { throw new Error("Giriş yapmalısınız."); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
 
     const originalData = [...announcements];
     const tempReplyId = `rpl_temp_${Date.now()}`;
-    const tempReply: Reply = { id: tempReplyId, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName };
+    const tempReply: Reply = { id: tempReplyId, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName, replyingToAuthorId };
     
-    let originalCommentAuthorId: string | undefined;
     let announcementTitle: string | undefined;
 
     const optimisticData = originalData.map(ann => {
@@ -273,7 +272,6 @@ export function useAnnouncements() {
         announcementTitle = ann.title;
         const newComments = (ann.comments || []).map(c => {
           if (c.id === commentId) {
-            originalCommentAuthorId = c.authorId;
             const newReplies = (c.replies ? [tempReply, ...c.replies] : [tempReply]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             return {...c, replies: newReplies};
           }
@@ -289,13 +287,14 @@ export function useAnnouncements() {
       const replyResponse = await fetch('/api/announcements', { 
         method: 'POST', 
         headers: {'Content-Type': 'application/json'}, 
-        body: JSON.stringify({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName } }) 
+        body: JSON.stringify({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId } }) 
       });
       if (!replyResponse.ok) throw new Error((await replyResponse.json()).message || "Yanıt eklenemedi.");
       const updatedAnnouncement = await replyResponse.json();
       
-      if (originalCommentAuthorId && announcementTitle && originalCommentAuthorId !== authorId) {
-        const notificationPayload = { type: 'reply', recipientUserId: originalCommentAuthorId, senderUserName: authorName, announcementId: announcementId, announcementTitle: announcementTitle, commentId: commentId };
+      // Send notification if not replying to self
+      if (replyingToAuthorId && announcementTitle && replyingToAuthorId !== authorId) {
+        const notificationPayload = { type: 'reply', recipientUserId: replyingToAuthorId, senderUserName: authorName, announcementId: announcementId, announcementTitle: announcementTitle, commentId: commentId };
         const notifResponse = await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notificationPayload) });
         if (notifResponse.ok) {
           broadcastNotificationUpdate();

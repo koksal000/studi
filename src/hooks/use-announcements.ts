@@ -1,12 +1,10 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
-import { useSettings } from '@/contexts/settings-context';
 import { useToast } from './use-toast';
-import { idbGet, idbSet, STORES } from '@/lib/idb';
 
 export interface Like {
   userId: string;
@@ -95,143 +93,91 @@ type AnnouncementApiPayload =
   | DeleteReplyPayload
   | Announcement; 
 
-const ANNOUNCEMENTS_KEY = 'all-announcements';
 
 export function useAnnouncements() {
-  const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { user, isAdmin } = useUser();
   const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
-  const { siteNotificationsPreference } = useSettings();
   const { toast } = useToast();
 
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const isLoading = announcements === null;
-
-  const showNotification = useCallback((title: string, body: string, tag?: string) => {
-    if (!siteNotificationsPreference || typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
-      return;
+  const fetchAnnouncements = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/announcements');
+      if (!response.ok) {
+        throw new Error('Duyurular sunucudan alınamadı.');
+      }
+      const data: Announcement[] = await response.json();
+      setAnnouncements(data);
+    } catch (error: any) {
+      toast({ title: 'Veri Yükleme Hatası', description: error.message, variant: 'destructive' });
+      setAnnouncements([]); // Set to empty array on error to avoid broken state
+    } finally {
+      setIsLoading(false);
     }
-    const notification = new Notification(title, {
-      body: body,
-      icon: '/images/logo.png', 
-      tag: tag || `ann-${Date.now()}`,
-      renotify: !!tag, 
-    });
-    notification.onclick = (event) => {
-      event.preventDefault();
-      window.open(window.location.origin + '/announcements', '_blank');
-      notification.close();
-    };
-  }, [siteNotificationsPreference]);
-  
-  useEffect(() => {
-    let stillMounted = true;
-    let previousAnnouncementsState: Announcement[] = [];
-
-    const initializeAndConnect = async () => {
-      try {
-        const cachedAnnouncements = await idbGet<Announcement[]>(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY);
-        if (stillMounted && cachedAnnouncements && Array.isArray(cachedAnnouncements)) {
-          setAnnouncements(cachedAnnouncements);
-          previousAnnouncementsState = cachedAnnouncements;
-        }
-      } catch (e) {
-        console.warn("Could not load announcements from IndexedDB:", e);
-      }
-
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      
-      const newEventSource = new EventSource('/api/announcements/stream');
-      eventSourceRef.current = newEventSource;
-
-      newEventSource.onmessage = (event) => {
-        if (!stillMounted) return;
-
-        try {
-          const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-          
-          setAnnouncements(updatedAnnouncementsFromServer);
-          idbSet(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY, updatedAnnouncementsFromServer).catch(e => console.error("Failed to cache announcements in IndexedDB", e));
-
-          if (user && previousAnnouncementsState.length > 0) {
-            const currentUserIdentifier = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-            updatedAnnouncementsFromServer.forEach(newAnn => {
-              const isGenuinelyNew = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
-              if (isGenuinelyNew && newAnn.authorId !== currentUserIdentifier) {
-                showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : ""), `new-ann-${newAnn.id}`);
-              }
-            });
-          }
-
-          previousAnnouncementsState = updatedAnnouncementsFromServer;
-
-        } catch (error) {
-          console.error("[SSE Announcements] Error parsing SSE message data:", error);
-        }
-      };
-
-      newEventSource.onerror = (error) => {
-        console.error("[SSE Announcements] Connection error:", error);
-        if (stillMounted) {
-          setAnnouncements(announcements => announcements === null ? [] : announcements);
-        }
-      };
-    };
-
-    initializeAndConnect();
-
-    return () => {
-      stillMounted = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-    };
-  }, [user, isAdmin, showNotification]);
+  }, [toast]);
 
   useEffect(() => {
-    if (announcements === null) return;
-    if (!lastOpenedNotificationTimestamp) {
-      setUnreadCount(announcements.length);
-    } else {
+    fetchAnnouncements();
+  }, [fetchAnnouncements]);
+
+  useEffect(() => {
+    if (announcements.length > 0 && lastOpenedNotificationTimestamp) {
       const newUnreadCount = announcements.filter(
         (ann) => new Date(ann.date).getTime() > lastOpenedNotificationTimestamp
       ).length;
       setUnreadCount(newUnreadCount);
+    } else if (announcements.length > 0) {
+      setUnreadCount(announcements.length);
+    } else {
+      setUnreadCount(0);
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
-
-  const sendApiRequest = useCallback(async (payload: AnnouncementApiPayload, method: 'POST' | 'DELETE' = 'POST', queryParams = '') => {
-    if (!user && 'action' in payload && (payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE")) {
-      toast({ title: "Giriş Gerekli", description: "Bu işlemi yapmak için giriş yapmalısınız.", variant: "destructive" });
-      throw new Error("User not logged in for this action");
-    }
+  
+  const performApiAction = useCallback(async (
+    endpoint: string, 
+    method: 'POST' | 'DELETE', 
+    body?: any,
+    successToast?: { title: string; description?: string }
+  ): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/announcements${queryParams}`, {
-        method: method,
+      const response = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: method === 'POST' ? JSON.stringify(payload) : undefined,
+        body: body ? JSON.stringify(body) : undefined,
       });
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
-        toast({ title: "İşlem Başarısız", description: errorData.message || 'Sunucu hatası.', variant: "destructive" });
-        throw new Error(errorData.message || 'Sunucu hatası.');
+        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
+        throw new Error(errorData.message);
       }
-    } catch (error) {
-      console.error("[Announcements] API request error:", error);
-      if (!(error instanceof Error && (error.message.includes('Sunucu hatası') || error.message.includes("User not logged in")))) {
-        toast({ title: "Ağ Hatası", description: "İstek gönderilemedi.", variant: "destructive" });
+      
+      if (successToast) {
+        toast(successToast);
       }
-      throw error;
+
+      await fetchAnnouncements(); 
+      return true;
+
+    } catch (error: any) {
+      toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
+      console.error(`[useAnnouncements] API Action Failed:`, error);
+      return false;
     }
-  }, [user, toast]);
+  }, [toast, fetchAnnouncements]);
+
 
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
-    if (!user) throw new Error("User not logged in");
-    if (!payload.title?.trim() || !payload.content?.trim()) throw new Error("Title and content are required.");
+    if (!user) {
+        toast({ title: "Giriş Gerekli", variant: "destructive" });
+        return;
+    }
+     if (!payload.title?.trim() || !payload.content?.trim()) {
+        toast({ title: 'Eksik Bilgi', description: 'Lütfen başlık ve içerik alanlarını doldurun.', variant: 'destructive' });
+        return;
+    }
 
     const newAnnouncementData: Announcement = {
       id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -245,17 +191,18 @@ export function useAnnouncements() {
       likes: [],
       comments: [],
     };
-    await sendApiRequest(newAnnouncementData);
-    toast({ title: "Duyuru Eklendi", description: `"${newAnnouncementData.title}" başarıyla yayınlandı.` });
-  }, [user, isAdmin, toast, sendApiRequest]);
+
+    await performApiAction('/api/announcements', 'POST', newAnnouncementData, { title: "Duyuru Eklendi", description: `"${newAnnouncementData.title}" başarıyla yayınlandı.` });
+  }, [user, isAdmin, performApiAction, toast]);
+
 
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user || !isAdmin) { 
         toast({ title: "Yetki Gerekli", description: "Duyuru silmek için yönetici olmalısınız.", variant: "destructive"});
-        throw new Error("Admin privileges required to delete announcement.");
+        return;
     }
-    await sendApiRequest(undefined as any, 'DELETE', `?id=${id}`);
-  }, [user, isAdmin, toast, sendApiRequest]);
+    await performApiAction(`/api/announcements?id=${id}`, 'DELETE');
+  }, [user, isAdmin, performApiAction]);
 
   const toggleAnnouncementLike = useCallback(async (announcementId: string) => {
     if (!user) {
@@ -263,8 +210,9 @@ export function useAnnouncements() {
       return;
     }
     const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    await sendApiRequest({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId });
-  }, [user, isAdmin, toast, sendApiRequest]);
+    const payload: ToggleAnnouncementLikePayload = { action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId };
+    await performApiAction('/api/announcements', 'POST', payload);
+  }, [user, isAdmin, performApiAction, toast]);
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
     if (!user) {
@@ -277,61 +225,42 @@ export function useAnnouncements() {
     }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-
-    const commentPayload: Omit<Comment, 'id' | 'date' | 'replies'> = {
-      authorName,
-      authorId,
-      text,
-    };
-    await sendApiRequest({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: commentPayload });
-    toast({ title: "Yorum Eklendi", description: "Yorumunuz başarıyla gönderildi." });
-  }, [user, isAdmin, toast, sendApiRequest]);
+    const commentPayload: AddCommentPayload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: { authorName, authorId, text } };
+    await performApiAction('/api/announcements', 'POST', commentPayload, { title: "Yorum Eklendi", description: "Yorumunuz başarıyla gönderildi." });
+  }, [user, isAdmin, performApiAction, toast]);
 
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Yanıtlamak için giriş yapmalısınız.", variant: "destructive"});
       return;
     }
-     if (!text.trim()) {
+    if (!text.trim()) {
       toast({ title: "Yanıt Boş Olamaz", description: "Lütfen bir yanıt yazın.", variant: "destructive"});
       return;
     }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const replyingToAuthorId = replyingToAuthorName; 
-
-    const replyPayload: Omit<Reply, 'id' | 'date'> = {
-        authorName,
-        authorId,
-        text,
-        replyingToAuthorName,
-        replyingToAuthorId,
-    };
-    await sendApiRequest({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: replyPayload });
-    toast({ title: "Yanıt Eklendi", description: "Yanıtınız başarıyla gönderildi." });
-  }, [user, isAdmin, toast, sendApiRequest]);
+    const replyPayload: AddReplyPayload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName } };
+    await performApiAction('/api/announcements', 'POST', replyPayload, { title: "Yanıt Eklendi", description: "Yanıtınız başarıyla gönderildi." });
+  }, [user, isAdmin, performApiAction, toast]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
-    if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Yorum silmek için giriş yapmalısınız.", variant: "destructive"});
-      throw new Error("User not logged in for delete comment.");
-    }
+    if (!user) { throw new Error("User not logged in"); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    await sendApiRequest({ action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId });
-  }, [user, isAdmin, toast, sendApiRequest]);
+    const payload: DeleteCommentPayload = { action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId };
+    await performApiAction('/api/announcements', 'POST', payload);
+  }, [user, isAdmin, performApiAction]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
-     if (!user) { 
-      toast({ title: "Giriş Gerekli", description: "Yanıt silmek için giriş yapmalısınız.", variant: "destructive"});
-      throw new Error("User not logged in for delete reply.");
-    }
+    if (!user) { throw new Error("User not logged in"); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    await sendApiRequest({ action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId });
-  }, [user, isAdmin, toast, sendApiRequest]);
+    const payload: DeleteReplyPayload = { action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId };
+    await performApiAction('/api/announcements', 'POST', payload);
+  }, [user, isAdmin, performApiAction]);
 
 
   return {
-    announcements: announcements ?? [],
+    announcements,
     addAnnouncement,
     deleteAnnouncement,
     isLoading,

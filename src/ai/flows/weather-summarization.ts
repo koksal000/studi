@@ -191,7 +191,7 @@ const summarizeWeatherFlow = ai.defineFlow(
     console.log(`[WeatherSummarization] Cache expired or no cache (last fetch: ${lastSuccessfulFetchTime?.toISOString() || 'N/A'}). Attempting to fetch new weather data.`);
 
     if (flowInput.location.toLowerCase() !== 'domaniç') {
-      throw new Error('Hava durumu verileri şu anda sadece Domaniç için mevcuttur.');
+      throw new Error('Weather data is currently only available for Domaniç.');
     }
 
     const lat = 39.80; // Domaniç, Kütahya
@@ -204,7 +204,7 @@ const summarizeWeatherFlow = ai.defineFlow(
       if (!response.ok) {
         const errorBody = await response.text();
         console.error("[WeatherSummarization] Open-Meteo API Error:", response.status, errorBody);
-        throw new Error(`Open-Meteo API'sinden hava durumu verileri alınamadı: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to get weather data from Open-Meteo API: ${response.status} ${response.statusText}`);
       }
       apiResponseData = await response.json();
     } catch (error: any) {
@@ -217,7 +217,7 @@ const summarizeWeatherFlow = ai.defineFlow(
           dataTimestamp: lastSuccessfulFetchTime.toISOString() 
         };
       }
-      throw new Error("Hava durumu verileri alınamadı ve önbellekte kullanılabilir veri yok. Lütfen daha sonra tekrar deneyin.");
+      throw new Error("Could not retrieve weather data and no cached data is available. Please try again later.");
     }
     
     if (!apiResponseData.current || 
@@ -234,7 +234,7 @@ const summarizeWeatherFlow = ai.defineFlow(
           dataTimestamp: lastSuccessfulFetchTime.toISOString() 
         };
       }
-      throw new Error("Open-Meteo'dan eksik güncel hava durumu verileri alındı ve önbellekte veri yok.");
+      throw new Error("Incomplete current weather data received from Open-Meteo and no data in cache.");
     }
 
     const hasHourly = apiResponseData.hourly && apiResponseData.hourly.time && Array.isArray(apiResponseData.hourly.time);
@@ -274,7 +274,7 @@ const summarizeWeatherFlow = ai.defineFlow(
         const {output} = await formatOpenMeteoDataPrompt(promptInputData);
         aiOutput = output; // Assign to aiOutput
         if (!aiOutput) { // Check aiOutput
-            throw new Error("Hava durumu özetleme prompt'u bir çıktı döndürmedi.");
+            throw new Error("The weather summarization prompt did not return an output.");
         }
         
         const currentTimestamp = new Date().toISOString();
@@ -291,7 +291,7 @@ const summarizeWeatherFlow = ai.defineFlow(
         attempts++;
         const errorMessage = e.message || "";
         const isServiceUnavailable = errorMessage.includes("503") && errorMessage.includes("Service Unavailable");
-        const isEmptyOutput = errorMessage.includes("Hava durumu özetleme prompt'u bir çıktı döndürmedi.");
+        const isEmptyOutput = errorMessage.includes("The weather summarization prompt did not return an output.");
 
         if ((isServiceUnavailable || isEmptyOutput) && attempts < MAX_RETRIES) {
           console.warn(`[WeatherSummarization] AI Model error (Attempt ${attempts}/${MAX_RETRIES}): ${errorMessage}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
@@ -306,8 +306,8 @@ const summarizeWeatherFlow = ai.defineFlow(
               dataTimestamp: lastSuccessfulFetchTime.toISOString() 
             };
           }
-          if (isServiceUnavailable) throw new Error("Hava durumu modeli şu anda aşırı yoğun ve önbellekte veri yok. Lütfen daha sonra tekrar deneyin.");
-          throw new Error(errorMessage || "Hava durumu özeti oluşturulurken bilinmeyen bir hata oluştu ve önbellekte veri yok.");
+          if (isServiceUnavailable) throw new Error("The weather model is currently overloaded and no cache is available. Please try again later.");
+          throw new Error(errorMessage || "An unknown error occurred while generating weather summary and no cache is available.");
         }
       }
     }
@@ -320,7 +320,7 @@ const summarizeWeatherFlow = ai.defineFlow(
           dataTimestamp: lastSuccessfulFetchTime.toISOString()
         };
     }
-    throw new Error("Hava durumu özeti maksimum deneme sayısına ulaşıldıktan sonra oluşturulamadı ve önbellekte veri yok.");
+    throw new Error("Could not generate weather summary after maximum retries and no cache is available.");
   }
 );
 

@@ -14,43 +14,36 @@ interface FCMTokenRecord {
 const dataDir = process.env.DATA_PATH || process.cwd();
 const TOKENS_FILE_PATH = path.join(dataDir, '_fcm_tokens.json');
 
-let fcmTokens: FCMTokenRecord[] = [];
-
-const loadTokensFromFile = () => {
+const readTokensFromFile = (): FCMTokenRecord[] => {
   try {
     if (fs.existsSync(TOKENS_FILE_PATH)) {
       const fileData = fs.readFileSync(TOKENS_FILE_PATH, 'utf-8');
       if (fileData.trim() === '') {
-        fcmTokens = [];
-      } else {
-        fcmTokens = JSON.parse(fileData) as FCMTokenRecord[];
+        return [];
       }
+      return JSON.parse(fileData) as FCMTokenRecord[];
     } else {
-      fcmTokens = [];
-      saveTokensToFile(); // Create file if not exists
+      return [];
     }
   } catch (error) {
     console.error("[API/FCMTokens] Error loading tokens from file:", error);
-    fcmTokens = [];
+    return [];
   }
 };
 
-const saveTokensToFile = (): boolean => {
+const writeTokensToFile = (tokens: FCMTokenRecord[]): boolean => {
   try {
     const dir = path.dirname(TOKENS_FILE_PATH);
     if (!fs.existsSync(dir) && dataDir !== process.cwd()) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(TOKENS_FILE_PATH, JSON.stringify(fcmTokens, null, 2));
+    fs.writeFileSync(TOKENS_FILE_PATH, JSON.stringify(tokens, null, 2));
     return true;
   } catch (error) {
     console.error("[API/FCMTokens] CRITICAL: Error saving tokens to file:", error);
     return false;
   }
 };
-
-// Load tokens once on server start (for this simple file-based storage)
-loadTokensFromFile();
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Invalid FCM token provided.' }, { status: 400 });
     }
 
-    loadTokensFromFile(); // Ensure we have the latest tokens before modifying
+    const fcmTokens = readTokensFromFile();
 
     const existingTokenIndex = fcmTokens.findIndex(t => t.token === token);
     if (existingTokenIndex === -1) {
@@ -78,11 +71,9 @@ export async function POST(request: NextRequest) {
       console.log(`[API/FCMTokens] FCM token already registered, updated timestamp: ${token.substring(0, 20)}...`);
     }
 
-    if (saveTokensToFile()) {
+    if (writeTokensToFile(fcmTokens)) {
       return NextResponse.json({ message: 'FCM token registered successfully.' }, { status: 200 });
     } else {
-      // Revert in-memory change if save failed
-      loadTokensFromFile();
       return NextResponse.json({ message: 'Server error: Failed to save FCM token.' }, { status: 500 });
     }
   } catch (error) {
@@ -94,6 +85,8 @@ export async function POST(request: NextRequest) {
 export async function GET() {
     // This endpoint is primarily for admin/debugging to see registered tokens.
     // In a production app, this should be secured.
-    loadTokensFromFile();
+    const fcmTokens = readTokensFromFile();
     return NextResponse.json({ tokens: fcmTokens, count: fcmTokens.length });
 }
+
+    

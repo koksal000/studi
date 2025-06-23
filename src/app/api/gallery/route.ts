@@ -4,7 +4,6 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import galleryEmitter from '@/lib/gallery-emitter';
 import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 
 export interface GalleryImage {
@@ -17,11 +16,7 @@ export interface GalleryImage {
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const GALLERY_FILE_PATH = path.join(dataDir, '_gallery.json');
-// MAX_BASE64_SIZE_API for 5MB raw image: 5 * 1024 * 1024 * 1.37 (base64 encoding) * 1.05 (safety margin)
 const MAX_BASE64_SIZE_API = Math.floor(5 * 1024 * 1024 * 1.37 * 1.05); // Approx 7.2MB 
-
-let galleryImagesData: GalleryImage[] = [];
-let initialized = false;
 
 const gallerySortFnInMemory = (a: GalleryImage, b: GalleryImage): number => {
   const aIsSeed = a.id.startsWith('seed_');
@@ -53,42 +48,30 @@ const gallerySortFnInMemory = (a: GalleryImage, b: GalleryImage): number => {
   return a.id.localeCompare(b.id); 
 };
 
-const loadGalleryFromFile = () => {
+const readGalleryFromFile = (): GalleryImage[] => {
   try {
-    console.log(`[API/Gallery] DATA_PATH used for gallery: ${dataDir}`);
     if (fs.existsSync(GALLERY_FILE_PATH)) {
       const fileData = fs.readFileSync(GALLERY_FILE_PATH, 'utf-8');
       if (fileData.trim() === '' || fileData.trim() === '[]') {
-        // File is empty or just an empty array, seed with static images
-        console.log(`[API/Gallery] File ${GALLERY_FILE_PATH} is empty. Initializing with seed images.`);
-        galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
-        saveGalleryToFile(); // Attempt to save the seeded data
-      } else {
-        galleryImagesData = (JSON.parse(fileData) as GalleryImage[]).sort(gallerySortFnInMemory);
-        console.log(`[API/Gallery] Successfully loaded ${galleryImagesData.length} images from ${GALLERY_FILE_PATH}`);
+        return [];
       }
-    } else {
-      // File does not exist, seed with static images and try to create the file
-      console.log(`[API/Gallery] File ${GALLERY_FILE_PATH} not found. Initializing with seed images and attempting to create.`);
-      galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
-      saveGalleryToFile();
+      return (JSON.parse(fileData) as GalleryImage[]).sort(gallerySortFnInMemory);
     }
+    return [];
   } catch (error) {
-    console.error("[API/Gallery] Error loading gallery from file, attempting to use static seeds as fallback:", error);
-    galleryImagesData = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
+    console.error("[API/Gallery] Error reading gallery from file:", error);
+    return [];
   }
 };
 
-const saveGalleryToFile = (): boolean => {
+const writeGalleryToFile = (images: GalleryImage[]): boolean => {
    try {
     const dir = path.dirname(GALLERY_FILE_PATH);
     if (!fs.existsSync(dir) && dataDir !== process.cwd()){ 
         fs.mkdirSync(dir, { recursive: true });
-        console.log(`[API/Gallery] Created directory for data: ${dir}`);
     }
-    const sortedData = [...galleryImagesData].sort(gallerySortFnInMemory);
+    const sortedData = [...images].sort(gallerySortFnInMemory);
     fs.writeFileSync(GALLERY_FILE_PATH, JSON.stringify(sortedData, null, 2));
-    console.log(`[API/Gallery] Gallery data saved to ${GALLERY_FILE_PATH} (${sortedData.length} images)`);
     return true;
   } catch (error) {
     console.error("[API/Gallery] CRITICAL: Error saving gallery to file:", error);
@@ -96,15 +79,15 @@ const saveGalleryToFile = (): boolean => {
   }
 };
 
-if (!initialized) {
-  loadGalleryFromFile();
-  initialized = true;
-}
-
 export async function GET() {
-  // No need to load from file on every GET if using SSE to keep in-memory up to date
-  // loadGalleryFromFile(); // This might cause race conditions if save is slow
-  return NextResponse.json([...galleryImagesData]);
+    let images = readGalleryFromFile();
+    // If the gallery is empty (e.g., first run), seed it from constants.
+    if (images.length === 0) {
+        console.log("[API/Gallery] Gallery is empty, seeding with static images.");
+        images = [...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFnInMemory);
+        writeGalleryToFile(images);
+    }
+    return NextResponse.json(images);
 }
 
 export async function POST(request: NextRequest) {
@@ -125,32 +108,26 @@ export async function POST(request: NextRequest) {
   }
 
   if (newImage.src.length > MAX_BASE64_SIZE_API) { 
-      const limitMB = (MAX_BASE64_SIZE_API / (1024*1024)).toFixed(1); // e.g. 7.2MB
-      const rawEquivalentMB = (MAX_BASE64_SIZE_API / (1.37 * 1.05 * 1024 * 1024)).toFixed(1); // e.g. 5MB
+      const limitMB = (MAX_BASE64_SIZE_API / (1024*1024)).toFixed(1);
+      const rawEquivalentMB = (MAX_BASE64_SIZE_API / (1.37 * 1.05 * 1024 * 1024)).toFixed(1);
       return NextResponse.json({ message: `Resim verisi çok büyük. Maksimum işlenmiş veri boyutu ~${limitMB}MB olmalıdır (yaklaşık ~${rawEquivalentMB}MB ham dosya).` }, { status: 413 });
   }
 
-  // Thread-safe update: Load current data from file, modify, then save
-  loadGalleryFromFile(); // Load the absolute latest from disk
-  const currentGalleryFromFile = [...galleryImagesData]; 
+  const images = readGalleryFromFile();
   
-  const existingImageIndex = currentGalleryFromFile.findIndex(img => img.id === newImage.id);
+  const existingImageIndex = images.findIndex(img => img.id === newImage.id);
 
   if (existingImageIndex !== -1) {
-    currentGalleryFromFile[existingImageIndex] = newImage; 
+    images[existingImageIndex] = newImage; 
   } else {
-    currentGalleryFromFile.unshift(newImage); // Add to the beginning
+    images.unshift(newImage); // Add to the beginning
   }
-  galleryImagesData = currentGalleryFromFile.sort(gallerySortFnInMemory); // Update in-memory version
-
-  if (saveGalleryToFile()) { // This saves the updated galleryImagesData
-    galleryEmitter.emit('update', [...galleryImagesData]);
-    console.log(`[API/Gallery] Image ${newImage.id} processed and saved. Total images: ${galleryImagesData.length}`);
+  
+  if (writeGalleryToFile(images)) {
+    console.log(`[API/Gallery] Image ${newImage.id} processed and saved. Total images: ${images.length}`);
     return NextResponse.json(newImage, { status: 201 });
   } else {
-    // Attempt to revert in-memory change if save failed, and reload from file to be safe
-    loadGalleryFromFile(); 
-    console.error(`[API/Gallery] Failed to save image ${newImage.id} to file. In-memory change might be partially reverted or state could be inconsistent until next load.`);
+    console.error(`[API/Gallery] Failed to save image ${newImage.id} to file.`);
     return NextResponse.json({ message: "Sunucu hatası: Galeri resmi kalıcı olarak kaydedilemedi." }, { status: 500 });
   }
 }
@@ -163,20 +140,16 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silme için resim IDsi gerekli.' }, { status: 400 });
   }
     
-  loadGalleryFromFile(); // Load latest from disk
-  const currentDataFromFile = [...galleryImagesData];
-  const initialLength = currentDataFromFile.length;
-  const filteredGallery = currentDataFromFile.filter(img => img.id !== id);
+  const images = readGalleryFromFile();
+  const initialLength = images.length;
+  const filteredGallery = images.filter(img => img.id !== id);
 
   if (filteredGallery.length < initialLength) {
-    galleryImagesData = filteredGallery.sort(gallerySortFnInMemory); // Update in-memory version
-    if (saveGalleryToFile()) { // This saves the updated galleryImagesData
-      galleryEmitter.emit('update', [...galleryImagesData]);
-      console.log(`[API/Gallery] Image ${id} deleted and saved. Total images: ${galleryImagesData.length}`);
+    if (writeGalleryToFile(filteredGallery)) {
+      console.log(`[API/Gallery] Image ${id} deleted and saved. Total images: ${filteredGallery.length}`);
       return NextResponse.json({ message: 'Resim başarıyla silindi' }, { status: 200 });
     } else {
-      loadGalleryFromFile(); // Revert to last known good state from file
-      console.error(`[API/Gallery] Failed to save after deleting image ${id} from file. In-memory change reverted.`);
+      console.error(`[API/Gallery] Failed to save after deleting image ${id} from file.`);
       return NextResponse.json({ message: 'Sunucu hatası: Resim silindikten sonra değişiklikler kalıcı olarak kaydedilemedi.' }, { status: 500 });
     }
   } else {

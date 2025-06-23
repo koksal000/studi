@@ -3,22 +3,16 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import type { Announcement, Comment, Reply } from '@/hooks/use-announcements';
-import announcementEmitter from '@/lib/announcement-emitter';
 import fs from 'fs';
 import path from 'path';
-import type { UserProfile } from '@/app/api/user-profile/route';
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
-const USER_DATA_FILE_PATH = path.join(dataDir, '_user_data.json');
 
 const MAX_IMAGE_RAW_SIZE_MB_API = 5;
 const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
 const MAX_IMAGE_PAYLOAD_SIZE_API = Math.floor(MAX_IMAGE_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
 const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
-
-let announcementsData: Announcement[] = [];
-let initializedFs = false;
 
 interface ToggleAnnouncementLikeApiPayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
@@ -59,47 +53,41 @@ type AnnouncementApiPayload =
   | DeleteReplyApiPayload
   | Announcement;
 
-
-const loadAnnouncementsFromFile = () => {
+const readAnnouncementsFromFile = (): Announcement[] => {
   try {
-    if (!initializedFs) console.log(`[API/Announcements] DATA_PATH used: ${dataDir}`);
     if (fs.existsSync(ANNOUNCEMENTS_FILE_PATH)) {
       const fileData = fs.readFileSync(ANNOUNCEMENTS_FILE_PATH, 'utf-8');
       if (fileData.trim() === '') {
-        announcementsData = [];
-      } else {
-        const parsedData = JSON.parse(fileData) as Announcement[];
-        announcementsData = parsedData.map(ann => ({
-          ...ann,
-          likes: ann.likes || [],
-          comments: (ann.comments || []).map(comment => ({
-            ...comment,
-            replies: (comment.replies || []).map(reply => ({
-                ...reply,
-            })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-        })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return [];
       }
-      if (!initializedFs) console.log(`[API/Announcements] Successfully loaded ${announcementsData.length} announcements from file.`);
+      const parsedData = JSON.parse(fileData) as Announcement[];
+      return parsedData.map(ann => ({
+        ...ann,
+        likes: ann.likes || [],
+        comments: (ann.comments || []).map(comment => ({
+          ...comment,
+          replies: (comment.replies || []).map(reply => ({
+              ...reply,
+          })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     } else {
-      announcementsData = [];
-      if (!initializedFs) console.log(`[API/Announcements] File ${ANNOUNCEMENTS_FILE_PATH} not found. Initializing with empty array.`);
-      saveAnnouncementsToFile();
+      return [];
     }
   } catch (error) {
-    console.error("[API/Announcements] Error loading announcements from file:", error);
-    announcementsData = [];
+    console.error("[API/Announcements] Error reading announcements from file:", error);
+    return [];
   }
 };
 
-const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData): boolean => {
+const writeAnnouncementsToFile = (data: Announcement[]): boolean => {
   try {
     const dir = path.dirname(ANNOUNCEMENTS_FILE_PATH);
     if (!fs.existsSync(dir) && dataDir !== process.cwd()) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    const processedDataToSave = dataToSave.map(ann => ({
+    const processedDataToSave = data.map(ann => ({
         ...ann,
         likes: ann.likes || [],
         comments: (ann.comments || []).map(comment => ({
@@ -118,16 +106,9 @@ const saveAnnouncementsToFile = (dataToSave: Announcement[] = announcementsData)
   }
 };
 
-// E-posta gönderme fonksiyonları (EmailJS HTTP API ile) kaldırıldı.
-
-if (!initializedFs) {
-  loadAnnouncementsFromFile();
-  initializedFs = true;
-}
-
 export async function GET() {
-  loadAnnouncementsFromFile();
-  return NextResponse.json([...announcementsData]);
+  const announcements = readAnnouncementsFromFile();
+  return NextResponse.json(announcements);
 }
 
 export async function POST(request: NextRequest) {
@@ -140,28 +121,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Geçersiz JSON yükü." }, { status: 400 });
   }
 
-  loadAnnouncementsFromFile();
-  let currentDataFromFile = [...announcementsData.map(a => ({...a, comments: (a.comments || []).map(c => ({...c, replies: (c.replies || []).map(r => ({...r}))}))}))];
+  let announcements = readAnnouncementsFromFile();
   let announcementModified = false;
   let modifiedAnnouncement: Announcement | null = null;
   let isNewAnnouncement = false;
 
-
   if ('action' in payload) {
     const actionPayload = payload;
-    const annIndex = currentDataFromFile.findIndex(ann => ann.id === actionPayload.announcementId);
+    const annIndex = announcements.findIndex(ann => ann.id === actionPayload.announcementId);
 
     if (annIndex === -1) {
         return NextResponse.json({ message: 'İlgili duyuru bulunamadı.' }, { status: 404 });
     }
 
-    let announcementToUpdate = JSON.parse(JSON.stringify(currentDataFromFile[annIndex])) as Announcement;
+    let announcementToUpdate = JSON.parse(JSON.stringify(announcements[annIndex])) as Announcement;
     announcementToUpdate.likes = announcementToUpdate.likes || [];
     announcementToUpdate.comments = (announcementToUpdate.comments || []).map(c => ({
         ...c,
         replies: (c.replies || []).map(r => ({...r})),
     }));
-
 
     if (actionPayload.action === "TOGGLE_ANNOUNCEMENT_LIKE") {
       const likeExistsIndex = announcementToUpdate.likes.findIndex(like => like.userId === actionPayload.userId);
@@ -229,7 +207,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (announcementModified) {
-        currentDataFromFile[annIndex] = announcementToUpdate;
+        announcements[annIndex] = announcementToUpdate;
         modifiedAnnouncement = announcementToUpdate;
     }
 
@@ -252,11 +230,11 @@ export async function POST(request: NextRequest) {
         replies: (c.replies || []).map(r => ({...r})),
     })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const existingIndex = currentDataFromFile.findIndex(ann => ann.id === newAnnouncement.id);
+    const existingIndex = announcements.findIndex(ann => ann.id === newAnnouncement.id);
     if (existingIndex !== -1) {
-      currentDataFromFile[existingIndex] = newAnnouncement;
+      announcements[existingIndex] = newAnnouncement;
     } else {
-      currentDataFromFile.unshift(newAnnouncement);
+      announcements.unshift(newAnnouncement);
       isNewAnnouncement = true;
     }
     announcementModified = true;
@@ -264,19 +242,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (announcementModified) {
-    currentDataFromFile.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    if (saveAnnouncementsToFile(currentDataFromFile)) {
-      announcementsData = currentDataFromFile;
-      announcementEmitter.emit('update', [...announcementsData]);
-
-      // E-posta gönderme mantığı kaldırıldı.
-      // if (isNewAnnouncement && modifiedAnnouncement) {
-      //   console.log(`[API/Announcements] New announcement posted: "${modifiedAnnouncement.title}". Triggering Email notifications.`);
-      //   sendEmailNotifications(modifiedAnnouncement).catch(err => { // Bu fonksiyon artık yok
-      //       console.error("[API/Announcements] Error during Email notification process:", err);
-      //   });
-      // }
-
+    announcements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (writeAnnouncementsToFile(announcements)) {
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
     } else {
       console.error(`[API/Announcements] Failed to save data to file after modification.`);
@@ -295,14 +262,12 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Duyuru IDsi silme için gerekli' }, { status: 400 });
   }
 
-  loadAnnouncementsFromFile();
-  const currentDataFromFile = [...announcementsData];
-  const filteredAnnouncements = currentDataFromFile.filter(ann => ann.id !== id);
+  const announcements = readAnnouncementsFromFile();
+  const initialLength = announcements.length;
+  const filteredAnnouncements = announcements.filter(ann => ann.id !== id);
 
-  if (filteredAnnouncements.length < currentDataFromFile.length) {
-    if (saveAnnouncementsToFile(filteredAnnouncements)) {
-      announcementsData = filteredAnnouncements;
-      announcementEmitter.emit('update', [...announcementsData]);
+  if (filteredAnnouncements.length < initialLength) {
+    if (writeAnnouncementsToFile(filteredAnnouncements)) {
       return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
     } else {
       console.error(`[API/Announcements] Failed to save after deleting announcement ${id} from file.`);
@@ -312,3 +277,5 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
+
+    

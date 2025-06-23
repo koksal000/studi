@@ -99,22 +99,18 @@ export function useAnnouncements() {
       return;
     }
 
-    const optimisticUpdate = (currentData: Announcement[]) => {
-      const newAnnouncement: Announcement = {
+    const tempId = `ann_temp_${Date.now()}`;
+    const newAnnouncement: Announcement = {
         ...payload,
-        id: `ann_temp_${Date.now()}`,
+        id: tempId,
         date: new Date().toISOString(),
         author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
         authorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`,
         likes: [],
         comments: [],
-      };
-      return [newAnnouncement, ...currentData];
     };
-
-    const originalData = [...announcements];
-    const optimisticData = optimisticUpdate(originalData);
-    setAnnouncements(optimisticData);
+    
+    setAnnouncements(currentData => [newAnnouncement, ...currentData]);
 
     try {
       const response = await fetch('/api/announcements', {
@@ -130,18 +126,23 @@ export function useAnnouncements() {
           comments: [],
         })
       });
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
         throw new Error(errorData.message);
       }
+      
+      const finalAnnouncement: Announcement = await response.json();
+      setAnnouncements(currentData => currentData.map(ann => ann.id === tempId ? finalAnnouncement : ann));
+      
       toast({ title: "Duyuru Eklendi", description: "Duyurunuz başarıyla yayınlandı." });
-      await fetchAnnouncements();
       broadcastAnnouncementUpdate();
+
     } catch (error: any) {
       toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
-      setAnnouncements(originalData);
+      setAnnouncements(currentData => currentData.filter(a => a.id !== tempId));
     }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+  }, [user, isAdmin, toast]);
   
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user || !isAdmin) {
@@ -149,9 +150,8 @@ export function useAnnouncements() {
       return;
     }
     
-    const optimisticUpdate = (currentData: Announcement[]) => currentData.filter(a => a.id !== id);
     const originalData = [...announcements];
-    const optimisticData = optimisticUpdate(originalData);
+    const optimisticData = originalData.filter(a => a.id !== id);
     setAnnouncements(optimisticData);
 
     try {
@@ -162,13 +162,20 @@ export function useAnnouncements() {
             throw new Error(errorData.message);
         }
         toast({ title: "Duyuru Silindi" });
-        await fetchAnnouncements();
         broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData);
     }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+  }, [user, isAdmin, announcements, toast]);
+
+  const updateAnnouncementInState = (updatedAnnouncement: Announcement) => {
+    setAnnouncements(currentAnnouncements => 
+        currentAnnouncements.map(ann => 
+            ann.id === updatedAnnouncement.id ? updatedAnnouncement : ann
+        )
+    );
+  };
 
   const toggleAnnouncementLike = useCallback(async (announcementId: string) => {
     if (!user) {
@@ -177,7 +184,8 @@ export function useAnnouncements() {
     }
     const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
     
-    const optimisticUpdate = (currentData: Announcement[]) => currentData.map(ann => {
+    const originalData = [...announcements];
+    const optimisticData = announcements.map(ann => {
       if (ann.id === announcementId) {
         const newLikes = ann.likes ? [...ann.likes] : [];
         const likeIndex = newLikes.findIndex(l => l.userId === userId);
@@ -190,67 +198,63 @@ export function useAnnouncements() {
       }
       return ann;
     });
-
-    const originalData = [...announcements];
-    const optimisticData = optimisticUpdate(originalData);
     setAnnouncements(optimisticData);
     
     try {
-        const apiCall = () => fetch('/api/announcements', { 
+        const response = await fetch('/api/announcements', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
             body: JSON.stringify({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId }) 
         });
-        const response = await apiCall();
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
             throw new Error(errorData.message);
         }
-        await fetchAnnouncements();
+        const updatedAnnouncement = await response.json();
+        updateAnnouncementInState(updatedAnnouncement);
         broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData);
     }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+  }, [user, isAdmin, announcements, toast]);
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
     if (!user) { throw new Error("Giriş yapmalısınız."); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
+    const tempCommentId = `cmt_temp_${Date.now()}`;
+    const tempComment: Comment = { id: tempCommentId, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
     
-    const optimisticUpdate = (currentData: Announcement[]) => currentData.map(ann => {
+    const originalData = [...announcements];
+    const optimisticData = originalData.map(ann => {
       if (ann.id === announcementId) {
-        const tempComment: Comment = { id: `cmt_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
         const newComments = (ann.comments ? [tempComment, ...ann.comments] : [tempComment]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return { ...ann, comments: newComments };
       }
       return ann;
     });
-
-    const originalData = [...announcements];
-    const optimisticData = optimisticUpdate(originalData);
     setAnnouncements(optimisticData);
 
     try {
-        const apiCall = () => fetch('/api/announcements', { 
+        const response = await fetch('/api/announcements', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
             body: JSON.stringify({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: { authorName, authorId, text } }) 
         });
-        const response = await apiCall();
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
             throw new Error(errorData.message);
         }
+        const updatedAnnouncement = await response.json();
+        updateAnnouncementInState(updatedAnnouncement);
         toast({ title: "Yorum Eklendi" });
-        await fetchAnnouncements();
         broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData);
     }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+  }, [user, isAdmin, announcements, toast]);
   
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
     if (!user) { throw new Error("Giriş yapmalısınız."); }
@@ -258,7 +262,8 @@ export function useAnnouncements() {
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
 
     const originalData = [...announcements];
-    const tempReply: Reply = { id: `rpl_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName };
+    const tempReplyId = `rpl_temp_${Date.now()}`;
+    const tempReply: Reply = { id: tempReplyId, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName };
     
     let originalCommentAuthorId: string | undefined;
     let announcementTitle: string | undefined;
@@ -281,73 +286,73 @@ export function useAnnouncements() {
     setAnnouncements(optimisticData);
 
     try {
-      // 1. Post the reply
-      const replyPayload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName } };
-      const replyResponse = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(replyPayload) });
+      const replyResponse = await fetch('/api/announcements', { 
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName } }) 
+      });
       if (!replyResponse.ok) throw new Error((await replyResponse.json()).message || "Yanıt eklenemedi.");
+      const updatedAnnouncement = await replyResponse.json();
       
-      // 2. Post notification if needed
       if (originalCommentAuthorId && announcementTitle && originalCommentAuthorId !== authorId) {
         const notificationPayload = { type: 'reply', recipientUserId: originalCommentAuthorId, senderUserName: authorName, announcementId: announcementId, announcementTitle: announcementTitle, commentId: commentId };
         const notifResponse = await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notificationPayload) });
         if (notifResponse.ok) {
-          broadcastNotificationUpdate(); // Notify clients to refetch notifications
+          broadcastNotificationUpdate();
         }
       }
-
-      // 3. Show success and re-sync
+      
+      updateAnnouncementInState(updatedAnnouncement);
       toast({ title: "Yanıt Eklendi" });
-      await fetchAnnouncements(); 
       broadcastAnnouncementUpdate();
 
     } catch (error: any) {
         toast({ title: 'Yanıt Eklenemedi', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData); // Rollback on failure
     }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+  }, [user, isAdmin, announcements, toast]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
     if (!user) { throw new Error("Giriş yapmalısınız."); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
     const originalData = [...announcements];
+    let wasModified = true;
     const optimisticData = originalData.map(ann => {
         if (ann.id === announcementId) {
             const commentToDelete = (ann.comments || []).find(c => c.id === commentId);
             if (commentToDelete && commentToDelete.authorId !== deleterAuthorId) {
                 toast({ title: "Yetki Hatası", description: "Bu yorumu silme yetkiniz yok.", variant: "destructive" });
-                return ann; // Return original ann if not authorized
+                wasModified = false;
+                return ann; 
             }
             return {...ann, comments: (ann.comments || []).filter(c => c.id !== commentId)};
         }
         return ann;
     });
 
-    // Check if optimistic update actually changed anything
-    if (JSON.stringify(originalData) === JSON.stringify(optimisticData)) {
-      return; // Abort if user was not authorized
-    }
+    if (!wasModified) return;
     setAnnouncements(optimisticData);
 
     try {
-      const apiCall = () => fetch('/api/announcements', { 
-          method: 'POST', 
-          headers: {'Content-Type': 'application/json'}, 
-          body: JSON.stringify({ action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId })
-      });
-      const response = await apiCall();
-      if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
-          throw new Error(errorData.message);
-      }
-      toast({ title: "Yorum Silindi" });
-      await fetchAnnouncements();
-      broadcastAnnouncementUpdate();
+        const response = await fetch('/api/announcements', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify({ action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId })
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
+            throw new Error(errorData.message);
+        }
+        const updatedAnnouncement = await response.json();
+        updateAnnouncementInState(updatedAnnouncement);
+        toast({ title: "Yorum Silindi" });
+        broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData);
     }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+  }, [user, isAdmin, announcements, toast]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
     if (!user) { throw new Error("Giriş yapmalısınız."); }
@@ -375,30 +380,28 @@ export function useAnnouncements() {
         return ann;
     });
     
-    if (!wasModified) {
-      return; // Abort if user was not authorized
-    }
+    if (!wasModified) return;
     setAnnouncements(optimisticData);
 
     try {
-      const apiCall = () => fetch('/api/announcements', { 
+      const response = await fetch('/api/announcements', { 
           method: 'POST', 
           headers: {'Content-Type': 'application/json'}, 
           body: JSON.stringify({ action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId })
       });
-      const response = await apiCall();
       if (!response.ok) {
           const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
           throw new Error(errorData.message);
       }
+      const updatedAnnouncement = await response.json();
+      updateAnnouncementInState(updatedAnnouncement);
       toast({ title: "Yanıt Silindi" });
-      await fetchAnnouncements();
       broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData);
     }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+  }, [user, isAdmin, announcements, toast]);
 
   // Listen for broadcasted updates from other tabs/components
   useEffect(() => {

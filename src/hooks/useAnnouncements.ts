@@ -105,10 +105,9 @@ export function useAnnouncements() {
   const { siteNotificationsPreference } = useSettings();
   const { toast } = useToast();
 
-  const eventSourceRef = useRef<EventSource | null>(null);
   const isLoading = announcements === null;
-
   const userInfoRef = useRef({ user, isAdmin });
+
   useEffect(() => {
     userInfoRef.current = { user, isAdmin };
   }, [user, isAdmin]);
@@ -118,8 +117,9 @@ export function useAnnouncements() {
     siteNotificationsPrefRef.current = siteNotificationsPreference;
   }, [siteNotificationsPreference]);
 
+
   useEffect(() => {
-    let stillMounted = true;
+    let isMounted = true;
     let previousAnnouncementsState: Announcement[] = [];
 
     const showNotification = (title: string, body: string, tag?: string) => {
@@ -139,72 +139,59 @@ export function useAnnouncements() {
       };
     };
 
-    const initializeAndConnect = async () => {
-      try {
-        const cachedAnnouncements = await idbGet<Announcement[]>(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY);
-        if (stillMounted && cachedAnnouncements && Array.isArray(cachedAnnouncements)) {
-          setAnnouncements(cachedAnnouncements);
-          previousAnnouncementsState = cachedAnnouncements;
-        } else if (stillMounted) {
-          setAnnouncements([]);
+    // 1. Attempt to load from cache first for instant UI
+    idbGet<Announcement[]>(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY).then(cachedData => {
+        if (isMounted && cachedData) {
+            previousAnnouncementsState = cachedData;
+            setAnnouncements(cachedData);
         }
-      } catch (e) {
-        console.warn("Could not load announcements from IndexedDB:", e);
-        if (stillMounted) {
-            setAnnouncements([]);
-        }
-      }
+    });
 
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      
-      const newEventSource = new EventSource('/api/announcements/stream');
-      eventSourceRef.current = newEventSource;
+    // 2. Establish live SSE connection
+    const eventSource = new EventSource('/api/announcements/stream');
 
-      newEventSource.onmessage = (event) => {
-        if (!stillMounted) return;
+    eventSource.onmessage = (event) => {
+        if (!isMounted) return;
 
         try {
-          const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-          const { user: currentUser, isAdmin: currentIsAdmin } = userInfoRef.current;
+            const serverData: Announcement[] = JSON.parse(event.data);
+            const { user: currentUser, isAdmin: currentIsAdmin } = userInfoRef.current;
 
-          if (currentUser && previousAnnouncementsState.length > 0) {
-            const currentUserIdentifier = currentIsAdmin ? "ADMIN_ACCOUNT" : `${currentUser.name} ${currentUser.surname}`;
-            updatedAnnouncementsFromServer.forEach(newAnn => {
-              const isGenuinelyNew = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
-              if (isGenuinelyNew && newAnn.authorId !== currentUserIdentifier) {
-                showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : ""), `new-ann-${newAnn.id}`);
-              }
-            });
-          }
-          
-          setAnnouncements(updatedAnnouncementsFromServer);
-          previousAnnouncementsState = updatedAnnouncementsFromServer;
-          idbSet(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY, updatedAnnouncementsFromServer).catch(e => console.error("Failed to cache announcements in IndexedDB", e));
+            // Notify for new announcements
+            if (currentUser && previousAnnouncementsState.length > 0) {
+              const currentUserIdentifier = currentIsAdmin ? "ADMIN_ACCOUNT" : `${currentUser.name} ${currentUser.surname}`;
+              serverData.forEach(newAnn => {
+                const isGenuinelyNew = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
+                if (isGenuinelyNew && newAnn.authorId !== currentUserIdentifier) {
+                  showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : ""), `new-ann-${newAnn.id}`);
+                }
+              });
+            }
+            
+            // Update state and cache
+            setAnnouncements(serverData);
+            previousAnnouncementsState = serverData;
+            idbSet(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY, serverData).catch(e => console.error("Failed to cache announcements in IndexedDB", e));
+
         } catch (error) {
-          console.error("[SSE Announcements] Error parsing SSE message data:", error);
+            console.error("[SSE Announcements] Error parsing SSE message data:", error);
         }
-      };
+    };
 
-      newEventSource.onerror = (error) => {
+    eventSource.onerror = (error) => {
         console.error("[SSE Announcements] Connection error:", error);
-        if (stillMounted) {
-          setAnnouncements(announcements => announcements === null ? [] : announcements);
+        if (isMounted && announcements === null) {
+            setAnnouncements([]); // If cache is empty and SSE fails, show "no announcements" instead of loader
         }
-      };
+        eventSource.close();
     };
 
-    initializeAndConnect();
-
+    // 3. Cleanup on unmount
     return () => {
-      stillMounted = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+        isMounted = false;
+        eventSource.close();
     };
-  }, []);
+  }, []); // <-- CRITICAL: Empty dependency array ensures this runs only once.
 
   useEffect(() => {
     if (announcements === null) return;

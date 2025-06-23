@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ContactMessage } from '@/app/api/contact/route';
 import { useToast } from './use-toast';
 import { idbGet, idbSet, STORES } from '@/lib/idb';
@@ -10,61 +10,52 @@ const MESSAGES_KEY = 'all-contact-messages';
 
 export function useContactMessages() {
   const [messages, setMessages] = useState<ContactMessage[] | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
   const { toast } = useToast();
   
   const isLoading = messages === null;
   
   useEffect(() => {
-    let stillMounted = true;
+    let isMounted = true;
     
-    const initializeAndConnect = async () => {
-      try {
-        const cachedMessages = await idbGet<ContactMessage[]>(STORES.CONTACT_MESSAGES, MESSAGES_KEY);
-        if (stillMounted && cachedMessages && Array.isArray(cachedMessages)) {
-            setMessages(cachedMessages);
+    // 1. Attempt to load from cache first for instant UI
+    idbGet<ContactMessage[]>(STORES.CONTACT_MESSAGES, MESSAGES_KEY).then(cachedData => {
+        if (isMounted && cachedData) {
+            setMessages(cachedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
         }
-      } catch (e) {
-          console.warn("Could not load contact messages from IndexedDB:", e);
-      }
+    });
 
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
+    // 2. Establish live SSE connection
+    const eventSource = new EventSource('/api/contact/stream');
 
-      const newEventSource = new EventSource('/api/contact/stream');
-      eventSourceRef.current = newEventSource;
-
-      newEventSource.onmessage = (event) => {
-        if(!stillMounted) return;
+    eventSource.onmessage = (event) => {
+        if(!isMounted) return;
         try {
-          const updatedMessages: ContactMessage[] = JSON.parse(event.data);
-          const sortedMessages = updatedMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setMessages(sortedMessages);
-          idbSet(STORES.CONTACT_MESSAGES, MESSAGES_KEY, sortedMessages).catch(e => console.error("Failed to cache contact messages in IndexedDB", e));
+            const serverData: ContactMessage[] = JSON.parse(event.data);
+            const sortedData = serverData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+            // Update state and cache
+            setMessages(sortedData);
+            idbSet(STORES.CONTACT_MESSAGES, MESSAGES_KEY, sortedData).catch(e => console.error("Failed to cache contact messages in IndexedDB", e));
         } catch (error) {
-          console.error("Error processing SSE message for contact messages:", error);
+            console.error("Error processing SSE message for contact messages:", error);
         }
-      };
-
-      newEventSource.onerror = (error) => {
-          console.error("[SSE Contact] Connection error:", error);
-          if (stillMounted) {
-            setMessages(msgs => msgs === null ? [] : msgs);
-          }
-      };
-    }
-    
-    initializeAndConnect();
-
-    return () => {
-      stillMounted = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
     };
-  }, []);
+
+    eventSource.onerror = (error) => {
+        console.error("[SSE Contact] Connection error:", error);
+        if (isMounted && messages === null) {
+            setMessages([]); // If cache is empty and SSE fails, show "no messages" instead of loader
+        }
+        eventSource.close();
+    };
+
+    // 3. Cleanup on unmount
+    return () => {
+        isMounted = false;
+        eventSource.close();
+    };
+  }, []); // <-- CRITICAL: Empty dependency array ensures this runs only once.
+
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
     const newMessage: ContactMessage = {

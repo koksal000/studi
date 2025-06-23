@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from './use-toast';
 import { STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
@@ -59,65 +59,55 @@ export function useGallery() {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[] | null>(null);
   const { user } = useUser();
   const { toast } = useToast();
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   const isLoading = galleryImages === null;
 
   useEffect(() => {
-    let stillMounted = true;
+    let isMounted = true;
     
-    const initializeAndConnect = async () => {
-      try {
-        const cachedImages = await idbGet<GalleryImage[]>(STORES.GALLERY, GALLERY_KEY);
-        if (stillMounted) {
-            if (cachedImages && Array.isArray(cachedImages) && cachedImages.length > 0) {
-                setGalleryImages(cachedImages.sort(gallerySortFn));
+    // 1. Attempt to load from cache first for instant UI
+    idbGet<GalleryImage[]>(STORES.GALLERY, GALLERY_KEY).then(cachedData => {
+        if (isMounted) {
+            if (cachedData && cachedData.length > 0) {
+                setGalleryImages(cachedData.sort(gallerySortFn));
             } else {
+                // If cache is empty, use static seeds as a starting point
                 setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
             }
         }
-      } catch(e) {
-        console.warn("Could not load gallery from IndexedDB, using static seeds:", e);
-        if(stillMounted) setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
-      }
+    });
 
-      if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-      }
-      
-      const newEventSource = new EventSource('/api/gallery/stream');
-      eventSourceRef.current = newEventSource;
+    // 2. Establish live SSE connection
+    const eventSource = new EventSource('/api/gallery/stream');
 
-      newEventSource.onmessage = (event) => {
-        if(!stillMounted) return;
+    eventSource.onmessage = (event) => {
+        if(!isMounted) return;
         try {
-          const updatedGalleryFromServer: GalleryImage[] = JSON.parse(event.data);
-          const sortedImages = updatedGalleryFromServer.sort(gallerySortFn);
-          setGalleryImages(sortedImages);
-          idbSet(STORES.GALLERY, GALLERY_KEY, sortedImages).catch(e => console.error("Failed to cache gallery images in IndexedDB", e));
+            const serverData: GalleryImage[] = JSON.parse(event.data);
+            const sortedData = serverData.sort(gallerySortFn);
+            
+            // Update state and cache
+            setGalleryImages(sortedData);
+            idbSet(STORES.GALLERY, GALLERY_KEY, sortedData).catch(e => console.error("Failed to cache gallery images in IndexedDB", e));
         } catch (error) {
-          console.error("Error processing gallery SSE message:", error);
+            console.error("Error processing gallery SSE message:", error);
         }
-      };
-
-      newEventSource.onerror = (error) => {
-        console.error("[SSE Gallery] Connection error:", error);
-        if (stillMounted) {
-            setGalleryImages(images => images === null ? [] : images);
-        }
-      };
-    }
-    
-    initializeAndConnect();
-
-    return () => {
-      stillMounted = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
     };
-  }, []);
+
+    eventSource.onerror = (error) => {
+        console.error("[SSE Gallery] Connection error:", error);
+        if (isMounted && galleryImages === null) {
+            setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
+        }
+        eventSource.close();
+    };
+
+    // 3. Cleanup on unmount
+    return () => {
+        isMounted = false;
+        eventSource.close();
+    };
+  }, []); // <-- CRITICAL: Empty dependency array ensures this runs only once.
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {

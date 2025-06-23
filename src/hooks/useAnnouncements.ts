@@ -98,8 +98,7 @@ type AnnouncementApiPayload =
 const ANNOUNCEMENTS_KEY = 'all-announcements';
 
 export function useAnnouncements() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const { user, isAdmin } = useUser();
   const { lastOpenedNotificationTimestamp } = useAnnouncementStatus();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -107,24 +106,103 @@ export function useAnnouncements() {
   const { toast } = useToast();
 
   const eventSourceRef = useRef<EventSource | null>(null);
-  const announcementsRef = useRef<Announcement[]>(announcements);
-  
-  // Use a ref to hold the latest value of siteNotificationsPreference
-  // This avoids re-running the main effect when the preference changes.
+  const isLoading = announcements === null;
+
+  const userInfoRef = useRef({ user, isAdmin });
+  useEffect(() => {
+    userInfoRef.current = { user, isAdmin };
+  }, [user, isAdmin]);
+
   const siteNotificationsPrefRef = useRef(siteNotificationsPreference);
   useEffect(() => {
     siteNotificationsPrefRef.current = siteNotificationsPreference;
   }, [siteNotificationsPreference]);
 
-  // Use a ref for the user info as well to use inside the main effect.
-  const userInfoRef = useRef({ user, isAdmin });
   useEffect(() => {
-      userInfoRef.current = { user, isAdmin };
-  }, [user, isAdmin]);
+    let stillMounted = true;
+    let previousAnnouncementsState: Announcement[] = [];
 
-  // This effect calculates unread count and should react to its dependencies
+    const showNotification = (title: string, body: string, tag?: string) => {
+      if (!siteNotificationsPrefRef.current || typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
+        return;
+      }
+      const notification = new Notification(title, {
+        body: body,
+        icon: '/images/logo.png',
+        tag: tag || `ann-${Date.now()}`,
+        renotify: !!tag,
+      });
+      notification.onclick = (event) => {
+        event.preventDefault();
+        window.open(window.location.origin + '/announcements', '_blank');
+        notification.close();
+      };
+    };
+
+    const initializeAndConnect = async () => {
+      try {
+        const cachedAnnouncements = await idbGet<Announcement[]>(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY);
+        if (stillMounted && cachedAnnouncements && Array.isArray(cachedAnnouncements)) {
+          setAnnouncements(cachedAnnouncements);
+          previousAnnouncementsState = cachedAnnouncements;
+        }
+      } catch (e) {
+        console.warn("Could not load announcements from IndexedDB:", e);
+      }
+
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+      
+      const newEventSource = new EventSource('/api/announcements/stream');
+      eventSourceRef.current = newEventSource;
+
+      newEventSource.onmessage = (event) => {
+        if (!stillMounted) return;
+
+        try {
+          const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
+          const { user: currentUser, isAdmin: currentIsAdmin } = userInfoRef.current;
+
+          if (currentUser && previousAnnouncementsState.length > 0) {
+            const currentUserIdentifier = currentIsAdmin ? "ADMIN_ACCOUNT" : `${currentUser.name} ${currentUser.surname}`;
+            updatedAnnouncementsFromServer.forEach(newAnn => {
+              const isGenuinelyNew = !previousAnnouncementsState.find(pa => pa.id === newAnn.id);
+              if (isGenuinelyNew && newAnn.authorId !== currentUserIdentifier) {
+                showNotification(`Yeni Duyuru: ${newAnn.title}`, newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : ""), `new-ann-${newAnn.id}`);
+              }
+            });
+          }
+          
+          setAnnouncements(updatedAnnouncementsFromServer);
+          previousAnnouncementsState = updatedAnnouncementsFromServer;
+          idbSet(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY, updatedAnnouncementsFromServer).catch(e => console.error("Failed to cache announcements in IndexedDB", e));
+        } catch (error) {
+          console.error("[SSE Announcements] Error parsing SSE message data:", error);
+        }
+      };
+
+      newEventSource.onerror = (error) => {
+        console.error("[SSE Announcements] Connection error:", error);
+        if (stillMounted) {
+          setAnnouncements(announcements => announcements === null ? [] : announcements);
+        }
+      };
+    };
+
+    initializeAndConnect();
+
+    return () => {
+      stillMounted = false;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []); // This effect should only run once on mount.
+
   useEffect(() => {
-    announcementsRef.current = announcements;
+    if (announcements === null) return;
     if (!lastOpenedNotificationTimestamp) {
       setUnreadCount(announcements.length);
     } else {
@@ -135,99 +213,7 @@ export function useAnnouncements() {
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
 
-  // This is the main SSE effect. It should only run once on mount.
-  useEffect(() => {
-    let stillMounted = true;
-
-    const showNotification = (title: string, body: string, tag?: string) => {
-        // Use the ref to get the latest preference without causing a dependency loop
-        if (!siteNotificationsPrefRef.current) {
-          return;
-        }
-        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === 'granted') {
-          const notification = new Notification(title, {
-            body: body,
-            icon: '/images/logo.png', 
-            tag: tag || `ann-${Date.now()}`,
-            renotify: !!tag, 
-          });
-          notification.onclick = (event) => {
-            event.preventDefault();
-            window.open(window.location.origin + '/announcements', '_blank');
-            notification.close();
-          };
-        }
-      };
-    
-    async function initialize() {
-      setIsLoading(true);
-      try {
-        const cachedAnnouncements = await idbGet<Announcement[]>(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY);
-        if (stillMounted && cachedAnnouncements && Array.isArray(cachedAnnouncements)) {
-          setAnnouncements(cachedAnnouncements);
-        }
-      } catch (e) {
-        console.warn("Could not load announcements from IndexedDB:", e);
-      }
-
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-
-      const newEventSource = new EventSource('/api/announcements/stream');
-      eventSourceRef.current = newEventSource;
-
-      newEventSource.onmessage = (event) => {
-        if (!stillMounted) return;
-        
-        try {
-          const updatedAnnouncementsFromServer: Announcement[] = JSON.parse(event.data);
-          const previousState = announcementsRef.current;
-          
-          setAnnouncements(updatedAnnouncementsFromServer);
-          idbSet(STORES.ANNOUNCEMENTS, ANNOUNCEMENTS_KEY, updatedAnnouncementsFromServer).catch(e => console.error("Failed to cache announcements in IndexedDB", e));
-
-          const { user: currentUser, isAdmin: currentIsAdmin } = userInfoRef.current;
-
-          if (currentUser && previousState.length > 0) {
-            const currentUserIdentifier = currentIsAdmin ? "ADMIN_ACCOUNT" : `${currentUser.name} ${currentUser.surname}`;
-            updatedAnnouncementsFromServer.forEach(newAnn => {
-              const isGenuinelyNew = !previousState.find(pa => pa.id === newAnn.id);
-              const isAuthorSelf = newAnn.authorId === currentUserIdentifier;
-
-              if (isGenuinelyNew && !isAuthorSelf) {
-                const notificationTitle = `Yeni Duyuru: ${newAnn.title}`;
-                const notificationBody = newAnn.content.substring(0, 100) + (newAnn.content.length > 100 ? "..." : "");
-                showNotification(notificationTitle, notificationBody, `new-ann-${newAnn.id}`);
-              }
-            });
-          }
-
-        } catch (error) {
-          console.error("[SSE Announcements] Error parsing SSE message data:", error);
-        } finally {
-          if (stillMounted) setIsLoading(false);
-        }
-      };
-
-      newEventSource.onerror = (error) => {
-        console.error("[SSE Announcements] Connection error:", error);
-        if (stillMounted) setIsLoading(false);
-      };
-    }
-
-    initialize();
-
-    return () => {
-      stillMounted = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-    };
-  }, []); // EMPTY DEPENDENCY ARRAY IS THE KEY FIX
-
-  const sendApiRequest = async (payload: AnnouncementApiPayload, method: 'POST' | 'DELETE' = 'POST', queryParams = '') => {
+  const sendApiRequest = useCallback(async (payload: AnnouncementApiPayload, method: 'POST' | 'DELETE' = 'POST', queryParams = '') => {
     if (!user && 'action' in payload && (payload.action !== "TOGGLE_ANNOUNCEMENT_LIKE")) {
       toast({ title: "Giriş Gerekli", description: "Bu işlemi yapmak için giriş yapmalısınız.", variant: "destructive" });
       throw new Error("User not logged in for this action");
@@ -250,7 +236,7 @@ export function useAnnouncements() {
       }
       throw error;
     }
-  };
+  }, [user, toast]);
 
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
     if (!user) throw new Error("User not logged in");
@@ -270,7 +256,7 @@ export function useAnnouncements() {
     };
     await sendApiRequest(newAnnouncementData);
     toast({ title: "Duyuru Eklendi", description: `"${newAnnouncementData.title}" başarıyla yayınlandı.` });
-  }, [user, isAdmin, toast]);
+  }, [user, isAdmin, toast, sendApiRequest]);
 
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user || !isAdmin) { 
@@ -278,7 +264,7 @@ export function useAnnouncements() {
         throw new Error("Admin privileges required to delete announcement.");
     }
     await sendApiRequest(undefined as any, 'DELETE', `?id=${id}`);
-  }, [user, isAdmin, toast]);
+  }, [user, isAdmin, toast, sendApiRequest]);
 
   const toggleAnnouncementLike = useCallback(async (announcementId: string) => {
     if (!user) {
@@ -287,7 +273,7 @@ export function useAnnouncements() {
     }
     const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
     await sendApiRequest({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId });
-  }, [user, isAdmin, toast]);
+  }, [user, isAdmin, toast, sendApiRequest]);
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
     if (!user) {
@@ -308,7 +294,7 @@ export function useAnnouncements() {
     };
     await sendApiRequest({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: commentPayload });
     toast({ title: "Yorum Eklendi", description: "Yorumunuz başarıyla gönderildi." });
-  }, [user, isAdmin, toast]);
+  }, [user, isAdmin, toast, sendApiRequest]);
 
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
     if (!user) {
@@ -332,7 +318,7 @@ export function useAnnouncements() {
     };
     await sendApiRequest({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: replyPayload });
     toast({ title: "Yanıt Eklendi", description: "Yanıtınız başarıyla gönderildi." });
-  }, [user, isAdmin, toast]);
+  }, [user, isAdmin, toast, sendApiRequest]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
     if (!user) {
@@ -341,7 +327,7 @@ export function useAnnouncements() {
     }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
     await sendApiRequest({ action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId });
-  }, [user, isAdmin, toast]);
+  }, [user, isAdmin, toast, sendApiRequest]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
      if (!user) { 
@@ -350,10 +336,10 @@ export function useAnnouncements() {
     }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
     await sendApiRequest({ action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId });
-  }, [user, isAdmin, toast]);
+  }, [user, isAdmin, toast, sendApiRequest]);
 
   return {
-    announcements,
+    announcements: announcements ?? [],
     addAnnouncement,
     deleteAnnouncement,
     isLoading,

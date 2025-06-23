@@ -43,21 +43,17 @@ export function useContactMessages() {
   }, []);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
-    const tempId = `msg_temp_${Date.now()}`;
-    const newMessage: ContactMessage = {
-      ...newMessageData,
-      id: tempId,
-      date: new Date().toISOString(),
-    };
-    
-    // No optimistic UI for contact form as the user navigates away/clears form.
+    // No optimistic update for contact form as the user navigates away/clears form.
     // The main benefit is for the admin panel to update.
-
     try {
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newMessage, id: `msg_${Date.now()}` }),
+        body: JSON.stringify({ 
+          ...newMessageData, 
+          id: `msg_${Date.now()}`,
+          date: new Date().toISOString()
+        }),
       });
 
       if (!response.ok) {
@@ -68,7 +64,7 @@ export function useContactMessages() {
         title: "Mesajınız Gönderildi!",
         description: "En kısa sürede sizinle iletişime geçeceğiz.",
       });
-      broadcastContactUpdate(); // Notify admin panels
+      broadcastContactUpdate(); // Notify admin panels to refetch
     } catch (error: any) {
       toast({ title: "Mesaj Gönderilemedi", description: error.message, variant: "destructive" });
       throw error; // Re-throw to be caught by the form handler
@@ -99,5 +95,3 @@ export function useContactMessages() {
     refetchMessages: fetchMessages,
   };
 }
-
-    

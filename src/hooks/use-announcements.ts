@@ -92,70 +92,85 @@ export function useAnnouncements() {
         setUnreadCount(0);
     }
   }, [announcements, lastOpenedNotificationTimestamp]);
+  
+  // A generic function to perform optimistic updates and API calls
+  const performApiAction = useCallback(async (
+    optimisticUpdate: (currentData: Announcement[]) => Announcement[],
+    apiCall: () => Promise<Response>,
+    successToast?: { title: string, description?: string }
+  ) => {
+    const originalData = [...announcements];
+    const optimisticData = optimisticUpdate(originalData);
+    setAnnouncements(optimisticData);
+
+    try {
+      const response = await apiCall();
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
+        throw new Error(errorData.message);
+      }
+      
+      if (successToast) {
+        toast(successToast);
+      }
+      
+      await fetchAnnouncements(); // Re-fetch for consistency
+      broadcastAnnouncementUpdate();
+
+    } catch (error: any) {
+      toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
+      setAnnouncements(originalData); // Rollback on failure
+    }
+  }, [announcements, toast, fetchAnnouncements]);
+
 
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Duyuru eklemek için giriş yapmalısınız.", variant: "destructive" });
-      throw new Error("User not logged in");
+      return;
     }
-    // Optimistic UI update
-    const tempId = `ann_temp_${Date.now()}`;
-    const newAnnouncement: Announcement = {
-      ...payload,
-      id: tempId,
-      date: new Date().toISOString(),
-      author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
-      authorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`,
-      likes: [],
-      comments: [],
-    };
-    const originalAnnouncements = announcements;
-    setAnnouncements(prev => [newAnnouncement, ...prev]);
 
-    try {
-        const response = await fetch('/api/announcements', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...newAnnouncement, id: `ann_${Date.now()}` })
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Duyuru sunucuya kaydedilemedi.' }));
-            throw new Error(errorData.message);
-        }
-        toast({ title: "Duyuru Eklendi", description: "Duyurunuz başarıyla yayınlandı." });
-        // Refetch to get the final server-confirmed data including the real ID
-        await fetchAnnouncements();
-        broadcastAnnouncementUpdate();
-    } catch (error: any) {
-        toast({ title: 'Duyuru Eklenemedi', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalAnnouncements); // Revert on failure
-    }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+    const optimisticUpdate = (currentData: Announcement[]) => {
+      const newAnnouncement: Announcement = {
+        ...payload,
+        id: `ann_temp_${Date.now()}`,
+        date: new Date().toISOString(),
+        author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
+        authorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`,
+        likes: [],
+        comments: [],
+      };
+      return [newAnnouncement, ...currentData];
+    };
+
+    const apiCall = () => fetch('/api/announcements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        ...payload,
+        id: `ann_${Date.now()}`,
+        date: new Date().toISOString(),
+        author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
+        authorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`,
+        likes: [],
+        comments: [],
+       })
+    });
+    
+    await performApiAction(optimisticUpdate, apiCall, { title: "Duyuru Eklendi", description: "Duyurunuz başarıyla yayınlandı." });
+  }, [user, isAdmin, performApiAction, toast]);
   
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user || !isAdmin) {
       toast({ title: "Yetki Gerekli", description: "Duyuru silmek için yönetici olmalısınız.", variant: "destructive" });
-      throw new Error("Admin privileges required");
+      return;
     }
     
-    const originalAnnouncements = announcements;
-    const optimisticAnnouncements = originalAnnouncements.filter(a => a.id !== id);
-    setAnnouncements(optimisticAnnouncements);
-    broadcastAnnouncementUpdate();
+    const optimisticUpdate = (currentData: Announcement[]) => currentData.filter(a => a.id !== id);
+    const apiCall = () => fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
 
-    try {
-      const response = await fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Duyuru silinemedi."}));
-        throw new Error(errorData.message);
-      }
-      toast({ title: "Duyuru Silindi", description: `Duyuru başarıyla silindi.` });
-    } catch (error: any) {
-      toast({ title: "Silme Başarısız", description: error.message, variant: "destructive"});
-      setAnnouncements(originalAnnouncements);
-      broadcastAnnouncementUpdate();
-    }
-  }, [user, isAdmin, announcements, toast]);
+    await performApiAction(optimisticUpdate, apiCall, { title: "Duyuru Silindi" });
+  }, [user, isAdmin, performApiAction, toast]);
 
   const toggleAnnouncementLike = useCallback(async (announcementId: string) => {
     if (!user) {
@@ -163,9 +178,8 @@ export function useAnnouncements() {
       return;
     }
     const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const originalAnnouncements = announcements;
-
-    const optimisticAnnouncements = originalAnnouncements.map(ann => {
+    
+    const optimisticUpdate = (currentData: Announcement[]) => currentData.map(ann => {
       if (ann.id === announcementId) {
         const newLikes = ann.likes ? [...ann.likes] : [];
         const likeIndex = newLikes.findIndex(l => l.userId === userId);
@@ -178,59 +192,49 @@ export function useAnnouncements() {
       }
       return ann;
     });
-    setAnnouncements(optimisticAnnouncements);
-    
-    try {
-      const payload = { action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId };
-      const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Beğeni işlemi kaydedilemedi."}));
-        throw new Error(errorData.message);
-      }
-    } catch (error: any) {
-      toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
-      setAnnouncements(originalAnnouncements);
-    }
-  }, [user, isAdmin, announcements, toast]);
+
+    const apiCall = () => fetch('/api/announcements', { 
+      method: 'POST', 
+      headers: {'Content-Type': 'application/json'}, 
+      body: JSON.stringify({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId }) 
+    });
+
+    await performApiAction(optimisticUpdate, apiCall);
+  }, [user, isAdmin, performApiAction, toast]);
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
     if (!user) { throw new Error("Not logged in"); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const tempComment: Comment = { id: `cmt_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
     
-    const originalData = announcements;
-    const optimisticData = originalData.map(ann => {
+    const optimisticUpdate = (currentData: Announcement[]) => currentData.map(ann => {
       if (ann.id === announcementId) {
+        const tempComment: Comment = { id: `cmt_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
         const newComments = ann.comments ? [tempComment, ...ann.comments] : [tempComment];
         return { ...ann, comments: newComments };
       }
       return ann;
     });
-    setAnnouncements(optimisticData);
 
-    try {
-        const payload = { action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: { authorName, authorId, text } };
-        const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-        if (!response.ok) throw new Error((await response.json()).message || "Yorum eklenemedi.");
-        await fetchAnnouncements(); // Re-sync with server to get real IDs
-    } catch (error: any) {
-        toast({ title: 'Yorum Eklenemedi', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData);
-    }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+    const apiCall = () => fetch('/api/announcements', { 
+      method: 'POST', 
+      headers: {'Content-Type': 'application/json'}, 
+      body: JSON.stringify({ action: "ADD_COMMENT_TO_ANNOUNCEMENT", announcementId, comment: { authorName, authorId, text } }) 
+    });
+
+    await performApiAction(optimisticUpdate, apiCall, { title: "Yorum Eklendi" });
+  }, [user, isAdmin, performApiAction, toast]);
   
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string) => {
     if (!user) { throw new Error("Not logged in"); }
     const authorName = `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
-    const tempReply: Reply = { id: `rpl_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName };
-    
-    const originalData = announcements;
-    const optimisticData = originalData.map(ann => {
+
+    const optimisticUpdate = (currentData: Announcement[]) => currentData.map(ann => {
       if (ann.id === announcementId) {
         const newComments = (ann.comments || []).map(c => {
           if (c.id === commentId) {
+            const tempReply: Reply = { id: `rpl_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName };
             const newReplies = c.replies ? [tempReply, ...c.replies] : [tempReply];
             return {...c, replies: newReplies};
           }
@@ -240,68 +244,73 @@ export function useAnnouncements() {
       }
       return ann;
     });
-    setAnnouncements(optimisticData);
 
-    try {
-      const payload = { action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName } };
-      const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-      if (!response.ok) throw new Error((await response.json()).message || "Yanıt eklenemedi.");
-      await fetchAnnouncements(); // Re-sync
-    } catch (error: any) {
-      toast({ title: 'Yanıt Eklenemedi', description: error.message, variant: 'destructive' });
-      setAnnouncements(originalData);
-    }
-  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
+    const apiCall = () => fetch('/api/announcements', { 
+      method: 'POST', 
+      headers: {'Content-Type': 'application/json'}, 
+      body: JSON.stringify({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId: replyingToAuthorName } })
+    });
+
+    await performApiAction(optimisticUpdate, apiCall, { title: "Yanıt Eklendi" });
+  }, [user, isAdmin, performApiAction, toast]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
     if (!user) { throw new Error("User not logged in"); }
-    const originalData = announcements;
-    const optimisticData = originalData.map(ann => {
-      if (ann.id === announcementId) {
-        return {...ann, comments: (ann.comments || []).filter(c => c.id !== commentId)};
-      }
-      return ann;
-    });
-    setAnnouncements(optimisticData);
+    const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
-    try {
-      const payload = { action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}` };
-      const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-      if (!response.ok) throw new Error((await response.json()).message || "Yorum silinemedi.");
-      toast({ title: "Yorum Silindi", description: "Yorumunuz başarıyla kaldırıldı."});
-    } catch (error: any) {
-      toast({ title: "Yorum Silinemedi", description: error.message, variant: "destructive" });
-      setAnnouncements(originalData);
-    }
-  }, [user, isAdmin, announcements, toast]);
+    const optimisticUpdate = (currentData: Announcement[]) => currentData.map(ann => {
+        if (ann.id === announcementId) {
+            const commentToDelete = (ann.comments || []).find(c => c.id === commentId);
+            if (commentToDelete && commentToDelete.authorId !== deleterAuthorId) {
+                toast({ title: "Yetki Hatası", description: "Bu yorumu silme yetkiniz yok.", variant: "destructive" });
+                return currentData; // Return original data if not authorized
+            }
+            return {...ann, comments: (ann.comments || []).filter(c => c.id !== commentId)};
+        }
+        return ann;
+    });
+
+    const apiCall = () => fetch('/api/announcements', { 
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify({ action: "DELETE_COMMENT", announcementId, commentId, deleterAuthorId })
+    });
+
+    await performApiAction(optimisticUpdate, apiCall, { title: "Yorum Silindi" });
+  }, [user, isAdmin, performApiAction, toast]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
     if (!user) { throw new Error("User not logged in"); }
-    const originalData = announcements;
-    const optimisticData = originalData.map(ann => {
-      if (ann.id === announcementId) {
-        const newComments = (ann.comments || []).map(c => {
-          if (c.id === commentId) {
-            return {...c, replies: (c.replies || []).filter(r => r.id !== replyId)};
-          }
-          return c;
-        });
-        return {...ann, comments: newComments};
-      }
-      return ann;
-    });
-    setAnnouncements(optimisticData);
+    const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
-    try {
-      const payload = { action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}` };
-      const response = await fetch('/api/announcements', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-      if (!response.ok) throw new Error((await response.json()).message || "Yanıt silinemedi.");
-      toast({ title: "Yanıt Silindi", description: "Yanıtınız başarıyla kaldırıldı." });
-    } catch (error: any) {
-      toast({ title: "Yanıt Silinemedi", description: error.message, variant: "destructive" });
-      setAnnouncements(originalData);
-    }
-  }, [user, isAdmin, announcements, toast]);
+    const optimisticUpdate = (currentData: Announcement[]) => currentData.map(ann => {
+        if (ann.id === announcementId) {
+            const newComments = (ann.comments || []).map(c => {
+                if (c.id === commentId) {
+                    const replyToDelete = (c.replies || []).find(r => r.id === replyId);
+                     if (replyToDelete && replyToDelete.authorId !== deleterAuthorId) {
+                        toast({ title: "Yetki Hatası", description: "Bu yanıtı silme yetkiniz yok.", variant: "destructive" });
+                        return c;
+                    }
+                    return {...c, replies: (c.replies || []).filter(r => r.id !== replyId)};
+                }
+                return c;
+            });
+            // If check fails, it returns the original comments array, so we must check if it's a new array
+            if (JSON.stringify(newComments) === JSON.stringify(ann.comments)) return ann;
+            return {...ann, comments: newComments};
+        }
+        return ann;
+    });
+
+    const apiCall = () => fetch('/api/announcements', { 
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify({ action: "DELETE_REPLY", announcementId, commentId, replyId, deleterAuthorId })
+    });
+
+    await performApiAction(optimisticUpdate, apiCall, { title: "Yanıt Silindi" });
+  }, [user, isAdmin, performApiAction, toast]);
 
   // Listen for broadcasted updates from other tabs/components
   useEffect(() => {
@@ -334,5 +343,3 @@ export function useAnnouncements() {
     refetchAnnouncements: fetchAnnouncements,
   };
 }
-
-    

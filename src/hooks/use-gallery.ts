@@ -57,16 +57,14 @@ export function useGallery() {
       throw new Error("User not logged in");
     }
 
-    const tempId = `gal_temp_${Date.now()}`;
+    const originalImages = [...galleryImages];
     const newImage: GalleryImage = {
-      id: tempId,
+      id: `gal_temp_${Date.now()}`,
       src: payload.imageDataUri,
       alt: payload.alt?.trim() || payload.caption,
       caption: payload.caption,
       hint: payload.hint?.trim() || 'uploaded image',
     };
-
-    const originalImages = galleryImages;
     setGalleryImages(prev => [newImage, ...prev]);
 
     try {
@@ -98,10 +96,8 @@ export function useGallery() {
       throw new Error("User not logged in");
     }
     
-    const originalImages = galleryImages;
-    const optimisticImages = originalImages.filter(img => img.id !== id);
-    setGalleryImages(optimisticImages);
-    broadcastGalleryUpdate();
+    const originalImages = [...galleryImages];
+    setGalleryImages(prev => prev.filter(img => img.id !== id));
     
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
@@ -114,13 +110,14 @@ export function useGallery() {
       }
       
       toast({ title: "Resim Silindi", description: "Resim galeriden başarıyla kaldırıldı." });
+      await fetchGallery(); // Refetch to ensure consistency
+      broadcastGalleryUpdate();
     } catch (error: any) {
       toast({ title: "Silme Başarısız", description: error.message, variant: "destructive" });
       setGalleryImages(originalImages);
-      broadcastGalleryUpdate();
       throw error;
     }
-  }, [user, toast, galleryImages]);
+  }, [user, toast, galleryImages, fetchGallery]);
 
 
   // Listen for broadcasted updates from other tabs/components
@@ -146,5 +143,3 @@ export function useGallery() {
     isLoading 
   };
 }
-
-    

@@ -63,21 +63,20 @@ export function useGallery() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let stillMounted = true;
     async function loadInitialData() {
-      setIsLoading(true);
+      if(stillMounted) setIsLoading(true);
       try {
         const cachedImages = await idbGet<GalleryImage[]>(STORES.GALLERY, GALLERY_KEY);
-        if (cachedImages && Array.isArray(cachedImages) && cachedImages.length > 0) {
+        if (stillMounted && cachedImages && Array.isArray(cachedImages) && cachedImages.length > 0) {
             setGalleryImages(cachedImages.sort(gallerySortFn));
-        } else {
-            // Fallback to static if cache is empty
+        } else if (stillMounted) {
             setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
         }
       } catch(e) {
         console.warn("Could not load gallery from IndexedDB, using static seeds:", e);
-        setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
+        if(stillMounted) setGalleryImages([...STATIC_GALLERY_IMAGES_FOR_SEEDING].sort(gallerySortFn));
       }
-      // SSE will set loading to false
     }
     
     loadInitialData();
@@ -90,6 +89,7 @@ export function useGallery() {
     eventSourceRef.current = newEventSource;
 
     newEventSource.onmessage = (event) => {
+      if(!stillMounted) return;
       try {
         const updatedGalleryFromServer: GalleryImage[] = JSON.parse(event.data);
         const sortedImages = updatedGalleryFromServer.sort(gallerySortFn);
@@ -98,20 +98,21 @@ export function useGallery() {
       } catch (error) {
         console.error("Error processing gallery SSE message:", error);
       } finally {
-        if (isLoading) setIsLoading(false);
+        if (stillMounted && isLoading) setIsLoading(false);
       }
     };
 
     newEventSource.onerror = (error) => {
       console.error("[SSE Gallery] Connection error:", error);
-      if (isLoading) setIsLoading(false);
+      if (stillMounted && isLoading) setIsLoading(false);
     };
 
     return () => {
+      stillMounted = false;
       if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
     };
-  }, [isLoading]);
+  }, []);
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {

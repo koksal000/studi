@@ -15,17 +15,17 @@ export function useContactMessages() {
   const { toast } = useToast();
   
   useEffect(() => {
+    let stillMounted = true;
     async function loadInitialData() {
-      setIsLoading(true);
+      if (stillMounted) setIsLoading(true);
       try {
         const cachedMessages = await idbGet<ContactMessage[]>(STORES.CONTACT_MESSAGES, MESSAGES_KEY);
-        if (cachedMessages && Array.isArray(cachedMessages)) {
+        if (stillMounted && cachedMessages && Array.isArray(cachedMessages)) {
             setMessages(cachedMessages);
         }
       } catch (e) {
           console.warn("Could not load contact messages from IndexedDB:", e);
       }
-      // SSE will handle setting loading to false
     }
 
     loadInitialData();
@@ -38,6 +38,7 @@ export function useContactMessages() {
     eventSourceRef.current = newEventSource;
 
     newEventSource.onmessage = (event) => {
+      if(!stillMounted) return;
       try {
         const updatedMessages: ContactMessage[] = JSON.parse(event.data);
         const sortedMessages = updatedMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -46,20 +47,21 @@ export function useContactMessages() {
       } catch (error) {
         console.error("Error processing SSE message for contact messages:", error);
       } finally {
-         if (isLoading) setIsLoading(false);
+         if (stillMounted && isLoading) setIsLoading(false);
       }
     };
 
     newEventSource.onerror = (error) => {
         console.error("[SSE Contact] Connection error:", error);
-        if (isLoading) setIsLoading(false);
+        if (stillMounted && isLoading) setIsLoading(false);
     };
 
     return () => {
+      stillMounted = false;
       if (newEventSource) newEventSource.close();
       eventSourceRef.current = null;
     };
-  }, [isLoading]);
+  }, []);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
     const newMessage: ContactMessage = {
@@ -79,7 +81,6 @@ export function useContactMessages() {
         toast({ title: "Mesaj Gönderilemedi", description: errorData.message || "Sunucu hatası oluştu.", variant: "destructive" });
         throw new Error(errorData.message || "Mesaj sunucuya gönderilemedi.");
       }
-      // UI will update via SSE
     } catch (error) {
       console.error("Error submitting contact message:", error);
       if (error instanceof Error && !error.message.includes("sunucuya gönderilemedi")) {

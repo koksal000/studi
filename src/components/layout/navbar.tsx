@@ -15,7 +15,8 @@ import { NAVIGATION_LINKS, VILLAGE_NAME, ADMIN_PANEL_PATH } from '@/lib/constant
 import { Input } from '@/components/ui/input';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
-import { AnnouncementPopoverContent } from '@/components/specific/announcement-popover-content';
+import { useNotifications } from '@/hooks/use-notifications';
+import { NotificationPopoverContent } from '@/components/specific/notification-popover-content';
 
 
 export function Navbar() {
@@ -28,8 +29,11 @@ export function Navbar() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isNotificationPopoverOpen, setIsNotificationPopoverOpen] = useState(false);
 
-  const { announcements, unreadCount } = useAnnouncements();
+  const { announcements, unreadCount: unreadAnnouncementsCount } = useAnnouncements();
+  const { notifications: replyNotifications, unreadCount: unreadRepliesCount, markAllAsRead } = useNotifications();
   const { setLastOpenedNotificationTimestamp } = useAnnouncementStatus();
+
+  const totalUnreadCount = unreadAnnouncementsCount + unreadRepliesCount;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +61,7 @@ export function Navbar() {
     setIsNotificationPopoverOpen(open);
     if (open) {
       setLastOpenedNotificationTimestamp(Date.now());
+      markAllAsRead();
     }
   };
 
@@ -102,7 +107,7 @@ export function Navbar() {
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" title="Bildirimler" className="relative">
                   <Bell className="h-5 w-5" />
-                  {unreadCount > 0 && (
+                  {totalUnreadCount > 0 && (
                     <span className="absolute top-1 right-1 flex h-2.5 w-2.5 items-center justify-center">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive"></span>
@@ -112,8 +117,9 @@ export function Navbar() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
-                <AnnouncementPopoverContent 
+                <NotificationPopoverContent 
                   announcements={announcements} 
+                  replyNotifications={replyNotifications}
                   onClose={() => setIsNotificationPopoverOpen(false)} 
                 />
               </PopoverContent>

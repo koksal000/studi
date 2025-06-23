@@ -36,4 +36,13 @@ export function broadcastContactUpdate() {
   }
 }
 
-    
+/**
+ * Notifies other tabs/windows that user notification data has changed.
+ */
+export function broadcastNotificationUpdate() {
+  if (canUseBroadcastChannel) {
+    const channel = new BroadcastChannel('notification_updates');
+    channel.postMessage('update');
+    channel.close();
+  }
+}

@@ -289,27 +289,33 @@ const summarizeWeatherFlow = ai.defineFlow(
 
       } catch (e: any) {
         attempts++;
-        const rawErrorMessage = e.message || "";
-        // Sanitize the error message to remove non-ASCII characters before throwing.
-        const errorMessage = rawErrorMessage.replace(/[^\\x00-\\x7F]/g, ""); 
-        const isServiceUnavailable = errorMessage.includes("503") && errorMessage.includes("Service Unavailable");
-        const isEmptyOutput = errorMessage.includes("The weather summarization prompt did not return an output.");
+        const rawErrorMessage = e.message || "Unknown error";
+        
+        const isServiceUnavailable = rawErrorMessage.includes("503") || rawErrorMessage.includes("Service Unavailable");
+        const isEmptyOutput = rawErrorMessage.includes("The weather summarization prompt did not return an output.");
 
         if ((isServiceUnavailable || isEmptyOutput) && attempts < MAX_RETRIES) {
           console.warn(`[WeatherSummarization] AI Model error (Attempt ${attempts}/${MAX_RETRIES}): ${rawErrorMessage}. Retrying in ${RETRY_DELAY_MS / 1000}s...`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
         } else {
-          console.error("[WeatherSummarization] Error calling formatOpenMeteoDataPrompt after all retries or for non-retryable error:", e);
+           // Log the original, potentially non-ASCII error for debugging purposes.
+          console.error(`[WeatherSummarization] AI processing error after ${attempts} attempts:`, rawErrorMessage);
+          
           if (lastSuccessfulWeather && lastSuccessfulFetchTime) {
-            console.warn("[WeatherSummarization] AI processing failed, serving stale data due to error:", rawErrorMessage);
+            console.warn("[WeatherSummarization] AI processing failed, serving stale data.");
             return { 
               ...lastSuccessfulWeather, 
-              summary: `(Veriler işlenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla) ${lastSuccessfulWeather.summary}`,
+              // The user-facing summary can safely contain Turkish characters.
+              summary: `(Veriler güncellenemedi, en son ${lastSuccessfulFetchTime.toLocaleTimeString('tr-TR')} itibarıyla) ${lastSuccessfulWeather.summary}`,
               dataTimestamp: lastSuccessfulFetchTime.toISOString() 
             };
           }
-          if (isServiceUnavailable) throw new Error("The weather model is currently overloaded and no cache is available. Please try again later.");
-          throw new Error(errorMessage || "An unknown error occurred while generating weather summary and no cache is available.");
+          
+          // Throw a generic, ASCII-safe error to prevent the ByteString crash.
+          if (isServiceUnavailable) {
+            throw new Error("AI weather service is unavailable and no cached data exists.");
+          }
+          throw new Error("Failed to generate weather summary and no cached data exists.");
         }
       }
     }
@@ -327,4 +333,5 @@ const summarizeWeatherFlow = ai.defineFlow(
 );
 
     
+
 

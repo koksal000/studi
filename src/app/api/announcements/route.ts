@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Silinecek yorum bulunamadı.' }, { status: 404 });
       }
       const commentToDelete = announcementToUpdate.comments[commentIndex];
-      if (commentToDelete.authorId !== actionPayload.deleterAuthorId) {
+      if (commentToDelete.authorId !== actionPayload.deleterAuthorId && actionPayload.deleterAuthorId !== 'ADMIN_ACCOUNT') {
          console.warn(`[API/Announcements] Unauthorized attempt to delete comment ${actionPayload.commentId} by ${actionPayload.deleterAuthorId}. Owner is ${commentToDelete.authorId}`);
         return NextResponse.json({ message: 'Bu yorumu silme yetkiniz yok.' }, { status: 403 });
       }
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Silinecek yanıt bulunamadı.' }, { status: 404 });
       }
       const replyToDelete = commentToUpdate.replies[replyIndex];
-      if (replyToDelete.authorId !== actionPayload.deleterAuthorId) {
+      if (replyToDelete.authorId !== actionPayload.deleterAuthorId && actionPayload.deleterAuthorId !== 'ADMIN_ACCOUNT') {
         console.warn(`[API/Announcements] Unauthorized attempt to delete reply ${actionPayload.replyId} by ${actionPayload.deleterAuthorId}. Owner is ${replyToDelete.authorId}`);
         return NextResponse.json({ message: 'Bu yanıtı silme yetkiniz yok.' }, { status: 403 });
       }
@@ -232,7 +232,16 @@ export async function POST(request: NextRequest) {
 
     const existingIndex = announcements.findIndex(ann => ann.id === newAnnouncement.id);
     if (existingIndex !== -1) {
-      announcements[existingIndex] = newAnnouncement;
+      // Preserve original date and author on edit to avoid it being pushed to top
+      const originalAnnouncement = announcements[existingIndex];
+      announcements[existingIndex] = {
+        ...newAnnouncement,
+        date: originalAnnouncement.date,
+        author: originalAnnouncement.author,
+        authorId: originalAnnouncement.authorId,
+        likes: originalAnnouncement.likes,
+        comments: originalAnnouncement.comments,
+      };
     } else {
       announcements.unshift(newAnnouncement);
       isNewAnnouncement = true;
@@ -244,7 +253,7 @@ export async function POST(request: NextRequest) {
   if (announcementModified) {
     announcements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (writeAnnouncementsToFile(announcements)) {
-      return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : 201 });
+      return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : (isNewAnnouncement ? 201 : 200) });
     } else {
       console.error(`[API/Announcements] Failed to save data to file after modification.`);
       return NextResponse.json({ message: "Sunucu hatası: Veri kalıcı olarak kaydedilemedi." }, { status: 500 });
@@ -277,5 +286,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
-
-    

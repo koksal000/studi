@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ReplyItemProps {
-  reply: Reply; // Use 'reply' prop directly
+  reply: Reply;
   announcementId: string;
   commentId: string;
 }
@@ -38,7 +38,6 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
   const [isSubmittingReplyToReply, setIsSubmittingReplyToReply] = useState(false);
   const [isDeletingReply, setIsDeletingReply] = useState(false);
 
-  // Directly use replyProp for rendering and logic
   const formattedDate = new Date(replyProp.date).toLocaleDateString('tr-TR', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
@@ -73,32 +72,20 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
   };
 
   const handleDeleteReply = async () => {
-    if (!user) {
-        toast({ title: "Giriş Gerekli", description: "Yanıt silmek için giriş yapmalısınız.", variant: "destructive" });
-        return;
-    }
-    const currentUserAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    if (currentUserAuthorId !== replyProp.authorId) {
-        toast({ title: "Yetki Hatası", description: "Bu yanıtı silme yetkiniz yok.", variant: "destructive" });
-        return;
-    }
     setIsDeletingReply(true);
     try {
       await deleteReply(announcementId, commentId, replyProp.id);
-      toast({ title: "Yanıt Silindi", description: "Yanıtınız başarıyla kaldırıldı." });
     } catch (error: any) {
-      if (!error.message?.includes("Bu yanıtı silme yetkiniz yok")) {
-        toast({ title: "Silme Başarısız", description: error.message || "Yanıt silinirken bir sorun oluştu.", variant: "destructive"});
-      }
+      // Toast is handled by hook
     } finally {
       setIsDeletingReply(false);
     }
   };
 
   const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
-  const canDeleteThisReply = currentUserAuthorId === replyProp.authorId;
+  const canDeleteThisReply = isAdmin || currentUserAuthorId === replyProp.authorId;
 
-  if (!replyProp) return null; // Guard against null reply prop
+  if (!replyProp) return null;
 
   return (
     <>

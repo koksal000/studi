@@ -5,7 +5,7 @@ import type { Announcement } from '@/hooks/use-announcements';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, UserCircle, CalendarDays, Image as ImageIconLucide, Video as VideoIconLucide, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2 } from 'lucide-react';
+import { Trash2, UserCircle, CalendarDays, Image as ImageIconLucide, Video as VideoIconLucide, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2, Pencil } from 'lucide-react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -27,12 +27,13 @@ import { AnnouncementDetailDialog } from '@/components/specific/announcement-det
 import { CommentItem } from './comment-item';
 
 interface AnnouncementCardProps {
-  announcement: Announcement; // Use 'announcement' prop directly
+  announcement: Announcement;
   isCompact?: boolean;
   allowDelete?: boolean;
+  onEditClick?: (announcement: Announcement) => void;
 }
 
-export function AnnouncementCard({ announcement: annProp, isCompact = false, allowDelete = false }: AnnouncementCardProps) {
+export function AnnouncementCard({ announcement: annProp, isCompact = false, allowDelete = false, onEditClick }: AnnouncementCardProps) {
   const { user, isAdmin } = useUser();
   const { deleteAnnouncement: removeAnnouncementHook, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
@@ -48,24 +49,18 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
   const [isMuted, setIsMuted] = useState(false);
   const [isDeletingAnnouncement, setIsDeletingAnnouncement] = useState(false);
 
-  // Directly use annProp for rendering and logic
   const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
   const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
 
-  const canAttemptDeleteAnnouncement = !!user && isAdmin && allowDelete;
+  const canAttemptDeleteOrEdit = !!user && isAdmin && allowDelete;
 
   const performDeleteAnnouncement = async () => {
     setIsDeletingAnnouncement(true);
     try {
       await removeAnnouncementHook(annProp.id);
-      toast({
-        title: "Duyuru Silindi",
-        description: `"${annProp.title}" başlıklı duyuru başarıyla silindi.`,
-      });
+      // Toast is handled in the hook
     } catch (error: any) {
-      if (!error.message?.includes("Admin privileges required")) {
-        toast({ title: "Silme Başarısız", description: error.message || "Duyuru silinirken bir sorun oluştu.", variant: "destructive"});
-      }
+      // Error toast is handled in the hook
     } finally {
       setIsDeletingAnnouncement(false);
       setIsAdminPasswordDialogOpenForAnnDelete(false);
@@ -153,7 +148,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     return <><Link2 className="h-3.5 w-3.5 mr-1 text-primary" /> Medya</>;
   };
 
-  if (!annProp) return null; // Guard against null announcement prop
+  if (!annProp) return null;
 
   return (
     <>
@@ -210,23 +205,28 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
           )}
         </CardContent>
         <CardFooter className="flex justify-end items-center pt-4">
-          {canAttemptDeleteAnnouncement && !isCompact && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="destructive" size="sm" disabled={isDeletingAnnouncement}><Trash2 className="h-4 w-4 mr-2" /> Sil</Button></AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle><AlertDialogDescription>"{annProp.title}" başlıklı duyuruyu ve tüm yorumlarını/yanıtlarını kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isDeletingAnnouncement}>İptal</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => setIsAdminPasswordDialogOpenForAnnDelete(true)}
-                    className="bg-destructive hover:bg-destructive/90"
-                    disabled={isDeletingAnnouncement}
-                  >
-                    {isDeletingAnnouncement ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+          {canAttemptDeleteOrEdit && !isCompact && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => onEditClick?.(annProp)}>
+                <Pencil className="mr-2 h-4 w-4" /> Düzenle
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild><Button variant="destructive" size="sm" disabled={isDeletingAnnouncement}><Trash2 className="h-4 w-4 mr-2" /> Sil</Button></AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader><AlertDialogTitle>Duyuruyu Silmeyi Onayla</AlertDialogTitle><AlertDialogDescription>"{annProp.title}" başlıklı duyuruyu ve tüm yorumlarını/yanıtlarını kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.</AlertDialogDescription></AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeletingAnnouncement}>İptal</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => setIsAdminPasswordDialogOpenForAnnDelete(true)}
+                      className="bg-destructive hover:bg-destructive/90"
+                      disabled={isDeletingAnnouncement}
+                    >
+                      {isDeletingAnnouncement ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Evet, Sil"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           )}
         </CardFooter>
       </Card>
@@ -240,5 +240,3 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     </>
   );
 }
-
-    

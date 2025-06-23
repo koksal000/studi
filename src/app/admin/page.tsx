@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, Activity } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, Activity, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -41,7 +41,9 @@ export default function AdminPage() {
   const { galleryImages, addGalleryImage, deleteGalleryImage, isLoading: galleryLoading } = useGallery();
   const { announcements, isLoading: announcementsLoading } = useAnnouncements();
 
-  const [isAddAnnouncementDialogOpen, setIsAddAnnouncementDialogOpen] = useState(false);
+  const [isAnnouncementDialogOpen, setIsAnnouncementDialogOpen] = useState(false);
+  const [announcementToEdit, setAnnouncementToEdit] = useState<Announcement | null>(null);
+
   const [isUserRequestsDialogOpen, setIsUserRequestsDialogOpen] = useState(false);
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [newImageCaption, setNewImageCaption] = useState('');
@@ -78,6 +80,11 @@ export default function AdminPage() {
       fetchEntryStats();
     }
   }, [user]);
+
+  const handleOpenAnnouncementDialog = (announcement: Announcement | null) => {
+    setAnnouncementToEdit(announcement);
+    setIsAnnouncementDialogOpen(true);
+  };
 
 
   if (!user) {
@@ -269,7 +276,7 @@ export default function AdminPage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             Duyuru Yönetimi
-            <Button onClick={() => setIsAddAnnouncementDialogOpen(true)} className="shadow-sm">
+            <Button onClick={() => handleOpenAnnouncementDialog(null)} className="shadow-sm">
               <PlusCircle className="mr-2 h-5 w-5" /> Yeni Duyuru Ekle
             </Button>
           </CardTitle>
@@ -279,8 +286,9 @@ export default function AdminPage() {
         </CardHeader>
         <CardContent>
           <AddAnnouncementDialog
-            isOpen={isAddAnnouncementDialogOpen}
-            onOpenChange={setIsAddAnnouncementDialogOpen}
+            isOpen={isAnnouncementDialogOpen}
+            onOpenChange={setIsAnnouncementDialogOpen}
+            announcementToEdit={announcementToEdit}
           />
 
           <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4 mt-6 flex items-center">
@@ -293,7 +301,12 @@ export default function AdminPage() {
           {!announcementsLoading && announcements.length > 0 && (
             <div className="space-y-4">
               {announcements.map((ann) => (
-                <AnnouncementCard key={ann.id} announcement={ann} allowDelete={true} />
+                <AnnouncementCard 
+                  key={ann.id} 
+                  announcement={ann} 
+                  allowDelete={true} 
+                  onEditClick={() => handleOpenAnnouncementDialog(ann)}
+                />
               ))}
             </div>
           )}
@@ -415,8 +428,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-
-    
-
-    

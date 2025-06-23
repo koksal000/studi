@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface CommentItemProps {
-  comment: Comment; // Use 'comment' prop directly
+  comment: Comment;
   announcementId: string;
 }
 
@@ -38,7 +38,6 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [isDeletingComment, setIsDeletingComment] = useState(false);
 
-  // Directly use commentProp for rendering and logic
   const formattedDate = new Date(commentProp.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
@@ -73,33 +72,20 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
   };
 
   const handleDeleteComment = async () => {
-    if (!user) {
-        toast({ title: "Giriş Gerekli", description: "Yorum silmek için giriş yapmalısınız.", variant: "destructive" });
-        return;
-    }
-    const currentUserAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    if (currentUserAuthorId !== commentProp.authorId) {
-        toast({ title: "Yetki Hatası", description: "Bu yorumu silme yetkiniz yok.", variant: "destructive" });
-        return;
-    }
-
     setIsDeletingComment(true);
     try {
       await deleteComment(announcementId, commentProp.id);
-      toast({ title: "Yorum Silindi", description: "Yorumunuz başarıyla kaldırıldı."});
     } catch (error: any) {
-      if (!error.message?.includes("Bu yorumu silme yetkiniz yok")) {
-        toast({ title: "Silme Başarısız", description: error.message || "Yorum silinirken bir sorun oluştu.", variant: "destructive"});
-      }
+      // Toast is handled by hook
     } finally {
       setIsDeletingComment(false);
     }
   };
 
   const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
-  const canDeleteThisComment = currentUserAuthorId === commentProp.authorId;
+  const canDeleteThisComment = isAdmin || currentUserAuthorId === commentProp.authorId;
 
-  if (!commentProp) return null; // Guard against null comment prop
+  if (!commentProp) return null;
 
   return (
     <>

@@ -51,7 +51,8 @@ export interface NewAnnouncementPayload {
   mediaType?: string | null;
 }
 
-// This hook now manages all announcement data, interactions, and optimistic UI updates.
+export interface EditAnnouncementPayload extends NewAnnouncementPayload {}
+
 export function useAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,7 +62,6 @@ export function useAnnouncements() {
   const { toast } = useToast();
 
   const fetchAnnouncements = useCallback(async () => {
-    // Only set loading to true on initial fetch
     if (announcements.length === 0) {
         setIsLoading(true);
     }
@@ -144,10 +144,72 @@ export function useAnnouncements() {
     }
   }, [user, isAdmin, toast]);
   
+  const editAnnouncement = useCallback(async (announcementId: string, payload: EditAnnouncementPayload) => {
+    if (!user || !isAdmin) {
+      toast({ title: 'Yetki Gerekli', description: 'Duyuru düzenlemek için yönetici olmalısınız.', variant: 'destructive' });
+      throw new Error('Admin privileges required.');
+    }
+
+    const originalAnnouncements = [...announcements];
+    let originalAnnouncement: Announcement | undefined;
+
+    const optimisticData = originalAnnouncements.map(ann => {
+      if (ann.id === announcementId) {
+        originalAnnouncement = { ...ann };
+        return {
+          ...ann,
+          title: payload.title,
+          content: payload.content,
+          media: payload.media,
+          mediaType: payload.mediaType,
+        };
+      }
+      return ann;
+    });
+
+    setAnnouncements(optimisticData);
+
+    try {
+      if (!originalAnnouncement) {
+          throw new Error("Düzenlenecek duyuru bulunamadı.");
+      }
+        
+      const announcementToUpdate: Announcement = {
+          ...originalAnnouncement,
+          title: payload.title,
+          content: payload.content,
+          media: payload.media,
+          mediaType: payload.mediaType,
+      };
+
+      const response = await fetch('/api/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(announcementToUpdate),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Duyuru güncellenirken sunucu hatası oluştu.' }));
+        throw new Error(errorData.message);
+      }
+      
+      const finalAnnouncement: Announcement = await response.json();
+      
+      setAnnouncements(current => current.map(ann => ann.id === announcementId ? finalAnnouncement : ann));
+      toast({ title: 'Duyuru Güncellendi', description: 'Değişiklikler başarıyla kaydedildi.' });
+      broadcastAnnouncementUpdate();
+
+    } catch (error: any) {
+      toast({ title: 'Güncelleme Başarısız', description: error.message, variant: 'destructive' });
+      setAnnouncements(originalAnnouncements);
+      throw error;
+    }
+  }, [user, isAdmin, announcements, toast]);
+
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user || !isAdmin) {
       toast({ title: "Yetki Gerekli", description: "Duyuru silmek için yönetici olmalısınız.", variant: "destructive" });
-      return;
+      throw new Error("Admin privileges required.");
     }
     
     const originalData = [...announcements];
@@ -155,8 +217,7 @@ export function useAnnouncements() {
     setAnnouncements(optimisticData);
 
     try {
-        const apiCall = () => fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
-        const response = await apiCall();
+        const response = await fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
             throw new Error(errorData.message);
@@ -292,7 +353,6 @@ export function useAnnouncements() {
       if (!replyResponse.ok) throw new Error((await replyResponse.json()).message || "Yanıt eklenemedi.");
       const updatedAnnouncement = await replyResponse.json();
       
-      // Send notification if not replying to self
       if (replyingToAuthorId && announcementTitle && replyingToAuthorId !== authorId) {
         const notificationPayload = { type: 'reply', recipientUserId: replyingToAuthorId, senderUserName: authorName, announcementId: announcementId, announcementTitle: announcementTitle, commentId: commentId };
         const notifResponse = await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notificationPayload) });
@@ -307,7 +367,7 @@ export function useAnnouncements() {
 
     } catch (error: any) {
         toast({ title: 'Yanıt Eklenemedi', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData); // Rollback on failure
+        setAnnouncements(originalData);
     }
   }, [user, isAdmin, announcements, toast]);
 
@@ -316,21 +376,12 @@ export function useAnnouncements() {
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
     const originalData = [...announcements];
-    let wasModified = true;
     const optimisticData = originalData.map(ann => {
         if (ann.id === announcementId) {
-            const commentToDelete = (ann.comments || []).find(c => c.id === commentId);
-            if (commentToDelete && commentToDelete.authorId !== deleterAuthorId) {
-                toast({ title: "Yetki Hatası", description: "Bu yorumu silme yetkiniz yok.", variant: "destructive" });
-                wasModified = false;
-                return ann; 
-            }
             return {...ann, comments: (ann.comments || []).filter(c => c.id !== commentId)};
         }
         return ann;
     });
-
-    if (!wasModified) return;
     setAnnouncements(optimisticData);
 
     try {
@@ -358,28 +409,18 @@ export function useAnnouncements() {
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
 
     const originalData = [...announcements];
-    let wasModified = true;
     const optimisticData = originalData.map(ann => {
         if (ann.id === announcementId) {
             const newComments = (ann.comments || []).map(c => {
                 if (c.id === commentId) {
-                    const replyToDelete = (c.replies || []).find(r => r.id === replyId);
-                     if (replyToDelete && replyToDelete.authorId !== deleterAuthorId) {
-                        toast({ title: "Yetki Hatası", description: "Bu yanıtı silme yetkiniz yok.", variant: "destructive" });
-                        wasModified = false;
-                        return c;
-                    }
                     return {...c, replies: (c.replies || []).filter(r => r.id !== replyId)};
                 }
                 return c;
             });
-            if (!wasModified) return ann;
             return {...ann, comments: newComments};
         }
         return ann;
     });
-    
-    if (!wasModified) return;
     setAnnouncements(optimisticData);
 
     try {
@@ -402,7 +443,6 @@ export function useAnnouncements() {
     }
   }, [user, isAdmin, announcements, toast]);
 
-  // Listen for broadcasted updates from other tabs/components
   useEffect(() => {
     const channel = new BroadcastChannel('announcement_updates');
     const handleMessage = (event: MessageEvent) => {
@@ -422,6 +462,7 @@ export function useAnnouncements() {
   return {
     announcements,
     addAnnouncement,
+    editAnnouncement,
     deleteAnnouncement,
     isLoading,
     unreadCount,

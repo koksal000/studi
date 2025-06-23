@@ -6,6 +6,17 @@
     "announcementId": "ann_1750714718442",
     "announcementTitle": "Deneme",
     "commentId": "cmt_1750714738379_w96hpc5",
+    "id": "notif_1750715631563_2wi0s6q",
+    "date": "2025-06-23T21:53:51.563Z",
+    "read": false
+  },
+  {
+    "type": "reply",
+    "recipientUserId": "ADMIN_ACCOUNT",
+    "senderUserName": "Bot Deneme Hesap",
+    "announcementId": "ann_1750714718442",
+    "announcementTitle": "Deneme",
+    "commentId": "cmt_1750714738379_w96hpc5",
     "id": "notif_1750714919333_g4gk159",
     "date": "2025-06-23T21:41:59.333Z",
     "read": true

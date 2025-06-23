@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncementStatus } from '@/contexts/announcement-status-context';
 import { useToast } from './use-toast';
+import { broadcastAnnouncementUpdate } from '@/lib/broadcast-channel';
+
 
 export interface Like {
   userId: string;
@@ -59,7 +61,10 @@ export function useAnnouncements() {
   const { toast } = useToast();
 
   const fetchAnnouncements = useCallback(async () => {
-    setIsLoading(true);
+    // Only set loading to true on initial fetch
+    if (announcements.length === 0) {
+        setIsLoading(true);
+    }
     try {
       const response = await fetch('/api/announcements');
       if (!response.ok) throw new Error('Duyurular sunucudan alınamadı.');
@@ -71,11 +76,12 @@ export function useAnnouncements() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, announcements.length]);
 
   useEffect(() => {
     fetchAnnouncements();
-  }, [fetchAnnouncements]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (announcements.length > 0 && lastOpenedNotificationTimestamp) {
@@ -92,51 +98,51 @@ export function useAnnouncements() {
       toast({ title: "Giriş Gerekli", description: "Duyuru eklemek için giriş yapmalısınız.", variant: "destructive" });
       throw new Error("User not logged in");
     }
-
-    const newAnnouncementData: Announcement = {
-      id: `ann_temp_${Date.now()}`,
-      title: payload.title,
-      content: payload.content,
-      media: payload.media || null,
-      mediaType: payload.mediaType || null,
+    // Optimistic UI update
+    const tempId = `ann_temp_${Date.now()}`;
+    const newAnnouncement: Announcement = {
+      ...payload,
+      id: tempId,
       date: new Date().toISOString(),
       author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
       authorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`,
       likes: [],
       comments: [],
     };
-
-    const originalAnnouncements = [...announcements];
-    setAnnouncements(prev => [newAnnouncementData, ...prev]);
+    const originalAnnouncements = announcements;
+    setAnnouncements(prev => [newAnnouncement, ...prev]);
 
     try {
-      const response = await fetch('/api/announcements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newAnnouncementData, id: `ann_${Date.now()}` }) // Use a real ID for the server
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Duyuru sunucuya kaydedilemedi.'}));
-        throw new Error(errorData.message);
-      }
-      toast({ title: "Duyuru Eklendi", description: "Duyurunuz başarıyla yayınlandı." });
-      await fetchAnnouncements(); // Refetch to get the final server-confirmed data
+        const response = await fetch('/api/announcements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...newAnnouncement, id: `ann_${Date.now()}` })
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Duyuru sunucuya kaydedilemedi.' }));
+            throw new Error(errorData.message);
+        }
+        toast({ title: "Duyuru Eklendi", description: "Duyurunuz başarıyla yayınlandı." });
+        // Refetch to get the final server-confirmed data including the real ID
+        await fetchAnnouncements();
+        broadcastAnnouncementUpdate();
     } catch (error: any) {
-      toast({ title: 'Duyuru Eklenemedi', description: error.message, variant: 'destructive' });
-      setAnnouncements(originalAnnouncements);
+        toast({ title: 'Duyuru Eklenemedi', description: error.message, variant: 'destructive' });
+        setAnnouncements(originalAnnouncements); // Revert on failure
     }
   }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
   
   const deleteAnnouncement = useCallback(async (id: string) => {
     if (!user || !isAdmin) {
       toast({ title: "Yetki Gerekli", description: "Duyuru silmek için yönetici olmalısınız.", variant: "destructive" });
-      return;
+      throw new Error("Admin privileges required");
     }
     
-    const originalAnnouncements = [...announcements];
+    const originalAnnouncements = announcements;
     const optimisticAnnouncements = originalAnnouncements.filter(a => a.id !== id);
     setAnnouncements(optimisticAnnouncements);
-    
+    broadcastAnnouncementUpdate();
+
     try {
       const response = await fetch(`/api/announcements?id=${id}`, { method: 'DELETE' });
       if (!response.ok) {
@@ -147,6 +153,7 @@ export function useAnnouncements() {
     } catch (error: any) {
       toast({ title: "Silme Başarısız", description: error.message, variant: "destructive"});
       setAnnouncements(originalAnnouncements);
+      broadcastAnnouncementUpdate();
     }
   }, [user, isAdmin, announcements, toast]);
 
@@ -155,11 +162,10 @@ export function useAnnouncements() {
       toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive"});
       return;
     }
-
     const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
-    const originalAnnouncements = [...announcements];
+    const originalAnnouncements = announcements;
 
-    const optimisticAnnouncements = announcements.map(ann => {
+    const optimisticAnnouncements = originalAnnouncements.map(ann => {
       if (ann.id === announcementId) {
         const newLikes = ann.likes ? [...ann.likes] : [];
         const likeIndex = newLikes.findIndex(l => l.userId === userId);
@@ -193,7 +199,7 @@ export function useAnnouncements() {
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
     const tempComment: Comment = { id: `cmt_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
     
-    const originalData = [...announcements];
+    const originalData = announcements;
     const optimisticData = originalData.map(ann => {
       if (ann.id === announcementId) {
         const newComments = ann.comments ? [tempComment, ...ann.comments] : [tempComment];
@@ -220,7 +226,7 @@ export function useAnnouncements() {
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
     const tempReply: Reply = { id: `rpl_temp_${Date.now()}`, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName };
     
-    const originalData = [...announcements];
+    const originalData = announcements;
     const optimisticData = originalData.map(ann => {
       if (ann.id === announcementId) {
         const newComments = (ann.comments || []).map(c => {
@@ -249,7 +255,7 @@ export function useAnnouncements() {
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
     if (!user) { throw new Error("User not logged in"); }
-    const originalData = [...announcements];
+    const originalData = announcements;
     const optimisticData = originalData.map(ann => {
       if (ann.id === announcementId) {
         return {...ann, comments: (ann.comments || []).filter(c => c.id !== commentId)};
@@ -271,7 +277,7 @@ export function useAnnouncements() {
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
     if (!user) { throw new Error("User not logged in"); }
-    const originalData = [...announcements];
+    const originalData = announcements;
     const optimisticData = originalData.map(ann => {
       if (ann.id === announcementId) {
         const newComments = (ann.comments || []).map(c => {
@@ -297,6 +303,23 @@ export function useAnnouncements() {
     }
   }, [user, isAdmin, announcements, toast]);
 
+  // Listen for broadcasted updates from other tabs/components
+  useEffect(() => {
+    const channel = new BroadcastChannel('announcement_updates');
+    const handleMessage = (event: MessageEvent) => {
+        if (event.data === 'update') {
+            fetchAnnouncements();
+        }
+    };
+    channel.addEventListener('message', handleMessage);
+
+    return () => {
+        channel.removeEventListener('message', handleMessage);
+        channel.close();
+    };
+  }, [fetchAnnouncements]);
+
+
   return {
     announcements,
     addAnnouncement,
@@ -308,5 +331,8 @@ export function useAnnouncements() {
     addReplyToComment,
     deleteComment,
     deleteReply,
+    refetchAnnouncements: fetchAnnouncements,
   };
 }
+
+    

@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
+import { broadcastContactUpdate } from '@/lib/broadcast-channel';
 
 export interface ContactMessage {
   id: string;
@@ -19,7 +20,9 @@ export function useContactMessages() {
   const { toast } = useToast();
 
   const fetchMessages = useCallback(async () => {
-    setIsLoading(true);
+    if (messages.length === 0) {
+        setIsLoading(true);
+    }
     try {
       const response = await fetch('/api/contact');
       if (!response.ok) {
@@ -33,37 +36,61 @@ export function useContactMessages() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, messages.length]);
 
   useEffect(() => {
-    // Initial fetch for admin panel
-    // No need to fetch for regular users
+    // Initial fetch handled by refetch call in dialog
   }, []);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
+    const tempId = `msg_temp_${Date.now()}`;
     const newMessage: ContactMessage = {
       ...newMessageData,
-      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      id: tempId,
       date: new Date().toISOString(),
     };
+    
+    // No optimistic UI for contact form as the user navigates away/clears form.
+    // The main benefit is for the admin panel to update.
 
     try {
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newMessage),
+        body: JSON.stringify({ ...newMessage, id: `msg_${Date.now()}` }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: "Mesaj gönderilirken sunucu hatası oluştu." }));
         throw new Error(errorData.message);
       }
-      // Success toast is handled in the component
+      toast({
+        title: "Mesajınız Gönderildi!",
+        description: "En kısa sürede sizinle iletişime geçeceğiz.",
+      });
+      broadcastContactUpdate(); // Notify admin panels
     } catch (error: any) {
       toast({ title: "Mesaj Gönderilemedi", description: error.message, variant: "destructive" });
       throw error; // Re-throw to be caught by the form handler
     }
   }, [toast]);
+  
+  // Listen for broadcasted updates
+  useEffect(() => {
+    const channel = new BroadcastChannel('contact_updates');
+    const handleMessage = (event: MessageEvent) => {
+        if (event.data === 'update') {
+            fetchMessages();
+        }
+    };
+    channel.addEventListener('message', handleMessage);
+
+    return () => {
+        channel.removeEventListener('message', handleMessage);
+        channel.close();
+    };
+  }, [fetchMessages]);
+
 
   return { 
     messages,
@@ -72,3 +99,5 @@ export function useContactMessages() {
     refetchMessages: fetchMessages,
   };
 }
+
+    

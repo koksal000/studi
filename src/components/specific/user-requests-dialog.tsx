@@ -5,7 +5,7 @@
 import { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle as CardTitlePrimitive, CardDescription as CardDesc } from '@/components/ui/card'; // Renamed CardTitle to avoid conflict
-import { useContactMessages, type ContactMessage } from '@/hooks/use-contact-messages';
+import { useContactMessages } from '@/hooks/use-contact-messages';
 import { Button } from '@/components/ui/button';
 import { Loader2, Mail, MessageSquare, User, CalendarDays, Inbox } from 'lucide-react';
 
@@ -18,7 +18,6 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
   const { messages, isLoading, refetchMessages } = useContactMessages();
 
   useEffect(() => {
-    // When the dialog is opened, refetch the messages to ensure they are up-to-date.
     if (isOpen) {
       refetchMessages();
     }
@@ -71,7 +70,7 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
                     </div>
                     <CardDesc className="text-xs sm:text-sm pt-1">
                         <span className="flex items-center"><User className="mr-1.5 h-3.5 w-3.5 text-primary" />{msg.name}</span>
-                        <span className="flex items-center mt-0.5"><Mail className="mr-1.5 h-3.5 w-3.5 text-primary" />{msg.email}</span>
+                        <span className="flex items-center mt-0.5"><Mail className="mr-1.5 h-3.5 w-3.5 text-primary" /><a href={`mailto:${msg.email}`} className="text-accent hover:underline">{msg.email}</a></span>
                     </CardDesc>
                   </CardHeader>
                   <CardContent>
@@ -92,3 +91,5 @@ export function UserRequestsDialog({ isOpen, onOpenChange }: UserRequestsDialogP
     </Dialog>
   );
 }
+
+    

@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from './use-toast';
+import { broadcastGalleryUpdate } from '@/lib/broadcast-channel';
 
 export interface GalleryImage {
   id: string;
@@ -27,7 +28,9 @@ export function useGallery() {
   const { toast } = useToast();
 
   const fetchGallery = useCallback(async () => {
-    setIsLoading(true);
+    if (galleryImages.length === 0) {
+        setIsLoading(true);
+    }
     try {
       const response = await fetch('/api/gallery');
       if (!response.ok) {
@@ -41,11 +44,12 @@ export function useGallery() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, galleryImages.length]);
 
   useEffect(() => {
     fetchGallery();
-  }, [fetchGallery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {
@@ -53,22 +57,23 @@ export function useGallery() {
       throw new Error("User not logged in");
     }
 
+    const tempId = `gal_temp_${Date.now()}`;
     const newImage: GalleryImage = {
-      id: `gal_temp_${Date.now()}`,
+      id: tempId,
       src: payload.imageDataUri,
       alt: payload.alt?.trim() || payload.caption,
       caption: payload.caption,
       hint: payload.hint?.trim() || 'uploaded image',
     };
 
-    const originalImages = [...galleryImages];
+    const originalImages = galleryImages;
     setGalleryImages(prev => [newImage, ...prev]);
 
     try {
       const response = await fetch('/api/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newImage, id: `gal_${Date.now()}` }), // Use real ID for server
+        body: JSON.stringify({ ...newImage, id: `gal_${Date.now()}` }),
       });
 
       if (!response.ok) {
@@ -77,7 +82,9 @@ export function useGallery() {
       }
       
       toast({ title: "Yükleme Başarılı", description: "Resim galeriye eklendi." });
-      await fetchGallery(); // Refetch to get final data
+      await fetchGallery(); // Refetch to get final data with real ID
+      broadcastGalleryUpdate();
+
     } catch (error: any) {
       toast({ title: "Yükleme Başarısız", description: error.message, variant: "destructive" });
       setGalleryImages(originalImages);
@@ -91,9 +98,10 @@ export function useGallery() {
       throw new Error("User not logged in");
     }
     
-    const originalImages = [...galleryImages];
+    const originalImages = galleryImages;
     const optimisticImages = originalImages.filter(img => img.id !== id);
     setGalleryImages(optimisticImages);
+    broadcastGalleryUpdate();
     
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
@@ -106,13 +114,30 @@ export function useGallery() {
       }
       
       toast({ title: "Resim Silindi", description: "Resim galeriden başarıyla kaldırıldı." });
-      // No need to refetch, UI is already updated
     } catch (error: any) {
       toast({ title: "Silme Başarısız", description: error.message, variant: "destructive" });
       setGalleryImages(originalImages);
+      broadcastGalleryUpdate();
       throw error;
     }
   }, [user, toast, galleryImages]);
+
+
+  // Listen for broadcasted updates from other tabs/components
+  useEffect(() => {
+    const channel = new BroadcastChannel('gallery_updates');
+    const handleMessage = (event: MessageEvent) => {
+        if (event.data === 'update') {
+            fetchGallery();
+        }
+    };
+    channel.addEventListener('message', handleMessage);
+
+    return () => {
+        channel.removeEventListener('message', handleMessage);
+        channel.close();
+    };
+  }, [fetchGallery]);
 
   return { 
     galleryImages,
@@ -121,3 +146,5 @@ export function useGallery() {
     isLoading 
   };
 }
+
+    

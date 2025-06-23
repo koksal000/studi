@@ -13,6 +13,15 @@
         "userId": "ADMIN_ACCOUNT"
       }
     ],
-    "comments": []
+    "comments": [
+      {
+        "authorName": "Mücteba Köksal",
+        "authorId": "Mücteba Köksal",
+        "text": "Deneme ",
+        "id": "cmt_1750703326224_502s8ry",
+        "date": "2025-06-23T18:28:46.224Z",
+        "replies": []
+      }
+    ]
   }
 ]

@@ -151,7 +151,9 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
-        throw new Error(errorData.message);
+        const rawErrorMessage = errorData.message || 'Bilinmeyen bir sunucu hatası oluştu.';
+        const sanitizedErrorMessage = String(rawErrorMessage).replace(/[^\x00-\x7F]/g, "");
+        throw new Error(sanitizedErrorMessage || 'API action failed');
       }
       
       if (successToast) {
@@ -162,7 +164,8 @@ export function useAnnouncements() {
       return true;
 
     } catch (error: any) {
-      toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
+      const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
+      toast({ title: 'İşlem Başarısız', description: rawErrorMessage, variant: 'destructive' });
       console.error(`[useAnnouncements] API Action Failed:`, error);
       return false;
     }

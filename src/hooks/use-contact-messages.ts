@@ -28,8 +28,10 @@ export function useContactMessages() {
   }, [toast]);
 
   useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    if (isLoading) {
+        fetchMessages();
+    }
+  }, [isLoading, fetchMessages]);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
     const newMessage: ContactMessage = {
@@ -50,12 +52,12 @@ export function useContactMessages() {
         throw new Error(errorData.message);
       }
       
-      // No need to refetch here as only admins see the list, and they don't send messages.
-      // If admins could send messages, we would call fetchMessages() here.
-
     } catch (error: any) {
-      toast({ title: "Mesaj Gönderilemedi", description: error.message, variant: "destructive" });
-      throw error;
+      const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
+      toast({ title: "Mesaj Gönderilemedi", description: rawErrorMessage, variant: "destructive" });
+      const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
+      sanitizedError.stack = error.stack;
+      throw sanitizedError;
     }
   }, [toast]);
 
@@ -63,6 +65,6 @@ export function useContactMessages() {
     messages,
     isLoading, 
     addContactMessage,
-    refetchMessages: fetchMessages, // Expose refetch for admin panel if needed
+    refetchMessages: fetchMessages,
   };
 }

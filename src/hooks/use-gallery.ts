@@ -51,18 +51,21 @@ export function useGallery() {
 
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {
+      const err = new Error("User not logged in");
       toast({ title: "Giriş Gerekli", description: "Resim eklemek için giriş yapmalısınız.", variant: "destructive" });
-      throw new Error("User not logged in");
+      throw err;
     }
 
     if (!payload || !payload.imageDataUri || !payload.caption?.trim()) {
-      toast({ title: "Geçersiz Yükleme Verisi", description: "Resim verisi veya başlık eksik.", variant: "destructive" });
-      throw new Error("Invalid payload: Missing imageDataUri or caption.");
+        const err = new Error("Invalid payload: Missing imageDataUri or caption.");
+        toast({ title: "Geçersiz Yükleme Verisi", description: "Resim verisi veya başlık eksik.", variant: "destructive" });
+        throw err;
     }
 
     if (payload.imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH_HOOK) {
+        const err = new Error("Image data URI too large.");
         toast({ title: "Resim Verisi Çok Büyük", description: `Resim dosyası çok büyük.`, variant: "destructive", duration: 8000 });
-        throw new Error("Image data URI too large.");
+        throw err;
     }
 
     const newImageForApi: GalleryImage = {
@@ -89,15 +92,19 @@ export function useGallery() {
       await fetchGallery(); // Refetch after successful add
 
     } catch (error: any) {
-      toast({ title: "Yükleme Başarısız", description: error.message, variant: "destructive" });
-      throw error;
+        const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
+        toast({ title: "Yükleme Başarısız", description: rawErrorMessage, variant: "destructive" });
+        const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
+        sanitizedError.stack = error.stack;
+        throw sanitizedError;
     }
   }, [user, toast, fetchGallery]);
 
   const deleteGalleryImage = useCallback(async (id: string) => {
     if (!user) {
-      toast({ title: "Giriş Gerekli", description: "Resim silmek için giriş yapmalısınız.", variant: "destructive" });
-      throw new Error("User not logged in");
+        const err = new Error("User not logged in");
+        toast({ title: "Giriş Gerekli", description: "Resim silmek için giriş yapmalısınız.", variant: "destructive" });
+        throw err;
     }
 
     try {
@@ -114,8 +121,11 @@ export function useGallery() {
       await fetchGallery(); // Refetch after successful delete
 
     } catch (error: any) {
-      toast({ title: "Silme Başarısız", description: error.message, variant: "destructive" });
-      throw error;
+        const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
+        toast({ title: "Silme Başarısız", description: rawErrorMessage, variant: "destructive" });
+        const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
+        sanitizedError.stack = error.stack;
+        throw sanitizedError;
     }
   }, [user, toast, fetchGallery]);
 

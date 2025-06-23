@@ -20,8 +20,6 @@ export interface NewGalleryImagePayload {
   hint: string;
 }
 
-const MAX_IMAGE_DATA_URI_LENGTH_HOOK = Math.floor(5 * 1024 * 1024 * 1.37 * 1.05); // Approx 7.2MB for 5MB raw image
-
 export function useGallery() {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,69 +53,66 @@ export function useGallery() {
       throw new Error("User not logged in");
     }
 
-    if (!payload || !payload.imageDataUri || !payload.caption?.trim()) {
-      toast({ title: "Geçersiz Yükleme Verisi", description: "Resim verisi veya başlık eksik.", variant: "destructive" });
-      throw new Error("Invalid payload: Missing imageDataUri or caption.");
-    }
-
-    if (payload.imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH_HOOK) {
-        toast({ title: "Resim Verisi Çok Büyük", description: `Resim dosyası çok büyük.`, variant: "destructive", duration: 8000 });
-        throw new Error("Image data URI too large.");
-    }
-
-    const newImageForApi: GalleryImage = {
-      id: `gal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    const newImage: GalleryImage = {
+      id: `gal_temp_${Date.now()}`,
       src: payload.imageDataUri,
       alt: payload.alt?.trim() || payload.caption,
       caption: payload.caption,
       hint: payload.hint?.trim() || 'uploaded image',
     };
 
+    const originalImages = [...galleryImages];
+    setGalleryImages(prev => [newImage, ...prev]);
+
     try {
       const response = await fetch('/api/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newImageForApi),
+        body: JSON.stringify({ ...newImage, id: `gal_${Date.now()}` }), // Use real ID for server
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
+        const errorData = await response.json().catch(() => ({ message: 'Resim sunucuya yüklenemedi.' }));
         throw new Error(errorData.message);
       }
       
       toast({ title: "Yükleme Başarılı", description: "Resim galeriye eklendi." });
-      await fetchGallery(); // Refetch after successful add
-
+      await fetchGallery(); // Refetch to get final data
     } catch (error: any) {
       toast({ title: "Yükleme Başarısız", description: error.message, variant: "destructive" });
+      setGalleryImages(originalImages);
       throw error;
     }
-  }, [user, toast, fetchGallery]);
+  }, [user, toast, galleryImages, fetchGallery]);
 
   const deleteGalleryImage = useCallback(async (id: string) => {
     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Resim silmek için giriş yapmalısınız.", variant: "destructive" });
       throw new Error("User not logged in");
     }
-
+    
+    const originalImages = [...galleryImages];
+    const optimisticImages = originalImages.filter(img => img.id !== id);
+    setGalleryImages(optimisticImages);
+    
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen sunucu hatası' }));
+        const errorData = await response.json().catch(() => ({ message: 'Resim silinemedi.' }));
         throw new Error(errorData.message);
       }
       
       toast({ title: "Resim Silindi", description: "Resim galeriden başarıyla kaldırıldı." });
-      await fetchGallery(); // Refetch after successful delete
-
+      // No need to refetch, UI is already updated
     } catch (error: any) {
       toast({ title: "Silme Başarısız", description: error.message, variant: "destructive" });
+      setGalleryImages(originalImages);
       throw error;
     }
-  }, [user, toast, fetchGallery]);
+  }, [user, toast, galleryImages]);
 
   return { 
     galleryImages,

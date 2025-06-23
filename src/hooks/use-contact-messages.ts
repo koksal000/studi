@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
-import { STORES, idbGetAll, idbSetAll } from '@/lib/idb';
 
 export interface ContactMessage {
   id: string;
@@ -14,63 +13,32 @@ export interface ContactMessage {
   date: string;
 }
 
-let contactChannel: BroadcastChannel | null = null;
-if (typeof window !== 'undefined' && window.BroadcastChannel) {
-  contactChannel = new BroadcastChannel('contact-messages-channel');
-}
-
 export function useContactMessages() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const syncWithServer = useCallback(async () => {
+  const fetchMessages = useCallback(async () => {
+    setIsLoading(true);
     try {
       const response = await fetch('/api/contact');
-      if (!response.ok) throw new Error('Mesajlar sunucudan alınamadı.');
-      const serverData: ContactMessage[] = await response.json();
-      await idbSetAll(STORES.contactMessages, serverData);
-      contactChannel?.postMessage('update');
-      return serverData;
+      if (!response.ok) {
+        throw new Error("Mesajlar sunucudan alınamadı.");
+      }
+      const data: ContactMessage[] = await response.json();
+      setMessages(data);
     } catch (error: any) {
-      console.error("[useContactMessages] Sync with server failed:", error.message);
-      return null;
+      toast({ title: 'Mesajlar Yüklenemedi', description: error.message, variant: 'destructive' });
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
-
-  const refetchMessages = useCallback(() => {
-      setIsLoading(true);
-      syncWithServer().finally(() => setIsLoading(false));
-  }, [syncWithServer]);
+  }, [toast]);
 
   useEffect(() => {
-    const refreshFromIdb = () => {
-      idbGetAll<ContactMessage>(STORES.contactMessages).then(data => {
-        if (data) setMessages(data);
-      });
-    };
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data === 'update') {
-        refreshFromIdb();
-      }
-    };
-
-    contactChannel?.addEventListener('message', handleMessage);
-
-    setIsLoading(true);
-    idbGetAll<ContactMessage>(STORES.contactMessages).then((cachedData) => {
-      if (cachedData && cachedData.length > 0) {
-        setMessages(cachedData);
-      }
-      // Initial sync for admins to get latest messages.
-      syncWithServer();
-    }).finally(() => setIsLoading(false));
-
-    return () => {
-      contactChannel?.removeEventListener('message', handleMessage);
-    };
-  }, [syncWithServer]);
+    // Initial fetch for admin panel
+    // No need to fetch for regular users
+  }, []);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
     const newMessage: ContactMessage = {
@@ -87,21 +55,20 @@ export function useContactMessages() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Sunucu hatası" }));
+        const errorData = await response.json().catch(() => ({ message: "Mesaj gönderilirken sunucu hatası oluştu." }));
         throw new Error(errorData.message);
       }
-      // Notify admin panel if open
-      syncWithServer();
+      // Success toast is handled in the component
     } catch (error: any) {
       toast({ title: "Mesaj Gönderilemedi", description: error.message, variant: "destructive" });
-      throw new Error(String(error.message).replace(/[^\x00-\x7F]/g, ""));
+      throw error; // Re-throw to be caught by the form handler
     }
-  }, [toast, syncWithServer]);
+  }, [toast]);
 
   return { 
     messages,
     isLoading, 
     addContactMessage,
-    refetchMessages,
+    refetchMessages: fetchMessages,
   };
 }

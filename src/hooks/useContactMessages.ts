@@ -2,8 +2,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import type { ContactMessage } from '@/app/api/contact/route';
 import { useToast } from './use-toast';
+
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  date: string;
+}
 
 export function useContactMessages() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -28,8 +36,9 @@ export function useContactMessages() {
   }, [toast]);
 
   useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    // Initial fetch for admin panel
+    // No need to fetch for regular users
+  }, []);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
     const newMessage: ContactMessage = {
@@ -46,16 +55,13 @@ export function useContactMessages() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: "Sunucu hatası" }));
+        const errorData = await response.json().catch(() => ({ message: "Mesaj gönderilirken sunucu hatası oluştu." }));
         throw new Error(errorData.message);
       }
-      
-      // No need to refetch here as only admins see the list, and they don't send messages.
-      // If admins could send messages, we would call fetchMessages() here.
-
+      // Success toast is handled in the component
     } catch (error: any) {
       toast({ title: "Mesaj Gönderilemedi", description: error.message, variant: "destructive" });
-      throw error;
+      throw error; // Re-throw to be caught by the form handler
     }
   }, [toast]);
 
@@ -63,6 +69,6 @@ export function useContactMessages() {
     messages,
     isLoading, 
     addContactMessage,
-    refetchMessages: fetchMessages, // Expose refetch for admin panel if needed
+    refetchMessages: fetchMessages,
   };
 }

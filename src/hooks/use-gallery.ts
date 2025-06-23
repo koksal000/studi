@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from './use-toast';
-import { STORES, idbGetAll, idbSetAll } from '@/lib/idb';
 
 export interface GalleryImage {
   id: string;
@@ -21,112 +20,70 @@ export interface NewGalleryImagePayload {
   hint: string;
 }
 
-let galleryChannel: BroadcastChannel | null = null;
-if (typeof window !== 'undefined' && window.BroadcastChannel) {
-  galleryChannel = new BroadcastChannel('gallery-channel');
-}
-
 export function useGallery() {
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useUser();
   const { toast } = useToast();
 
-  const syncWithServer = useCallback(async () => {
+  const fetchGallery = useCallback(async () => {
+    setIsLoading(true);
     try {
       const response = await fetch('/api/gallery');
-      if (!response.ok) throw new Error('Galeri resimleri sunucudan alınamadı.');
-      const serverData: GalleryImage[] = await response.json();
-      await idbSetAll(STORES.gallery, serverData);
-      galleryChannel?.postMessage('update');
-      return serverData;
+      if (!response.ok) {
+        throw new Error('Galeri resimleri sunucudan alınamadı.');
+      }
+      const data: GalleryImage[] = await response.json();
+      setGalleryImages(data);
     } catch (error: any) {
-      console.error("[useGallery] Sync with server failed:", error.message);
-      return null;
+      toast({ title: 'Galeri Yüklenemedi', description: error.message, variant: 'destructive' });
+      setGalleryImages([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
-    const refreshFromIdb = () => {
-      idbGetAll<GalleryImage>(STORES.gallery).then(data => {
-        if (data) setGalleryImages(data);
-      });
-    };
+    fetchGallery();
+  }, [fetchGallery]);
 
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data === 'update') {
-        refreshFromIdb();
-      }
-    };
-
-    galleryChannel?.addEventListener('message', handleMessage);
-
-    setIsLoading(true);
-    idbGetAll<GalleryImage>(STORES.gallery).then((cachedData) => {
-      if (cachedData && cachedData.length > 0) {
-        setGalleryImages(cachedData);
-      }
-      syncWithServer().then(serverData => {
-        // If cache was empty and server returns data, update state
-        if ((!cachedData || cachedData.length === 0) && serverData) {
-          setGalleryImages(serverData);
-        }
-      });
-    }).finally(() => setIsLoading(false));
-
-    return () => {
-      galleryChannel?.removeEventListener('message', handleMessage);
-    };
-  }, [syncWithServer]);
-  
   const addGalleryImage = useCallback(async (payload: NewGalleryImagePayload) => {
     if (!user) {
       toast({ title: "Giriş Gerekli", description: "Resim eklemek için giriş yapmalısınız.", variant: "destructive" });
       throw new Error("User not logged in");
     }
 
-    const MAX_IMAGE_DATA_URI_LENGTH_HOOK = Math.floor(5 * 1024 * 1024 * 1.37 * 1.05);
-    if (payload.imageDataUri.length > MAX_IMAGE_DATA_URI_LENGTH_HOOK) {
-        toast({ title: "Resim Verisi Çok Büyük", description: `Resim dosyası çok büyük.`, variant: "destructive", duration: 8000 });
-        throw new Error("Image data URI too large.");
-    }
-
-    const newImageForApi: GalleryImage = {
-      id: `gal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    const newImage: GalleryImage = {
+      id: `gal_temp_${Date.now()}`,
       src: payload.imageDataUri,
       alt: payload.alt?.trim() || payload.caption,
       caption: payload.caption,
       hint: payload.hint?.trim() || 'uploaded image',
     };
 
-    const originalData = [...galleryImages];
-    const optimisticData = [newImageForApi, ...originalData];
-    setGalleryImages(optimisticData);
-    await idbSetAll(STORES.gallery, optimisticData);
-    galleryChannel?.postMessage('update');
+    const originalImages = [...galleryImages];
+    setGalleryImages(prev => [newImage, ...prev]);
 
     try {
       const response = await fetch('/api/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newImageForApi),
+        body: JSON.stringify({ ...newImage, id: `gal_${Date.now()}` }), // Use real ID for server
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
-        throw new Error(error.message);
+        const errorData = await response.json().catch(() => ({ message: 'Resim sunucuya yüklenemedi.' }));
+        throw new Error(errorData.message);
       }
+      
       toast({ title: "Yükleme Başarılı", description: "Resim galeriye eklendi." });
-      await syncWithServer();
-
+      await fetchGallery(); // Refetch to get final data
     } catch (error: any) {
-      toast({ title: "Yükleme Başarısız", description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: "destructive" });
-      setGalleryImages(originalData);
-      await idbSetAll(STORES.gallery, originalData);
-      galleryChannel?.postMessage('update');
+      toast({ title: "Yükleme Başarısız", description: error.message, variant: "destructive" });
+      setGalleryImages(originalImages);
       throw error;
     }
-  }, [user, toast, galleryImages, syncWithServer]);
+  }, [user, toast, galleryImages, fetchGallery]);
 
   const deleteGalleryImage = useCallback(async (id: string) => {
     if (!user) {
@@ -134,25 +91,25 @@ export function useGallery() {
       throw new Error("User not logged in");
     }
     
-    const originalData = [...galleryImages];
-    const optimisticData = originalData.filter(img => img.id !== id);
-    setGalleryImages(optimisticData);
-    await idbSetAll(STORES.gallery, optimisticData);
-    galleryChannel?.postMessage('update');
+    const originalImages = [...galleryImages];
+    const optimisticImages = originalImages.filter(img => img.id !== id);
+    setGalleryImages(optimisticImages);
     
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
         method: 'DELETE',
       });
+
       if (!response.ok) {
-        const error = await response.json().catch(() => ({message: "Bilinmeyen sunucu hatasi"}));
-        throw new Error(error.message);
+        const errorData = await response.json().catch(() => ({ message: 'Resim silinemedi.' }));
+        throw new Error(errorData.message);
       }
+      
+      toast({ title: "Resim Silindi", description: "Resim galeriden başarıyla kaldırıldı." });
+      // No need to refetch, UI is already updated
     } catch (error: any) {
-      toast({ title: "Silme Başarısız", description: String(error.message).replace(/[^\x00-\x7F]/g, ""), variant: "destructive" });
-      setGalleryImages(originalData);
-      await idbSetAll(STORES.gallery, originalData);
-      galleryChannel?.postMessage('update');
+      toast({ title: "Silme Başarısız", description: error.message, variant: "destructive" });
+      setGalleryImages(originalImages);
       throw error;
     }
   }, [user, toast, galleryImages]);

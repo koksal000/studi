@@ -55,6 +55,7 @@ export function useContactMessages() {
     } catch (error: any) {
       const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
       toast({ title: "Mesaj Gönderilemedi", description: rawErrorMessage, variant: "destructive" });
+
       const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
       sanitizedError.stack = error.stack;
       throw sanitizedError;

@@ -94,6 +94,7 @@ export function useGallery() {
     } catch (error: any) {
         const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
         toast({ title: "Yükleme Başarısız", description: rawErrorMessage, variant: "destructive" });
+        
         const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
         sanitizedError.stack = error.stack;
         throw sanitizedError;
@@ -123,6 +124,7 @@ export function useGallery() {
     } catch (error: any) {
         const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
         toast({ title: "Silme Başarısız", description: rawErrorMessage, variant: "destructive" });
+
         const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
         sanitizedError.stack = error.stack;
         throw sanitizedError;

@@ -141,7 +141,7 @@ export function useAnnouncements() {
     method: 'POST' | 'DELETE', 
     body?: any,
     successToast?: { title: string; description?: string }
-  ): Promise<boolean> => {
+  ) => { // Removed boolean return, will throw on error
     try {
       const response = await fetch(endpoint, {
         method,
@@ -151,9 +151,7 @@ export function useAnnouncements() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
-        const rawErrorMessage = errorData.message || 'Bilinmeyen bir sunucu hatası oluştu.';
-        const sanitizedErrorMessage = String(rawErrorMessage).replace(/[^\x00-\x7F]/g, "");
-        throw new Error(sanitizedErrorMessage || 'API action failed');
+        throw new Error(errorData.message || 'Bilinmeyen bir sunucu hatası oluştu.');
       }
       
       if (successToast) {
@@ -161,13 +159,16 @@ export function useAnnouncements() {
       }
 
       await fetchAnnouncements(); 
-      return true;
 
     } catch (error: any) {
-      const rawErrorMessage = error.message || 'Bilinmeyen bir sunucu hatası oluştu.';
+      const rawErrorMessage = error.message || 'Bilinmeyen bir ağ hatası oluştu.';
+      // Show original Turkish message to user
       toast({ title: 'İşlem Başarısız', description: rawErrorMessage, variant: 'destructive' });
-      console.error(`[useAnnouncements] API Action Failed:`, error);
-      return false;
+      
+      // Sanitize the error before throwing it to the system to prevent crashes
+      const sanitizedError = new Error(String(rawErrorMessage).replace(/[^\x00-\x7F]/g, ""));
+      sanitizedError.stack = error.stack;
+      throw sanitizedError;
     }
   }, [toast, fetchAnnouncements]);
 

@@ -94,7 +94,7 @@ export function useAnnouncements() {
   }, [announcements, lastOpenedNotificationTimestamp]);
   
   const addAnnouncement = useCallback(async (payload: NewAnnouncementPayload) => {
-    if (!user) {
+    if (!user || !user.email) {
       toast({ title: "Giriş Gerekli", description: "Duyuru eklemek için giriş yapmalısınız.", variant: "destructive" });
       return;
     }
@@ -105,7 +105,7 @@ export function useAnnouncements() {
         id: tempId,
         date: new Date().toISOString(),
         author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
-        authorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`,
+        authorId: isAdmin ? "ADMIN_ACCOUNT" : user.email,
         likes: [],
         comments: [],
     };
@@ -121,7 +121,7 @@ export function useAnnouncements() {
           id: `ann_${Date.now()}`,
           date: new Date().toISOString(),
           author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
-          authorId: isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`,
+          authorId: isAdmin ? "ADMIN_ACCOUNT" : user.email,
           likes: [],
           comments: [],
         })
@@ -239,11 +239,11 @@ export function useAnnouncements() {
   };
 
   const toggleAnnouncementLike = useCallback(async (announcementId: string) => {
-    if (!user) {
+    if (!user || !user.email) {
       toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapmalısınız.", variant: "destructive"});
       return;
     }
-    const userId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+    const userId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
     
     const originalData = [...announcements];
     const optimisticData = announcements.map(ann => {
@@ -265,7 +265,7 @@ export function useAnnouncements() {
         const response = await fetch('/api/announcements', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: userId }) 
+            body: JSON.stringify({ action: "TOGGLE_ANNOUNCEMENT_LIKE", announcementId, userId, userName: `${user.name} ${user.surname}` }) 
         });
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen bir sunucu hatası oluştu.' }));
@@ -281,9 +281,9 @@ export function useAnnouncements() {
   }, [user, isAdmin, announcements, toast]);
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
-    if (!user) { throw new Error("Giriş yapmalısınız."); }
+    if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
     const authorName = `${user.name} ${user.surname}`;
-    const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
+    const authorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
     const tempCommentId = `cmt_temp_${Date.now()}`;
     const tempComment: Comment = { id: tempCommentId, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
     
@@ -318,9 +318,9 @@ export function useAnnouncements() {
   }, [user, isAdmin, announcements, toast]);
   
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string, replyingToAuthorId?: string) => {
-    if (!user) { throw new Error("Giriş yapmalısınız."); }
+    if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
     const authorName = `${user.name} ${user.surname}`;
-    const authorId = isAdmin ? "ADMIN_ACCOUNT" : authorName;
+    const authorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
 
     const originalData = [...announcements];
     const tempReplyId = `rpl_temp_${Date.now()}`;
@@ -353,6 +353,7 @@ export function useAnnouncements() {
       if (!replyResponse.ok) throw new Error((await replyResponse.json()).message || "Yanıt eklenemedi.");
       const updatedAnnouncement = await replyResponse.json();
       
+      // Send notification ONLY if replying to someone else.
       if (replyingToAuthorId && announcementTitle && replyingToAuthorId !== authorId) {
         const notificationPayload = { type: 'reply', recipientUserId: replyingToAuthorId, senderUserName: authorName, announcementId: announcementId, announcementTitle: announcementTitle, commentId: commentId };
         const notifResponse = await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notificationPayload) });
@@ -372,8 +373,8 @@ export function useAnnouncements() {
   }, [user, isAdmin, announcements, toast]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
-    if (!user) { throw new Error("Giriş yapmalısınız."); }
-    const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+    if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
+    const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
 
     const originalData = [...announcements];
     const optimisticData = originalData.map(ann => {
@@ -405,8 +406,8 @@ export function useAnnouncements() {
   }, [user, isAdmin, announcements, toast]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
-    if (!user) { throw new Error("Giriş yapmalısınız."); }
-    const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+    if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
+    const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
 
     const originalData = [...announcements];
     const optimisticData = originalData.map(ann => {

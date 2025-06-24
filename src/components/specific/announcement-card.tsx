@@ -49,7 +49,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
   const [isMuted, setIsMuted] = useState(false);
   const [isDeletingAnnouncement, setIsDeletingAnnouncement] = useState(false);
 
-  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
+  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : user.email) : null;
   const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
 
   const canAttemptDeleteOrEdit = !!user && isAdmin && allowDelete;

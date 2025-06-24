@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -15,8 +16,8 @@ export function useNotifications() {
   const { toast } = useToast();
 
   const getUserId = useCallback(() => {
-    if (!user) return null;
-    return isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`;
+    if (!user || !user.email) return null;
+    return isAdmin ? "ADMIN_ACCOUNT" : user.email;
   }, [user, isAdmin]);
 
   const fetchNotifications = useCallback(async () => {

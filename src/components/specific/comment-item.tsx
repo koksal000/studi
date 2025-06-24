@@ -82,7 +82,7 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
     }
   };
 
-  const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
+  const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : user.email) : null;
   const canDeleteThisComment = isAdmin || currentUserAuthorId === commentProp.authorId;
 
   if (!commentProp) return null;

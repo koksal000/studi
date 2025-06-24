@@ -51,8 +51,6 @@ export const requestNotificationPermissionAndToken = async (): Promise<string | 
   try {
     console.log('[FCM-Config] Current Notification.permission before request:', Notification.permission);
     
-    // Notification.requestPermission() will prompt if permission is 'default'.
-    // If 'granted' or 'denied', it resolves immediately with that state without prompting.
     const permissionResult = await Notification.requestPermission();
     console.log('[FCM-Config] Notification.permission after request:', permissionResult);
 
@@ -61,16 +59,6 @@ export const requestNotificationPermissionAndToken = async (): Promise<string | 
       const currentToken = await getToken(msg, { vapidKey: VAPID_KEY });
       if (currentToken) {
         console.log('[FCM-Config] FCM Token retrieved:', currentToken.substring(0, 20) + "...");
-        try {
-            await fetch('/api/fcm/register-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: currentToken }),
-            });
-            console.log("[FCM-Config] FCM token sent to server for registration.");
-        } catch (apiError) {
-            console.error("[FCM-Config] Failed to send FCM token to server:", apiError);
-        }
         return currentToken;
       } else {
         console.warn('[FCM-Config] No registration token available even after permission granted. This is unusual.');
@@ -93,4 +81,3 @@ export const onForegroundMessage = (callback: (payload: any) => void) => {
   }
   return () => {}; 
 };
-

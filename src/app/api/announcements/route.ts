@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import type { Announcement, Comment, Reply } from '@/hooks/use-announcements';
 import fs from 'fs';
 import path from 'path';
+import { sendNotificationToAll, sendNotificationToUser } from '@/lib/fcm-service';
 
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
@@ -174,6 +175,32 @@ export async function POST(request: NextRequest) {
       commentToUpdate.replies.push(newReply);
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       announcementModified = true;
+
+      // Send notifications for reply
+      const { replyingToAuthorId } = actionPayload.reply;
+      const { authorId: replierId, authorName: replierName, text: replyText } = newReply;
+      
+      if (replyingToAuthorId && announcementToUpdate.title && replyingToAuthorId !== replierId) {
+          // Send In-App Notification
+          const notificationPayload = { 
+              type: 'reply', 
+              recipientUserId: replyingToAuthorId, 
+              senderUserName: replierName, 
+              announcementId: actionPayload.announcementId, 
+              announcementTitle: announcementToUpdate.title, 
+              commentId: actionPayload.commentId 
+          };
+          fetch(new URL('/api/notifications', request.url).toString(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notificationPayload) });
+
+          // Send Push Notification
+          await sendNotificationToUser(replyingToAuthorId, {
+            title: `Yorumunuza yanıt geldi!`,
+            body: `${replierName}: ${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
+            link: '/announcements',
+          });
+      }
+
+
     } else if (actionPayload.action === "DELETE_COMMENT") {
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
       if (commentIndex === -1) {
@@ -253,6 +280,14 @@ export async function POST(request: NextRequest) {
   if (announcementModified) {
     announcements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (writeAnnouncementsToFile(announcements)) {
+      if (isNewAnnouncement && modifiedAnnouncement) {
+          // Send push notification to all users for a new announcement
+          sendNotificationToAll({
+            title: 'Yeni Duyuru: Çamlıca Köyü',
+            body: modifiedAnnouncement.title,
+            link: '/announcements'
+          }).catch(err => console.error("[API/Announcements] Failed to send push notification:", err));
+      }
       return NextResponse.json(modifiedAnnouncement || payload, { status: 'action' in payload ? 200 : (isNewAnnouncement ? 201 : 200) });
     } else {
       console.error(`[API/Announcements] Failed to save data to file after modification.`);

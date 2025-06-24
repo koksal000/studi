@@ -72,7 +72,7 @@ export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
 
 
 export const GOOGLE_MAPS_EMBED_URL = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3120.622236149758!2d29.611547515336896!3d39.84896537944119!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x409f9f6c8e1e7f2d%3A0x405f7559f0ab39e9!2zQ2HFn2zEsWNhIEvDvHnDvA!5e0!3m2!1str!2str!4v1719235275023!5m2!1str!2str";
-export const GOOGLE_MAPS_SHARE_URL = "https://maps.app.goo.gl/z6W1r3vP1Xy4J4dJA";
+export const GOOGLE_MAPS_SHARE_URL = "https://maps.app.goo.gl/3H14vPwg3ue42JXZ9";
 
 
 export const NAVIGATION_LINKS = [

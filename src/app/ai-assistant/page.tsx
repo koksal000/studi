@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Send, Sparkles, User, Lightbulb } from 'lucide-react';
 import { camlicaAIChatbot, type CamlicaAIChatbotInput, type CamlicaAIChatbotOutput } from '@/ai/flows/camlica-ai-chatbot';
 import { VILLAGE_NAME } from '@/lib/constants';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 interface Message {
   id: string;
@@ -97,7 +97,7 @@ export default function AIAssistantPage() {
                 <div key={msg.id} className={`flex items-end gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.sender === 'ai' && (
                     <Avatar className="h-9 w-9 flex-shrink-0">
-                      <AvatarImage src="https://files.catbox.moe/4dmtuq.png" alt="AI Avatar" />
+                      <AvatarImage src="https://files.catbox.moe/1sbjhr.jpg" alt="AI Avatar" />
                       <AvatarFallback><Sparkles /></AvatarFallback>
                     </Avatar>
                   )}
@@ -115,7 +115,7 @@ export default function AIAssistantPage() {
               {isLoading && (
                  <div className="flex items-end gap-3 justify-start">
                     <Avatar className="h-9 w-9 flex-shrink-0">
-                        <AvatarImage src="https://files.catbox.moe/4dmtuq.png" alt="AI Avatar" />
+                        <AvatarImage src="https://files.catbox.moe/1sbjhr.jpg" alt="AI Avatar" />
                         <AvatarFallback><Sparkles /></AvatarFallback>
                     </Avatar>
                     <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-md bg-muted rounded-bl-lg flex items-center gap-2">

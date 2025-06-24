@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { POPULATION_DATA, VILLAGE_NAME, ECONOMY_DATA, STATIC_GALLERY_IMAGES_FOR_SEEDING } from '@/lib/constants';
 import Image from 'next/image';
-import { BarChart as BarChartIconLucide, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'; 
+import { BarChart as BarChartIconLucide, LineChart as LineChartIcon, PieChart as PieChartIcon, ExternalLink } from 'lucide-react'; 
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { Bar, Line, Pie, Cell, CartesianGrid, XAxis, YAxis, LineChart, PieChart, BarChart as RechartsBarChart } from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -81,13 +81,13 @@ export default function AboutPage() {
             <div
                 className="relative aspect-square w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-xs xl:max-w-sm cursor-pointer rounded-lg overflow-hidden shadow-md mt-6 mx-auto group"
                 onClick={() => setSelectedModalImage({ 
-                    src: 'https://i.ibb.co/VWHCWx31/Domani-K-yler-Haritas.png', 
+                    src: 'https://i.ibb.co/VWHCWx3/Domani-K-yler-Haritas.png', 
                     alt: 'Domaniç Köyleri Haritası', 
                     hint: 'map villages' 
                 })}
             >
                 <Image
-                src="https://i.ibb.co/VWHCWx31/Domani-K-yler-Haritas.png" 
+                src="https://i.ibb.co/VWHCWx3/Domani-K-yler-Haritas.png" 
                 alt="Domaniç Köyleri Haritası"
                 layout="fill"
                 objectFit="contain"
@@ -162,13 +162,13 @@ export default function AboutPage() {
                 <div 
                     className="relative aspect-video rounded-lg overflow-hidden shadow-md group cursor-pointer"
                     onClick={() => setSelectedModalImage({ 
-                        src: "https://i.ibb.co/kgQ49804/Picsart-25-05-20-21-33-20-500.jpg", 
+                        src: "https://i.ibb.co/kgQ4980/Picsart-25-05-20-21-33-20-500.jpg", 
                         alt: "Çamlıca Köyü Tarım Faaliyetleri (Temsili Görsel)",
                         hint: "agriculture field"
                     })}
                 >
                     <Image 
-                        src="https://i.ibb.co/kgQ49804/Picsart-25-05-20-21-33-20-500.jpg" 
+                        src="https://i.ibb.co/kgQ4980/Picsart-25-05-20-21-33-20-500.jpg" 
                         alt="Çamlıca Köyü Tarım Faaliyetleri (Temsili Görsel)" 
                         layout="fill" 
                         objectFit="cover" 
@@ -183,13 +183,13 @@ export default function AboutPage() {
                 <div 
                     className="relative aspect-video rounded-lg overflow-hidden shadow-md group cursor-pointer"
                     onClick={() => setSelectedModalImage({ 
-                        src: "https://i.ibb.co/nsT80T3H/Picsart-25-05-20-21-34-33-814.jpg", 
+                        src: "https://i.ibb.co/nsT80T3/Picsart-25-05-20-21-34-33-814.jpg", 
                         alt: "Çamlıca Köyü Hayvancılık Faaliyetleri (Temsili Görsel)",
                         hint: "livestock animals"
                     })}
                 >
                     <Image 
-                        src="https://i.ibb.co/nsT80T3H/Picsart-25-05-20-21-34-33-814.jpg" 
+                        src="https://i.ibb.co/nsT80T3/Picsart-25-05-20-21-34-33-814.jpg" 
                         alt="Çamlıca Köyü Hayvancılık Faaliyetleri (Temsili Görsel)" 
                         layout="fill" 
                         objectFit="cover" 

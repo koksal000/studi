@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { CONTACT_INFO, VILLAGE_NAME, GOOGLE_MAPS_EMBED_URL } from '@/lib/constants';
 import { Mail, MapPin, User as UserIcon, MessageSquare, Send, Loader2, ExternalLink } from 'lucide-react'; // Renamed User to UserIcon
 import { useToast } from "@/hooks/use-toast";
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { EntryForm } from '@/components/specific/entry-form';
 import { useContactMessages } from '@/hooks/use-contact-messages'; 

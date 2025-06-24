@@ -8,7 +8,7 @@ import { AnnouncementCard } from '@/components/specific/announcement-card';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { GOOGLE_MAPS_EMBED_URL, POPULATION_DATA, VILLAGE_NAME } from '@/lib/constants';
+import { GOOGLE_MAPS_EMBED_URL, GOOGLE_MAPS_SHARE_URL, POPULATION_DATA, VILLAGE_NAME } from '@/lib/constants';
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -88,11 +88,12 @@ export default function HomePage() {
                   allowFullScreen={false}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
+                  title={`${VILLAGE_NAME} Haritası`}
                 ></iframe>
               </div>
               <p className="text-center mt-3">
                 <a
-                  href="https://maps.app.goo.gl/TdNCaaRwhZ61oA5QA"
+                  href={GOOGLE_MAPS_SHARE_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center text-sm text-primary hover:underline"

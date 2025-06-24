@@ -71,7 +71,9 @@ export const STATIC_GALLERY_IMAGES_FOR_SEEDING = [
 ];
 
 
-export const GOOGLE_MAPS_EMBED_URL = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d12289.676071227615!2d29.530861694955267!3d39.7903376789198!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14cf3b31772cd39f%3A0x34c10fbd2fe372a9!2s%C3%87aml%C4%B1ca%2C%2043580%20Domani%C3%A7%2FK%C3%BCtahya!5e0!3m2!1str!2str!4v1744723761582!5m2!1str!2str";
+export const GOOGLE_MAPS_EMBED_URL = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d6144.912781424754!2d29.52825684131551!3d39.78951919896791!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x14cf3b31772cd39f%3A0x34c10fbd2fe372a9!2zw4dhbWzEsWNhLCBEb21hbsOcLCA0MzU4MCDDh2FtbMSDYY_EsWNhL0RvbWFuacOfL0vDvHRhaHlh!5e0!3m2!1str!2str!4v1718826621351!5m2!1str!2str";
+export const GOOGLE_MAPS_SHARE_URL = "https://maps.app.goo.gl/m37mR5Y3tA5eLdG3A";
+
 
 export const NAVIGATION_LINKS = [
   { href: "/", label: "Ana Sayfa", pageId: "home" },

@@ -8,7 +8,11 @@
     "date": "2025-06-23T21:38:38.442Z",
     "author": "Yönetim Hesabı",
     "authorId": "ADMIN_ACCOUNT",
-    "likes": [],
+    "likes": [
+      {
+        "userId": "ADMIN_ACCOUNT"
+      }
+    ],
     "comments": []
   }
 ]

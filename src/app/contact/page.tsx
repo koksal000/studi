@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { CONTACT_INFO, VILLAGE_NAME, GOOGLE_MAPS_EMBED_URL } from '@/lib/constants';
+import { CONTACT_INFO, VILLAGE_NAME, GOOGLE_MAPS_EMBED_URL, GOOGLE_MAPS_SHARE_URL } from '@/lib/constants';
 import { Mail, MapPin, User as UserIcon, MessageSquare, Send, Loader2, ExternalLink } from 'lucide-react'; // Renamed User to UserIcon
 import { useToast } from "@/hooks/use-toast";
 import { useState, type FormEvent } from 'react';
@@ -121,7 +121,7 @@ export default function ContactPage() {
                 </div>
                 <p className="text-center mt-2">
                   <a
-                    href="https://maps.app.goo.gl/TdNCaaRwhZ61oA5QA"
+                    href={GOOGLE_MAPS_SHARE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center text-sm text-primary hover:underline"

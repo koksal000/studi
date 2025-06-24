@@ -8,20 +8,7 @@
     "date": "2025-06-23T21:38:38.442Z",
     "author": "Yönetim Hesabı",
     "authorId": "ADMIN_ACCOUNT",
-    "likes": [
-      {
-        "userId": "Bot Deneme Hesap"
-      }
-    ],
-    "comments": [
-      {
-        "authorName": "Mücteba Köksal",
-        "authorId": "ADMIN_ACCOUNT",
-        "text": "Deneme",
-        "id": "cmt_1750714738379_w96hpc5",
-        "date": "2025-06-23T21:38:58.379Z",
-        "replies": []
-      }
-    ]
+    "likes": [],
+    "comments": []
   }
 ]

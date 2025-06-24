@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Sparkles, User } from 'lucide-react';
+import { Loader2, Send, Sparkles, User, Lightbulb } from 'lucide-react';
 import { camlicaAIChatbot, type CamlicaAIChatbotInput, type CamlicaAIChatbotOutput } from '@/ai/flows/camlica-ai-chatbot';
 import { VILLAGE_NAME } from '@/lib/constants';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface Message {
   id: string;
@@ -16,110 +17,174 @@ interface Message {
   sender: 'user' | 'ai';
 }
 
+const examplePrompts = [
+    "Köyün nüfusu kaçtır?",
+    "Çamlıca'nın tarihi hakkında bilgi ver.",
+    "Köyün muhtarı kimdir?",
+    "Hasan Çamı nedir?",
+];
+
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [hasStarted, setHasStarted] = useState(false);
 
-  const scrollToBottom = () => {
+  useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollableView = scrollAreaRef.current.querySelector('div > div'); // Target the inner scrollable div
+      const scrollableView = scrollAreaRef.current.querySelector('div > div');
       if (scrollableView) {
         scrollableView.scrollTop = scrollableView.scrollHeight;
       }
     }
-  };
+  }, [messages, isLoading]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    // Initial AI greeting message
     setMessages([
-      { id: 'greeting', text: `Merhaba! Ben ${VILLAGE_NAME} yapay zeka asistanıyım. Köyümüzle ilgili merak ettiklerinizi bana sorabilirsiniz. Örneğin, "Köyün nüfusu kaçtır?" veya "Çamlıca'nın tarihi hakkında bilgi verir misin?" gibi sorular sorabilirsiniz.`, sender: 'ai' }
+      { id: 'greeting', text: `Merhaba! Ben ${VILLAGE_NAME} yapay zeka asistanıyım. Köyümüzle ilgili merak ettiklerinizi bana sorabilirsiniz.`, sender: 'ai' }
     ]);
   }, []);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const handlePromptClick = (prompt: string) => {
+    setInput(prompt);
+    handleFormSubmitWithValue(prompt);
+  };
 
-    const userMessage: Message = { id: Date.now().toString(), text: input, sender: 'user' };
+  const handleFormSubmitWithValue = async (value: string) => {
+    if (!value.trim() || isLoading) return;
+    setHasStarted(true);
+    const userMessage: Message = { id: Date.now().toString(), text: value, sender: 'user' };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
     try {
-      const aiInput: CamlicaAIChatbotInput = { question: input };
+      const aiInput: CamlicaAIChatbotInput = { question: value };
       const aiResponse: CamlicaAIChatbotOutput = await camlicaAIChatbot(aiInput);
       
       const aiMessage: Message = { id: (Date.now() + 1).toString(), text: aiResponse.answer, sender: 'ai' };
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error("AI Assistant Error:", error);
-      const errorMessage: Message = { id: (Date.now() + 1).toString(), text: 'Üzgünüm, bir sorun oluştu. Lütfen daha sonra tekrar deneyin.', sender: 'ai' };
+      const errorMessage: Message = { id: (Date.now() + 1).toString(), text: 'Üzgünüm, bir sorun oluştu. Lütfen daha sonra tekrar deneyin veya farklı bir soru sorun.', sender: 'ai' };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    handleFormSubmitWithValue(input);
+  };
+  
   return (
-    <div className="flex flex-col h-[calc(100vh-200px)] content-page">
-      <Card className="flex-grow flex flex-col shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold text-primary flex items-center">
-            <Sparkles className="mr-3 h-8 w-8" /> {VILLAGE_NAME} Yapay Zeka Asistanı
+    <div className="flex justify-center items-start pt-8 h-full min-h-[calc(100vh-150px)] content-page">
+      <Card className="w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl">
+        <CardHeader className="border-b">
+          <CardTitle className="text-2xl font-bold text-primary flex items-center gap-3">
+            <Sparkles className="h-7 w-7" /> {VILLAGE_NAME} Yapay Zeka Asistanı
           </CardTitle>
-          <CardDescription className="text-lg">
-            Köyümüzle ilgili sorularınızı yanıtlamak için buradayım.
+          <CardDescription>
+            Köyümüzle ilgili sorularınızı anında yanıtlayın.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex-grow flex flex-col p-0 overflow-hidden">
           <ScrollArea className="flex-grow p-4 sm:p-6" ref={scrollAreaRef}>
-            <div className="space-y-4">
+            <div className="space-y-6">
               {messages.map(msg => (
-                <div key={msg.id} className={`chat-message ${msg.sender === 'user' ? 'user-message' : 'ai-message'}`}>
-                  <div className="flex items-end gap-2 max-w-[85%]">
-                    {msg.sender === 'ai' && (
-                      <div className="flex-shrink-0 bg-accent text-accent-foreground rounded-full h-8 w-8 flex items-center justify-center shadow">
-                        <Sparkles className="h-5 w-5" />
-                      </div>
-                    )}
-                     <div className={`message-content shadow ${msg.sender === 'user' ? 'bg-primary text-primary-foreground rounded-tr-none' : 'bg-secondary text-secondary-foreground rounded-tl-none'}`}>
-                      {msg.text}
-                    </div>
-                     {msg.sender === 'user' && (
-                      <div className="flex-shrink-0 bg-muted text-muted-foreground rounded-full h-8 w-8 flex items-center justify-center shadow">
-                        <User className="h-5 w-5" />
-                      </div>
-                    )}
+                <div key={msg.id} className={`flex items-end gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {msg.sender === 'ai' && (
+                    <Avatar className="h-9 w-9 flex-shrink-0">
+                      <AvatarImage src="https://files.catbox.moe/4dmtuq.png" alt="AI Avatar" />
+                      <AvatarFallback><Sparkles /></AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-md ${msg.sender === 'user' ? 'bg-primary text-primary-foreground rounded-br-lg' : 'bg-muted rounded-bl-lg'}`}>
+                    <p className="text-sm">{msg.text}</p>
                   </div>
+                  {msg.sender === 'user' && (
+                     <Avatar className="h-9 w-9 flex-shrink-0">
+                       <AvatarFallback><User /></AvatarFallback>
+                     </Avatar>
+                  )}
                 </div>
               ))}
+              
+              {isLoading && (
+                 <div className="flex items-end gap-3 justify-start">
+                    <Avatar className="h-9 w-9 flex-shrink-0">
+                        <AvatarImage src="https://files.catbox.moe/4dmtuq.png" alt="AI Avatar" />
+                        <AvatarFallback><Sparkles /></AvatarFallback>
+                    </Avatar>
+                    <div className="max-w-[80%] rounded-2xl px-4 py-3 shadow-md bg-muted rounded-bl-lg flex items-center gap-2">
+                        <span className="typing-dot"></span>
+                        <span className="typing-dot animation-delay-200"></span>
+                        <span className="typing-dot animation-delay-400"></span>
+                    </div>
+                 </div>
+              )}
             </div>
+
+            {!hasStarted && !isLoading && (
+                <div className="text-center p-8 space-y-4">
+                    <Lightbulb className="mx-auto h-10 w-10 text-yellow-400" />
+                    <h3 className="font-semibold text-lg">Ne sormak istersiniz?</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {examplePrompts.map(prompt => (
+                            <Button key={prompt} variant="outline" size="sm" onClick={() => handlePromptClick(prompt)}>
+                                {prompt}
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
           </ScrollArea>
-          <div className="border-t p-4 bg-background/80">
+          <div className="border-t p-4 bg-background/95">
             <form onSubmit={handleSubmit} className="flex items-center gap-2 sm:gap-4">
               <Input
                 type="text"
-                placeholder="Sorunuzu yazın..."
+                placeholder="Mesajınızı yazın..."
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                className="flex-grow text-base"
+                className="flex-grow text-base h-11"
                 disabled={isLoading}
                 aria-label="Kullanıcı sorusu"
               />
-              <Button type="submit" disabled={isLoading || !input.trim()} className="px-4 py-2 text-base">
+              <Button type="submit" disabled={isLoading || !input.trim()} size="lg">
                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                <span className="ml-2 hidden sm:inline">Gönder</span>
+                <span className="sr-only">Gönder</span>
               </Button>
             </form>
           </div>
         </CardContent>
       </Card>
+      <style jsx>{`
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background-color: hsl(var(--primary));
+            border-radius: 50%;
+            display: inline-block;
+            animation: bounce 1.2s infinite ease-in-out both;
+        }
+        .animation-delay-200 {
+            animation-delay: 0.2s;
+        }
+        .animation-delay-400 {
+            animation-delay: 0.4s;
+        }
+        @keyframes bounce {
+            0%, 80%, 100% {
+                transform: scale(0);
+            }
+            40% {
+                transform: scale(1.0);
+            }
+        }
+      `}</style>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import type { Reply } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, Trash2 } from 'lucide-react';
+import { CalendarDays, MessageSquare, Send, Loader2, CornerDownRight, Trash2, TreePine } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
@@ -91,14 +91,22 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId }: Reply
     <>
     <div className="flex space-x-2 items-start text-xs">
       <CornerDownRight className="h-3.5 w-3.5 mt-1 text-muted-foreground flex-shrink-0" />
-      <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
-        <AvatarFallback className="bg-accent text-accent-foreground text-[10px]">
-          {getInitials(replyProp.authorName)}
-        </AvatarFallback>
-      </Avatar>
+      {replyProp.authorId === 'ADMIN_ACCOUNT' ? (
+        <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5 border border-amber-400 bg-secondary flex items-center justify-center">
+            <TreePine className="h-4 w-4 text-amber-500" />
+        </Avatar>
+      ) : (
+        <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
+          <AvatarFallback className="bg-accent text-accent-foreground text-[10px]">
+            {getInitials(replyProp.authorName)}
+          </AvatarFallback>
+        </Avatar>
+      )}
       <div className="flex-1 space-y-0.5 min-w-0">
         <p className="text-foreground/90 whitespace-pre-wrap break-words">
-          <span className="font-semibold text-primary">{replyProp.authorName}</span>
+          <span className={`font-semibold ${replyProp.authorId === 'ADMIN_ACCOUNT' ? 'admin-name-gradient' : 'text-primary'}`}>
+            {replyProp.authorName}
+          </span>
           {replyProp.replyingToAuthorName && <span className="text-muted-foreground"> yanıtladı (@{replyProp.replyingToAuthorName})</span>}
           : {replyProp.text}
         </p>

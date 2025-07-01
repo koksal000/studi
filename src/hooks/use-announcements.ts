@@ -282,7 +282,7 @@ export function useAnnouncements() {
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
-    const authorName = `${user.name} ${user.surname}`;
+    const authorName = isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
     const tempCommentId = `cmt_temp_${Date.now()}`;
     const tempComment: Comment = { id: tempCommentId, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
@@ -319,7 +319,7 @@ export function useAnnouncements() {
   
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string, replyingToAuthorId?: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
-    const authorName = `${user.name} ${user.surname}`;
+    const authorName = isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
 
     const originalData = [...announcements];

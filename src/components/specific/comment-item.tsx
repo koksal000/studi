@@ -5,7 +5,7 @@ import type { Comment } from '@/hooks/use-announcements';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, Trash2 } from 'lucide-react';
+import { UserCircle, CalendarDays, MessageSquare, Send, Loader2, Trash2, TreePine } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
@@ -91,14 +91,22 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
     <>
     <div className="p-3 bg-secondary/30 rounded-md shadow-sm">
       <div className="flex space-x-3">
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            {getInitials(commentProp.authorName)}
-          </AvatarFallback>
-        </Avatar>
+        {commentProp.authorId === 'ADMIN_ACCOUNT' ? (
+          <Avatar className="h-8 w-8 border-2 border-amber-400 bg-secondary flex items-center justify-center">
+              <TreePine className="h-5 w-5 text-amber-500" />
+          </Avatar>
+        ) : (
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+              {getInitials(commentProp.authorName)}
+            </AvatarFallback>
+          </Avatar>
+        )}
         <div className="flex-1 space-y-1 min-w-0">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-primary">{commentProp.authorName}</h4>
+            <h4 className={`text-sm font-semibold ${commentProp.authorId === 'ADMIN_ACCOUNT' ? 'admin-name-gradient' : 'text-primary'}`}>
+              {commentProp.authorName}
+            </h4>
             <p className="text-xs text-muted-foreground flex items-center">
               <CalendarDays className="h-3 w-3 mr-1" />
               {formattedDate}

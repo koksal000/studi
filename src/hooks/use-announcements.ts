@@ -326,11 +326,8 @@ export function useAnnouncements() {
     const tempReplyId = `rpl_temp_${Date.now()}`;
     const tempReply: Reply = { id: tempReplyId, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName, replyingToAuthorId };
     
-    let announcementTitle: string | undefined;
-
     const optimisticData = originalData.map(ann => {
       if (ann.id === announcementId) {
-        announcementTitle = ann.title;
         const newComments = (ann.comments || []).map(c => {
           if (c.id === commentId) {
             const newReplies = (c.replies ? [tempReply, ...c.replies] : [tempReply]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -351,20 +348,12 @@ export function useAnnouncements() {
         body: JSON.stringify({ action: "ADD_REPLY_TO_COMMENT", announcementId, commentId, reply: { authorName, authorId, text, replyingToAuthorName, replyingToAuthorId } }) 
       });
       if (!replyResponse.ok) throw new Error((await replyResponse.json()).message || "Yanıt eklenemedi.");
+      
       const updatedAnnouncement = await replyResponse.json();
-      
-      // Send notification ONLY if replying to someone else.
-      if (replyingToAuthorId && announcementTitle && replyingToAuthorId !== authorId) {
-        const notificationPayload = { type: 'reply', recipientUserId: replyingToAuthorId, senderUserName: authorName, announcementId: announcementId, announcementTitle: announcementTitle, commentId: commentId };
-        const notifResponse = await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notificationPayload) });
-        if (notifResponse.ok) {
-          broadcastNotificationUpdate();
-        }
-      }
-      
       updateAnnouncementInState(updatedAnnouncement);
       toast({ title: "Yanıt Eklendi" });
       broadcastAnnouncementUpdate();
+      broadcastNotificationUpdate(); // Trigger notification refetch for current user
 
     } catch (error: any) {
         toast({ title: 'Yanıt Eklenemedi', description: error.message, variant: 'destructive' });
@@ -438,6 +427,7 @@ export function useAnnouncements() {
       updateAnnouncementInState(updatedAnnouncement);
       toast({ title: "Yanıt Silindi" });
       broadcastAnnouncementUpdate();
+      broadcastNotificationUpdate(); // Also trigger notification refetch here
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData);

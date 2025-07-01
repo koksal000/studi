@@ -7,8 +7,23 @@ import fs from 'fs';
 import path from 'path';
 import { sendNotificationToAll, sendNotificationToUser } from '@/lib/fcm-service';
 
+// Re-define AppNotification type here to avoid circular dependencies from route files
+interface AppNotification {
+  id: string;
+  type: 'reply';
+  recipientUserId: string;
+  senderUserName: string;
+  announcementId: string;
+  announcementTitle: string;
+  commentId: string;
+  replyId?: string; // Link notification to a specific reply
+  date: string;
+  read: boolean;
+}
+
 const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
+const NOTIFICATIONS_FILE_PATH = path.join(dataDir, '_notifications.json');
 
 const MAX_IMAGE_RAW_SIZE_MB_API = 5;
 const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
@@ -107,6 +122,36 @@ const writeAnnouncementsToFile = (data: Announcement[]): boolean => {
   }
 };
 
+const readNotificationsFromFile = (): AppNotification[] => {
+  try {
+    if (fs.existsSync(NOTIFICATIONS_FILE_PATH)) {
+      const fileData = fs.readFileSync(NOTIFICATIONS_FILE_PATH, 'utf-8');
+      if (fileData.trim() === '') return [];
+      return (JSON.parse(fileData) as AppNotification[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+    return [];
+  } catch (error) {
+    console.error("[API/Announcements->Notifications] Error reading notifications from file:", error);
+    return [];
+  }
+};
+
+const writeNotificationsToFile = (data: AppNotification[]): boolean => {
+  try {
+    const dir = path.dirname(NOTIFICATIONS_FILE_PATH);
+    if (!fs.existsSync(dir) && dataDir !== process.cwd()) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const sortedData = data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    fs.writeFileSync(NOTIFICATIONS_FILE_PATH, JSON.stringify(sortedData, null, 2));
+    return true;
+  } catch (error) {
+    console.error("[API/Announcements->Notifications] CRITICAL: Error saving notifications to file:", error);
+    return false;
+  }
+};
+
+
 export async function GET() {
   const announcements = readAnnouncementsFromFile();
   return NextResponse.json(announcements);
@@ -176,30 +221,41 @@ export async function POST(request: NextRequest) {
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       announcementModified = true;
 
-      // Send notifications for reply
+      // --- Start of Notification Logic ---
       const { replyingToAuthorId } = actionPayload.reply;
       const { authorId: replierId, authorName: replierName, text: replyText } = newReply;
       
+      console.log(`[API/Announcements] Reply detected. Replier: ${replierId}, Recipient: ${replyingToAuthorId}`);
       if (replyingToAuthorId && announcementToUpdate.title && replyingToAuthorId !== replierId) {
-          // Send In-App Notification
-          const notificationPayload = { 
+          console.log(`[API/Announcements] Conditions met. Creating notifications for ${replyingToAuthorId}.`);
+          
+          // 1. Create In-App Notification
+          const allNotifications = readNotificationsFromFile();
+          const newInAppNotification: AppNotification = {
+              id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
               type: 'reply', 
               recipientUserId: replyingToAuthorId, 
               senderUserName: replierName, 
               announcementId: actionPayload.announcementId, 
               announcementTitle: announcementToUpdate.title, 
-              commentId: actionPayload.commentId 
+              commentId: actionPayload.commentId,
+              replyId: newReply.id, // IMPORTANT: Link notification to the specific reply
+              date: new Date().toISOString(),
+              read: false,
           };
-          fetch(new URL('/api/notifications', request.url).toString(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(notificationPayload) });
+          allNotifications.unshift(newInAppNotification);
+          writeNotificationsToFile(allNotifications);
 
-          // Send Push Notification
+          // 2. Send Push Notification
           await sendNotificationToUser(replyingToAuthorId, {
-            title: `Yorumunuza yanıt geldi!`,
-            body: `${replierName}: ${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
+            title: `${replierName} yorumunuza yanıt verdi`,
+            body: `${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
             link: '/announcements',
           });
+      } else {
+        console.log(`[API/Announcements] Notification conditions not met. Skipping notification. replyingToAuthorId: ${replyingToAuthorId}, title: ${!!announcementToUpdate.title}, is self-reply: ${replyingToAuthorId === replierId}`);
       }
-
+      // --- End of Notification Logic ---
 
     } else if (actionPayload.action === "DELETE_COMMENT") {
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
@@ -231,6 +287,14 @@ export async function POST(request: NextRequest) {
       }
       commentToUpdate.replies.splice(replyIndex, 1);
       announcementModified = true;
+
+      // Also delete the corresponding notification
+      const allNotificationsForDelete = readNotificationsFromFile();
+      const filteredNotifications = allNotificationsForDelete.filter(n => n.replyId !== actionPayload.replyId);
+      if (allNotificationsForDelete.length > filteredNotifications.length) {
+          console.log(`[API/Announcements] Deleting notification associated with reply ${actionPayload.replyId}.`);
+          writeNotificationsToFile(filteredNotifications);
+      }
     }
 
     if (announcementModified) {

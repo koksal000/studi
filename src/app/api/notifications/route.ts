@@ -12,6 +12,7 @@ export interface AppNotification {
   announcementId: string;
   announcementTitle: string;
   commentId: string;
+  replyId?: string; // This links the notification to a specific reply
   date: string;
   read: boolean;
 }
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(userNotifications);
 }
 
-// POST to create a new notification
+// POST to create a new notification (now only used for seeding or manual creation if needed)
 export async function POST(request: NextRequest) {
   let payload: Omit<AppNotification, 'id' | 'date' | 'read'>;
   try {

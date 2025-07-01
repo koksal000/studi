@@ -116,7 +116,14 @@ export async function sendNotificationToAll(payload: { title: string; body: stri
  * Sends a notification to a specific user, identified by their email.
  */
 export async function sendNotificationToUser(userId: string, payload: { title: string; body: string; link: string; }) {
+  console.log(`[FCM-Service] sendNotificationToUser called for userId: ${userId}`);
   const allTokenRecords = readTokensFromFile();
   const userTokens = allTokenRecords.filter(t => t.userId === userId).map(t => t.token);
-  await sendPushNotification({ ...payload, tokens: userTokens });
+  console.log(`[FCM-Service] Found ${userTokens.length} token(s) for userId: ${userId}`);
+  
+  if (userTokens.length > 0) {
+      await sendPushNotification({ ...payload, tokens: userTokens });
+  } else {
+      console.log(`[FCM-Service] No tokens found for user ${userId}, skipping push notification.`);
+  }
 }

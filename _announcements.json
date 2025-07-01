@@ -13,6 +13,15 @@
         "userId": "ADMIN_ACCOUNT"
       }
     ],
-    "comments": []
+    "comments": [
+      {
+        "authorName": "sdfg fd",
+        "authorId": "dsGhrfs@gmail.com",
+        "text": "deneme",
+        "id": "cmt_1751381880478_t71kheh",
+        "date": "2025-07-01T14:58:00.478Z",
+        "replies": []
+      }
+    ]
   }
 ]

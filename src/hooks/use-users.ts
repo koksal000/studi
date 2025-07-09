@@ -21,6 +21,8 @@ export function useUsers() {
         throw new Error('Kullanıcı verileri sunucudan alınamadı.');
       }
       const data: UserProfile[] = await response.json();
+      // Sort by last activity date, newest first
+      data.sort((a, b) => new Date(b.lastUpdatedAt).getTime() - new Date(a.lastUpdatedAt).getTime());
       setUsers(data);
     } catch (error: any) {
       toast({
@@ -44,5 +46,3 @@ export function useUsers() {
     refetchUsers: fetchUsers,
   };
 }
-
-    

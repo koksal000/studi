@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "title": "Deneme 2",
+    "content": "Deneme 2",
+    "media": null,
+    "mediaType": null,
+    "id": "ann_1752073088046",
+    "date": "2025-07-09T14:58:08.046Z",
+    "author": "Yönetim Hesabı",
+    "authorId": "ADMIN_ACCOUNT",
+    "likes": [],
+    "comments": [],
+    "isPinned": false
+  },
+  {
+    "title": "Deneme",
+    "content": "Deneme",
+    "media": null,
+    "mediaType": null,
+    "id": "ann_1752073036104",
+    "date": "2025-07-09T14:57:16.104Z",
+    "author": "Yönetim Hesabı",
+    "authorId": "ADMIN_ACCOUNT",
+    "likes": [],
+    "comments": [],
+    "isPinned": true
+  }
+]

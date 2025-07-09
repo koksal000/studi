@@ -18,19 +18,18 @@ const dataDir = process.env.DATA_PATH || process.cwd();
 const USER_DATA_FILE_PATH = path.join(dataDir, '_user_data.json');
 
 const readUserProfilesFromFile = (): UserProfile[] => {
-  try {
-    if (fs.existsSync(USER_DATA_FILE_PATH)) {
-      const fileData = fs.readFileSync(USER_DATA_FILE_PATH, 'utf-8');
-      if (fileData.trim() === '') {
-        return [];
-      }
-      return JSON.parse(fileData) as UserProfile[];
-    } else {
-      return [];
-    }
-  } catch (error) {
-    console.error("[API/UserProfile] Error loading user profiles file:", error);
+  if (!fs.existsSync(USER_DATA_FILE_PATH)) {
     return [];
+  }
+  const fileData = fs.readFileSync(USER_DATA_FILE_PATH, 'utf-8');
+  if (fileData.trim() === '') {
+    return [];
+  }
+  try {
+    return JSON.parse(fileData) as UserProfile[];
+  } catch (error) {
+    console.error("[API/UserProfile] CRITICAL: Could not parse _user_data.json. To prevent data loss, the operation will be aborted.", error);
+    throw new Error("Kullanıcı veri dosyası okunamadı veya bozuk. Veri kaybını önlemek için işlem durduruldu.");
   }
 };
 
@@ -67,34 +66,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Geçersiz kullanıcı verisi. Ad, soyad ve geçerli e-posta gereklidir.' }, { status: 400 });
   }
 
-  const profiles = readUserProfilesFromFile();
-  const existingProfileIndex = profiles.findIndex(p => p.email.toLowerCase() === email.toLowerCase());
-  const now = new Date().toISOString();
+  try {
+    const profiles = readUserProfilesFromFile();
+    const existingProfileIndex = profiles.findIndex(p => p.email.toLowerCase() === email.toLowerCase());
+    const now = new Date().toISOString();
 
-  if (existingProfileIndex !== -1) {
-    profiles[existingProfileIndex].name = name;
-    profiles[existingProfileIndex].surname = surname;
-    profiles[existingProfileIndex].lastUpdatedAt = now;
-    console.log(`[API/UserProfile] Profile updated for email: ${email}`);
-  } else {
-    const newUserProfile: UserProfile = {
-      id: email.toLowerCase(),
-      name,
-      surname,
-      email: email.toLowerCase(),
-      joinedAt: now,
-      lastUpdatedAt: now,
-    };
-    profiles.push(newUserProfile);
-    console.log(`[API/UserProfile] New profile created for email: ${email}`);
-  }
+    if (existingProfileIndex !== -1) {
+      profiles[existingProfileIndex].name = name;
+      profiles[existingProfileIndex].surname = surname;
+      profiles[existingProfileIndex].lastUpdatedAt = now;
+      console.log(`[API/UserProfile] Profile updated for email: ${email}`);
+    } else {
+      const newUserProfile: UserProfile = {
+        id: email.toLowerCase(),
+        name,
+        surname,
+        email: email.toLowerCase(),
+        joinedAt: now,
+        lastUpdatedAt: now,
+      };
+      profiles.push(newUserProfile);
+      console.log(`[API/UserProfile] New profile created for email: ${email}`);
+    }
 
-  if (writeUserProfilesToFile(profiles)) {
-    const savedProfile = profiles.find(p => p.email.toLowerCase() === email.toLowerCase());
-    return NextResponse.json(savedProfile, { status: existingProfileIndex !== -1 ? 200 : 201 });
-  } else {
-    return NextResponse.json({ message: "Sunucu hatası: Kullanıcı profili kaydedilemedi." }, { status: 500 });
+    if (writeUserProfilesToFile(profiles)) {
+      const savedProfile = profiles.find(p => p.email.toLowerCase() === email.toLowerCase());
+      return NextResponse.json(savedProfile, { status: existingProfileIndex !== -1 ? 200 : 201 });
+    } else {
+      return NextResponse.json({ message: "Sunucu hatası: Kullanıcı profili kaydedilemedi." }, { status: 500 });
+    }
+  } catch (error: any) {
+    // This will catch the error from the new readUserProfilesFromFile
+    return NextResponse.json({ message: error.message || "Kullanıcı profilleri işlenirken kritik bir sunucu hatası oluştu." }, { status: 500 });
   }
 }
-
-    

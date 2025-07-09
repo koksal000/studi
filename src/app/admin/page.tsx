@@ -361,7 +361,7 @@ export default function AdminPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center"><Users className="mr-2 h-6 w-6 text-primary" /> Kullanıcı Yönetimi</CardTitle>
-          <CardDescription>Kayıtlı kullanıcıları görüntüleyin ve onlara doğrudan mesaj gönderin.</CardDescription>
+          <CardDescription>Kayıtlı kullanıcıları görüntüleyin ve onlara doğrudan mesaj gönderin. Liste, en son aktif olan kullanıcıya göre sıralanmıştır.</CardDescription>
         </CardHeader>
         <CardContent>
           {usersLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Kullanıcılar yükleniyor...</div>}
@@ -374,6 +374,7 @@ export default function AdminPage() {
                     <TableHead>Ad Soyad</TableHead>
                     <TableHead>E-posta</TableHead>
                     <TableHead>Katılma Tarihi</TableHead>
+                    <TableHead>Son Aktivite</TableHead>
                     <TableHead>İşlem</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -383,6 +384,7 @@ export default function AdminPage() {
                       <TableCell>{u.name} {u.surname}</TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell>{formatDate(u.joinedAt)}</TableCell>
+                      <TableCell>{formatDate(u.lastUpdatedAt)}</TableCell>
                       <TableCell>
                         <Button variant="outline" size="sm" onClick={() => handleOpenUserMessageDialog(u)}>
                           <MessageSquare className="mr-2 h-4 w-4"/> Mesaj Gönder

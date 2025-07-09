@@ -367,7 +367,7 @@ export default function AdminPage() {
           {usersLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Kullanıcılar yükleniyor...</div>}
           {!usersLoading && users.length === 0 && <p className="text-muted-foreground">Kayıtlı kullanıcı bulunmamaktadır.</p>}
           {!usersLoading && users.length > 0 && (
-            <div className="overflow-x-auto">
+            <div className="relative max-h-[400px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

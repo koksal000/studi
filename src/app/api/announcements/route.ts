@@ -203,7 +203,6 @@ export async function POST(request: NextRequest) {
     } else if (actionPayload.action === "TOGGLE_PIN_ANNOUNCEMENT") {
         const announcementToPin = announcementToUpdate;
         
-        // Check pin limit ONLY when trying to pin (isPinned is currently false or undefined)
         if (!announcementToPin.isPinned) {
             const pinnedCount = announcements.filter(a => a.isPinned).length;
             if (pinnedCount >= 5) {
@@ -239,7 +238,6 @@ export async function POST(request: NextRequest) {
       commentToUpdate.replies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       announcementModified = true;
 
-      // --- Start of Notification Logic ---
       const { replyingToAuthorId } = actionPayload.reply;
       const { authorId: replierId, authorName: replierName, text: replyText } = newReply;
       
@@ -247,7 +245,6 @@ export async function POST(request: NextRequest) {
       if (replyingToAuthorId && announcementToUpdate.title && replyingToAuthorId !== replierId) {
           console.log(`[API/Announcements] Conditions met. Creating notifications for ${replyingToAuthorId}.`);
           
-          // 1. Create In-App Notification
           const allNotifications = readNotificationsFromFile();
           const newInAppNotification: AppNotification = {
               id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -257,14 +254,13 @@ export async function POST(request: NextRequest) {
               announcementId: actionPayload.announcementId, 
               announcementTitle: announcementToUpdate.title, 
               commentId: actionPayload.commentId,
-              replyId: newReply.id, // IMPORTANT: Link notification to the specific reply
+              replyId: newReply.id,
               date: new Date().toISOString(),
               read: false,
           };
           allNotifications.unshift(newInAppNotification);
           writeNotificationsToFile(allNotifications);
 
-          // 2. Send Push Notification
           await sendNotificationToUser(replyingToAuthorId, {
             title: `${replierName} yorumunuza yanıt verdi`,
             body: `${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
@@ -273,7 +269,6 @@ export async function POST(request: NextRequest) {
       } else {
         console.log(`[API/Announcements] Notification conditions not met. Skipping notification. replyingToAuthorId: ${replyingToAuthorId}, title: ${!!announcementToUpdate.title}, is self-reply: ${replyingToAuthorId === replierId}`);
       }
-      // --- End of Notification Logic ---
 
     } else if (actionPayload.action === "DELETE_COMMENT") {
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
@@ -285,8 +280,20 @@ export async function POST(request: NextRequest) {
          console.warn(`[API/Announcements] Unauthorized attempt to delete comment ${actionPayload.commentId} by ${actionPayload.deleterAuthorId}. Owner is ${commentToDelete.authorId}`);
         return NextResponse.json({ message: 'Bu yorumu silme yetkiniz yok.' }, { status: 403 });
       }
+
+      const replyIdsToDelete = (commentToDelete.replies || []).map(r => r.id);
+
       announcementToUpdate.comments.splice(commentIndex, 1);
       announcementModified = true;
+
+      if (replyIdsToDelete.length > 0) {
+          const allNotifications = readNotificationsFromFile();
+          const filteredNotifications = allNotifications.filter(n => !replyIdsToDelete.includes(n.replyId!));
+          if (allNotifications.length > filteredNotifications.length) {
+              console.log(`[API/Announcements] Deleting ${allNotifications.length - filteredNotifications.length} notifications for deleted comment ${actionPayload.commentId}.`);
+              writeNotificationsToFile(filteredNotifications);
+          }
+      }
     } else if (actionPayload.action === "DELETE_REPLY") {
       const commentIndex = announcementToUpdate.comments.findIndex(c => c.id === actionPayload.commentId);
       if (commentIndex === -1) {
@@ -306,7 +313,6 @@ export async function POST(request: NextRequest) {
       commentToUpdate.replies.splice(replyIndex, 1);
       announcementModified = true;
 
-      // Also delete the corresponding notification
       const allNotificationsForDelete = readNotificationsFromFile();
       const filteredNotifications = allNotificationsForDelete.filter(n => n.replyId !== actionPayload.replyId);
       if (allNotificationsForDelete.length > filteredNotifications.length) {
@@ -342,7 +348,6 @@ export async function POST(request: NextRequest) {
 
     const existingIndex = announcements.findIndex(ann => ann.id === newAnnouncement.id);
     if (existingIndex !== -1) {
-      // Preserve original date and author on edit to avoid it being pushed to top
       const originalAnnouncement = announcements[existingIndex];
       announcements[existingIndex] = {
         ...newAnnouncement,
@@ -351,7 +356,7 @@ export async function POST(request: NextRequest) {
         authorId: originalAnnouncement.authorId,
         likes: originalAnnouncement.likes,
         comments: originalAnnouncement.comments,
-        isPinned: originalAnnouncement.isPinned, // Preserve pinned status on general edit
+        isPinned: originalAnnouncement.isPinned,
       };
     } else {
       announcements.unshift(newAnnouncement);
@@ -365,7 +370,6 @@ export async function POST(request: NextRequest) {
     announcements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (writeAnnouncementsToFile(announcements)) {
       if (isNewAnnouncement && modifiedAnnouncement) {
-          // Send push notification to all users for a new announcement
           sendNotificationToAll({
             title: 'Yeni Duyuru: Çamlıca Köyü',
             body: modifiedAnnouncement.title,
@@ -391,12 +395,19 @@ export async function DELETE(request: NextRequest) {
   }
 
   const announcements = readAnnouncementsFromFile();
-  const initialLength = announcements.length;
-  const filteredAnnouncements = announcements.filter(ann => ann.id !== id);
+  const announcementToDelete = announcements.find(ann => ann.id === id);
 
-  if (filteredAnnouncements.length < initialLength) {
+  if (announcementToDelete) {
+    const allNotifications = readNotificationsFromFile();
+    const filteredNotifications = allNotifications.filter(n => n.announcementId !== id);
+    if (allNotifications.length > filteredNotifications.length) {
+        console.log(`[API/Announcements] Deleting ${allNotifications.length - filteredNotifications.length} notifications for deleted announcement ${id}.`);
+        writeNotificationsToFile(filteredNotifications);
+    }
+    
+    const filteredAnnouncements = announcements.filter(ann => ann.id !== id);
     if (writeAnnouncementsToFile(filteredAnnouncements)) {
-      return NextResponse.json({ message: 'Duyuru başarıyla silindi' }, { status: 200 });
+      return NextResponse.json({ message: 'Duyuru ve ilişkili bildirimler başarıyla silindi' }, { status: 200 });
     } else {
       console.error(`[API/Announcements] Failed to save after deleting announcement ${id} from file.`);
       return NextResponse.json({ message: 'Sunucu hatası: Duyuru silindikten sonra değişiklikler kalıcı olarak kaydedilemedi.' }, { status: 500 });

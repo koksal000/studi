@@ -53,7 +53,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
   if (!annProp) return null; // Guard against null announcement prop
 
   // Directly use annProp for rendering and logic
-  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : `${user.name} ${user.surname}`) : null;
+  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : user.email) : null;
   const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
 
   const formattedDate = new Date(annProp.date).toLocaleDateString('tr-TR', {

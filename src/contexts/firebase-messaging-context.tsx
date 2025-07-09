@@ -6,45 +6,40 @@ import { initializeFirebaseApp, requestNotificationPermissionAndToken, onForegro
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/contexts/user-context';
 
-export type FcmPermissionStatus = 'granted' | 'denied' | 'default' | 'prompted_declined' | 'not_supported';
+export type FcmPermissionStatus = 'granted' | 'denied' | 'default' | 'not_supported';
+export type UserPreference = 'enabled' | 'disabled' | 'unset';
 
 interface FirebaseMessagingContextType {
   fcmToken: string | null;
   permissionStatus: FcmPermissionStatus;
-  requestPermission: () => Promise<{ token: string | null; permission: FcmPermissionStatus }>;
+  userPreference: UserPreference;
+  updateNotificationPreference: (enabled: boolean) => void;
+  requestPermission: () => Promise<void>;
   isFcmLoading: boolean;
   showPermissionModal: boolean; 
   setShowPermissionModal: (show: boolean) => void; 
   hasModalBeenShown: boolean;
   setHasModalBeenShown: (shown: boolean) => void;
-  userPreference: 'enabled' | 'disabled' | 'unset';
-  setUserPreference: (preference: 'enabled' | 'disabled') => void;
-}
-
-interface FCMTokenResponse {
-  token: string | null;
-  permission: FcmPermissionStatus;
 }
 
 const FirebaseMessagingContext = createContext<FirebaseMessagingContextType | undefined>(undefined);
 
-const FCM_PERMISSION_BROWSER_STATUS_KEY = 'fcmActualBrowserPermissionStatus_v2';
-const FCM_MODAL_SHOWN_KEY = 'fcmPermissionModalShown_v2';
-const FCM_USER_PREFERENCE_KEY = 'fcmUserPreference_v2';
+const FCM_MODAL_SHOWN_KEY = 'fcmPermissionModalShown_v3';
+const FCM_USER_PREFERENCE_KEY = 'fcmUserPreference_v3';
 
 export const FirebaseMessagingProvider = ({ children }: { children: ReactNode }) => {
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<FcmPermissionStatus>('default');
+  const [userPreference, setUserPreferenceState] = useState<UserPreference>('unset');
   const [isFcmLoading, setIsFcmLoading] = useState(true);
-  const [_showPermissionModal, _setShowPermissionModal] = useState(false); 
+  const [showPermissionModal, setShowPermissionModal] = useState(false); 
   const [hasModalBeenShown, setHasModalBeenShownState] = useState(false);
-  const [userPreference, setUserPreferenceState] = useState<'enabled' | 'disabled' | 'unset'>('unset');
   const { toast } = useToast();
   const { user } = useUser();
 
   const sendTokenToServer = useCallback(async (token: string) => {
     if (!user || !user.email) {
-      console.log('[FCM Context] User not logged in, cannot associate token with user.');
+      console.log('[FCM Context] User not logged in. Token will be sent when user logs in.');
       return;
     }
     try {
@@ -53,77 +48,52 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, userId: user.email }),
       });
-      console.log('[FCM Context] Token sent to server for user:', user.email);
+      console.log(`[FCM Context] Token successfully sent to server for user: ${user.email}`);
     } catch (apiError) {
       console.error('[FCM Context] Failed to send FCM token to server:', apiError);
     }
   }, [user]);
 
-  const updateUserPreferenceAndToken = useCallback(async (newBrowserPermission: FcmPermissionStatus, currentToken: string | null) => {
-    setPermissionStatus(newBrowserPermission);
-    localStorage.setItem(FCM_PERMISSION_BROWSER_STATUS_KEY, newBrowserPermission);
-    setFcmToken(currentToken);
+  const requestPermission = useCallback(async () => {
+    console.log('[FCM Context] Requesting notification permission...');
+    const currentToken = await requestNotificationPermissionAndToken();
+    const newPermissionStatus = Notification.permission as FcmPermissionStatus;
+    setPermissionStatus(newPermissionStatus);
 
-    if (newBrowserPermission === 'granted') {
-      setUserPreferenceState('enabled');
-      localStorage.setItem(FCM_USER_PREFERENCE_KEY, 'enabled');
-      if (currentToken) {
-        await sendTokenToServer(currentToken);
-      }
-    } else if (newBrowserPermission === 'denied') {
-      setUserPreferenceState('disabled');
-      localStorage.setItem(FCM_USER_PREFERENCE_KEY, 'disabled');
+    if (newPermissionStatus === 'granted' && currentToken) {
+      setFcmToken(currentToken);
+      await sendTokenToServer(currentToken);
+    } else {
+      setFcmToken(null);
     }
+    return;
   }, [sendTokenToServer]);
 
-
+  // Effect to initialize state and check for existing permissions/tokens on mount.
   useEffect(() => {
-    initializeFirebaseApp();
     setIsFcmLoading(true);
-
+    initializeFirebaseApp();
+    
+    // Load preferences from localStorage
     const modalShown = localStorage.getItem(FCM_MODAL_SHOWN_KEY) === 'true';
     setHasModalBeenShownState(modalShown);
-
-    let storedUserPref = localStorage.getItem(FCM_USER_PREFERENCE_KEY) as 'enabled' | 'disabled' | 'unset' | null;
-    if (storedUserPref === null) storedUserPref = 'unset';
+    const storedUserPref = (localStorage.getItem(FCM_USER_PREFERENCE_KEY) as UserPreference) || 'unset';
     setUserPreferenceState(storedUserPref);
     
-    let browserPerm: FcmPermissionStatus = 'default';
-    if (typeof Notification !== 'undefined') {
-      if (!('permission' in Notification)) {
-        browserPerm = 'not_supported';
-      } else {
-        browserPerm = Notification.permission as FcmPermissionStatus;
-      }
-    } else {
-      browserPerm = 'not_supported';
+    // Check initial browser permission
+    const initialPermission = Notification.permission as FcmPermissionStatus;
+    setPermissionStatus(initialPermission);
+
+    // If permission is already granted and user wants notifications, get and send the token.
+    if (initialPermission === 'granted' && storedUserPref !== 'disabled') {
+      requestPermission();
     }
     
-    setPermissionStatus(browserPerm);
-    localStorage.setItem(FCM_PERMISSION_BROWSER_STATUS_KEY, browserPerm);
-
-    if (browserPerm === 'granted' && (storedUserPref === 'enabled' || storedUserPref === 'unset')) {
-      requestNotificationPermissionAndToken().then(token => {
-        if (token) {
-          setFcmToken(token);
-          sendTokenToServer(token);
-          if (storedUserPref === 'unset') { 
-              setUserPreferenceState('enabled');
-              localStorage.setItem(FCM_USER_PREFERENCE_KEY, 'enabled');
-          }
-        }
-      }).finally(() => setIsFcmLoading(false));
-    } else if (browserPerm === 'denied' && storedUserPref !== 'disabled') {
-      setUserPreferenceState('disabled');
-      localStorage.setItem(FCM_USER_PREFERENCE_KEY, 'disabled');
-      setIsFcmLoading(false);
-    }
-    else {
-      setIsFcmLoading(false);
-    }
-
+    setIsFcmLoading(false);
+    
+    // Listen for foreground messages
     const unsubscribeOnMessage = onForegroundMessage((payload) => {
-      console.log('[FCM Context] Foreground message received. ', payload);
+      console.log('[FCM Context] Foreground message received.', payload);
       toast({
         title: payload.notification?.title || "Yeni Bildirim",
         description: payload.notification?.body || "Yeni bir mesajınız var.",
@@ -133,55 +103,48 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
     return () => {
       unsubscribeOnMessage();
     };
-  }, [toast, user, sendTokenToServer]);
+  }, [requestPermission, toast]);
 
-
+  // This effect ensures that if a user logs in, we re-run the token registration.
+  useEffect(() => {
+    if (user && fcmToken) {
+        console.log("[FCM Context] User changed/loaded, re-sending token to server.");
+        sendTokenToServer(fcmToken);
+    }
+  }, [user, fcmToken, sendTokenToServer]);
+  
   const setHasModalBeenShown = (shown: boolean) => {
-    localStorage.setItem(FCM_MODAL_SHOWN_KEY, shown.toString());
+    localStorage.setItem(FCM_MODAL_SHOWN_KEY, String(shown));
     setHasModalBeenShownState(shown);
   };
+  
+  const updateNotificationPreference = useCallback(async (enabled: boolean) => {
+      const newPreference: UserPreference = enabled ? 'enabled' : 'disabled';
+      setUserPreferenceState(newPreference);
+      localStorage.setItem(FCM_USER_PREFERENCE_KEY, newPreference);
 
-  const setUserPreference = (preference: 'enabled' | 'disabled') => {
-    localStorage.setItem(FCM_USER_PREFERENCE_KEY, preference);
-    setUserPreferenceState(preference);
-  };
-
-  const requestPermission = useCallback(async (): Promise<FCMTokenResponse> => {
-    setIsFcmLoading(true);
-    console.log('[FCM Context] requestPermission called.');
-    const receivedToken = await requestNotificationPermissionAndToken(); 
-    
-    let newBrowserPermission: FcmPermissionStatus = 'default';
-     if (typeof Notification !== 'undefined') {
-      if (!('permission' in Notification)) {
-        newBrowserPermission = 'not_supported';
+      if (enabled) {
+          console.log('[FCM Context] User enabled notifications. Checking permission...');
+          await requestPermission();
       } else {
-        newBrowserPermission = Notification.permission as FcmPermissionStatus;
+          console.log('[FCM Context] User disabled notifications.');
+          setFcmToken(null);
+          // Optional: Add logic here to unregister token from server if desired.
       }
-    } else {
-      newBrowserPermission = 'not_supported';
-    }
-    console.log('[FCM Context] Browser permission after prompt/check:', newBrowserPermission, "Token:", receivedToken ? "Exists" : "Null");
-    
-    await updateUserPreferenceAndToken(newBrowserPermission, receivedToken);
-
-    setIsFcmLoading(false);
-    return { token: receivedToken, permission: newBrowserPermission };
-  }, [updateUserPreferenceAndToken]);
-
-
+  }, [requestPermission]);
+  
   return (
     <FirebaseMessagingContext.Provider value={{
       fcmToken,
       permissionStatus,
+      userPreference,
+      updateNotificationPreference,
       requestPermission,
       isFcmLoading,
-      showPermissionModal: _showPermissionModal, 
-      setShowPermissionModal: _setShowPermissionModal, 
+      showPermissionModal, 
+      setShowPermissionModal, 
       hasModalBeenShown,
       setHasModalBeenShown,
-      userPreference,
-      setUserPreference
     }}>
       {children}
     </FirebaseMessagingContext.Provider>

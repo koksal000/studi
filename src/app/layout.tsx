@@ -9,6 +9,9 @@ import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { SettingsProvider } from '@/contexts/settings-context';
 import { AnnouncementStatusProvider } from '@/contexts/announcement-status-context';
+import { FirebaseMessagingProvider } from '@/contexts/firebase-messaging-context';
+import { NotificationManager } from '@/components/specific/notification-manager';
+
 
 export const metadata: Metadata = {
   title: 'KöyümDomaniç - Çamlıca Köyü Portalı',
@@ -32,16 +35,19 @@ export default function RootLayout({
       <body className={`antialiased flex flex-col min-h-screen`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <UserProvider>
-            <SettingsProvider>
-              <AnnouncementStatusProvider>
-                <Navbar />
-                <main className="flex-grow container mx-auto px-4 py-8">
-                  {children}
-                </main>
-                <Footer />
-                <Toaster />
-              </AnnouncementStatusProvider>
-            </SettingsProvider>
+            <FirebaseMessagingProvider>
+              <SettingsProvider>
+                <AnnouncementStatusProvider>
+                  <Navbar />
+                  <main className="flex-grow container mx-auto px-4 py-8">
+                    {children}
+                  </main>
+                  <Footer />
+                  <Toaster />
+                  <NotificationManager />
+                </AnnouncementStatusProvider>
+              </SettingsProvider>
+            </FirebaseMessagingProvider>
           </UserProvider>
         </ThemeProvider>
       </body>

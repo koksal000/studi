@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import { useFirebaseMessaging } from "@/contexts/firebase-messaging-context";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,37 +20,32 @@ interface NotificationPermissionDialogProps {
 }
 
 export function NotificationPermissionDialog({ isOpen, onOpenChange }: NotificationPermissionDialogProps) {
-  const { requestPermission, setHasModalBeenShown, setUserPreference } = useFirebaseMessaging();
+  const { updateNotificationPreference, setHasModalBeenShown } = useFirebaseMessaging();
   const { toast } = useToast();
 
   const handlePermissionChoice = async (agreed: boolean) => {
     if (agreed) {
       toast({ title: "Bildirim İzni İsteniyor...", description: "Lütfen tarayıcınızın bildirim çubuğunu kontrol edin.", duration: 5000 });
-      const { permission: browserPermissionAfterPrompt } = await requestPermission(); // This calls context.requestPermission
-      
-      // The context's requestPermission function now handles setting the userPreference based on browserPermissionAfterPrompt.
-      if (browserPermissionAfterPrompt === 'granted') {
-        toast({ title: "Bildirim İzni Verildi", description: "Yeni duyurulardan haberdar edileceksiniz." });
-      } else if (browserPermissionAfterPrompt === 'denied') {
-        toast({ title: "Bildirim İzni Reddedildi", description: "Bildirimler gösterilmeyecek. Ayarlardan değiştirebilirsiniz.", variant: "destructive" });
-      } else { // 'default' or 'prompted_declined'
-        toast({ title: "Bildirim İzni Beklemede", description: "Tarayıcınızdan izin vermeniz gerekebilir veya daha sonra ayarlardan deneyebilirsiniz." });
-      }
+      updateNotificationPreference(true);
     } else {
-      setUserPreference('disabled'); // User explicitly said no to our dialog
-      toast({ title: "Bildirim İzni İstenmedi", description: "Bildirimler gösterilmeyecek. Bu ayarı daha sonra Ayarlar bölümünden değiştirebilirsiniz." });
+      updateNotificationPreference(false);
+      toast({ title: "Bildirim İzni İstenmedi", description: "Bu ayarı daha sonra Ayarlar bölümünden değiştirebilirsiniz." });
     }
-    setHasModalBeenShown(true); // Mark modal as shown
-    onOpenChange(false); // Close this dialog
+    setHasModalBeenShown(true);
+    onOpenChange(false);
+  };
+
+  const handleDialogClose = (openState: boolean) => {
+    if (!openState) {
+      // If dialog is closed by clicking away or X, treat as "no" for now.
+      setHasModalBeenShown(true); 
+      updateNotificationPreference(false);
+    }
+    onOpenChange(openState);
   };
 
   return (
-    <AlertDialog open={isOpen} onOpenChange={(open) => {
-      if (!open) { // If dialog is closed by clicking away or X, treat as "Hayır" for modal shown logic
-        setHasModalBeenShown(true);
-      }
-      onOpenChange(open);
-    }}>
+    <AlertDialog open={isOpen} onOpenChange={handleDialogClose}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Bildirimlere İzin Verilsin mi?</AlertDialogTitle>

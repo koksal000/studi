@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from '@/components/ui/switch'; // Switch'i hala siteNotificationsPreference için kullanacağız.
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Moon, Sun, Laptop, Bell } from 'lucide-react'; // Mail ikonu kaldırıldı, Bell eklendi (site bildirimleri için)
+import { Moon, Sun, Laptop, Bell } from 'lucide-react';
 import { VILLAGE_NAME } from '@/lib/constants';
+import { useFirebaseMessaging } from '@/contexts/firebase-messaging-context';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -18,18 +19,25 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
-  const { 
-    currentTheme, 
-    setAppTheme, 
-    siteNotificationsPreference, // Bu kalacak
-    setSiteNotificationsPreference, // Bu kalacak
-  } = useSettings(); 
+  const { currentTheme, setAppTheme } = useSettings(); 
   const { user, logout } = useUser();
   const { toast } = useToast();
+  const { userPreference, updateNotificationPreference, permissionStatus } = useFirebaseMessaging();
+
+  const handleNotificationSwitchChange = (enabled: boolean) => {
+    if (enabled && permissionStatus === 'denied') {
+      toast({
+        title: "Bildirim İzni Engellendi",
+        description: "Bildirimlere izin vermek için lütfen tarayıcınızın site ayarlarını kontrol edin.",
+        variant: "destructive",
+        duration: 7000,
+      });
+      return; 
+    }
+    updateNotificationPreference(enabled);
+  };
   
-  const handleSaveSettings = async () => {
-    // E-posta tercihleri API çağrısı kaldırıldı.
-    // Sadece tema ve site bildirimleri (localStorage'a zaten kaydediliyor)
+  const handleSaveSettings = () => {
     toast({
       title: "Ayarlar Kaydedildi",
       description: "Tercihleriniz güncellendi.",
@@ -85,8 +93,8 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
                     </div>
                     <Switch
                       id="site-notifications"
-                      checked={siteNotificationsPreference}
-                      onCheckedChange={setSiteNotificationsPreference}
+                      checked={userPreference === 'enabled'}
+                      onCheckedChange={handleNotificationSwitchChange}
                     />
                   </div>
                 </div>
@@ -113,7 +121,7 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
         </div>
         <DialogFooter className="p-4 sm:p-6 border-t flex-shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Kapat</Button>
-          <Button onClick={handleSaveSettings}>Değişiklikleri Kaydet</Button>
+          <Button onClick={handleSaveSettings}>Kapat</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

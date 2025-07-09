@@ -7,30 +7,17 @@ import { useTheme } from 'next-themes';
 interface SettingsContextType {
   currentTheme: string | undefined;
   setAppTheme: (theme: string) => void;
-  siteNotificationsPreference: boolean; 
-  setSiteNotificationsPreference: (enabled: boolean) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-const SITE_NOTIFICATIONS_KEY = 'camlicaKoyuSiteNotificationsEnabled';
-
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { theme, setTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
-  const [siteNotificationsPreference, setSiteNotificationsPreferenceState] = useState(true);
 
   useEffect(() => {
-    setIsLoading(true); 
-    
-    const storedSiteNotificationsPref = localStorage.getItem(SITE_NOTIFICATIONS_KEY);
-    if (storedSiteNotificationsPref !== null) {
-      setSiteNotificationsPreferenceState(storedSiteNotificationsPref === 'true');
-    } else {
-      localStorage.setItem(SITE_NOTIFICATIONS_KEY, 'true'); // Default to true
-      setSiteNotificationsPreferenceState(true);
-    }
-    
+    // This effect now only handles things that might cause a delay in loading settings,
+    // like checking the theme. Notification logic has been moved.
     setIsLoading(false); 
   }, []); 
 
@@ -38,26 +25,10 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
     setTheme(newTheme);
   }, [setTheme]);
 
-  const handleSetSiteNotificationsPreference = useCallback((enabled: boolean) => {
-    localStorage.setItem(SITE_NOTIFICATIONS_KEY, enabled.toString());
-    setSiteNotificationsPreferenceState(enabled);
-    if (enabled && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-          console.log("Site notification permission granted by user.");
-        } else {
-          console.log("Site notification permission denied by user.");
-        }
-      });
-    }
-  }, []);
-
   const contextValue = useMemo(() => ({
     currentTheme: theme, 
     setAppTheme,
-    siteNotificationsPreference, 
-    setSiteNotificationsPreference: handleSetSiteNotificationsPreference,
-  }), [theme, setAppTheme, siteNotificationsPreference, handleSetSiteNotificationsPreference]);
+  }), [theme, setAppTheme]);
 
   if (isLoading && typeof window !== 'undefined') { 
      return (

@@ -5,7 +5,7 @@ import type { Announcement } from '@/hooks/use-announcements';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, UserCircle, CalendarDays, Image as ImageIconLucide, Video as VideoIconLucide, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2, Pencil } from 'lucide-react';
+import { Trash2, UserCircle, CalendarDays, Image as ImageIconLucide, Video as VideoIconLucide, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2, Pencil, Pin, PinOff } from 'lucide-react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -31,9 +31,10 @@ interface AnnouncementCardProps {
   isCompact?: boolean;
   allowDelete?: boolean;
   onEditClick?: (announcement: Announcement) => void;
+  onPinClick?: (announcementId: string) => void;
 }
 
-export function AnnouncementCard({ announcement: annProp, isCompact = false, allowDelete = false, onEditClick }: AnnouncementCardProps) {
+export function AnnouncementCard({ announcement: annProp, isCompact = false, allowDelete = false, onEditClick, onPinClick }: AnnouncementCardProps) {
   const { user, isAdmin } = useUser();
   const { deleteAnnouncement: removeAnnouncementHook, toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
@@ -152,9 +153,12 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
 
   return (
     <>
-      <Card className={`shadow-md hover:shadow-lg transition-shadow duration-300 ${isCompact ? 'cursor-pointer' : ''}`} onClick={isCompact ? () => setIsDetailModalOpen(true) : undefined}>
+      <Card className={`shadow-md hover:shadow-lg transition-shadow duration-300 ${isCompact ? 'cursor-pointer' : ''} ${annProp.isPinned ? 'border-amber-500/50' : ''}`} onClick={isCompact ? () => setIsDetailModalOpen(true) : undefined}>
         <CardHeader>
-          <CardTitle className={isCompact ? "text-xl" : "text-2xl"}>{annProp.title}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            {annProp.isPinned && <Pin className="h-4 w-4 text-amber-500 flex-shrink-0" />}
+            <span className={isCompact ? "text-xl" : "text-2xl"}>{annProp.title}</span>
+          </CardTitle>
           <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 items-center mt-1">
             <span className="flex items-center"><CalendarDays className="h-3.5 w-3.5 mr-1" /> {formattedDate}</span>
             {renderAuthorInfo()}
@@ -207,6 +211,12 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
         <CardFooter className="flex justify-end items-center pt-4">
           {canAttemptDeleteOrEdit && !isCompact && (
             <div className="flex gap-2">
+              {onPinClick && (
+                <Button variant="outline" size="sm" onClick={() => onPinClick(annProp.id)}>
+                    {annProp.isPinned ? <PinOff className="mr-2 h-4 w-4" /> : <Pin className="mr-2 h-4 w-4" />}
+                    {annProp.isPinned ? "Sabitlemeyi Kaldır" : "Sabitle"}
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={() => onEditClick?.(annProp)}>
                 <Pencil className="mr-2 h-4 w-4" /> Düzenle
               </Button>

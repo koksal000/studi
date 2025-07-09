@@ -9,7 +9,7 @@ import { useAnnouncements } from '@/hooks/use-announcements';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { GOOGLE_MAPS_EMBED_URL, GOOGLE_MAPS_SHARE_URL, POPULATION_DATA, VILLAGE_NAME } from '@/lib/constants';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
@@ -26,6 +26,7 @@ export default function HomePage() {
   const { user, showEntryForm } = useUser();
   const { announcements } = useAnnouncements();
 
+  const pinnedAnnouncements = announcements.filter(ann => ann.isPinned).slice(0, 5);
   const recentAnnouncements = announcements.slice(0, 3);
 
   if (showEntryForm || !user) {
@@ -52,6 +53,23 @@ export default function HomePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
+          
+          {pinnedAnnouncements.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-amber-500">
+                  <Pin className="mr-2 h-5 w-5" />
+                  Sabitlenmiş Duyurular
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {pinnedAnnouncements.map(ann => (
+                  <AnnouncementCard key={ann.id} announcement={ann} isCompact={true} />
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Son Duyurular</CardTitle>

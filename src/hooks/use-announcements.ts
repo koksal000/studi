@@ -42,6 +42,7 @@ export interface Announcement {
   mediaType?: string | null;
   likes?: Like[];
   comments?: Comment[];
+  isPinned?: boolean;
 }
 
 export interface NewAnnouncementPayload {
@@ -108,6 +109,7 @@ export function useAnnouncements() {
         authorId: isAdmin ? "ADMIN_ACCOUNT" : user.email,
         likes: [],
         comments: [],
+        isPinned: false,
     };
     
     setAnnouncements(currentData => [newAnnouncement, ...currentData]);
@@ -124,6 +126,7 @@ export function useAnnouncements() {
           authorId: isAdmin ? "ADMIN_ACCOUNT" : user.email,
           likes: [],
           comments: [],
+          isPinned: false,
         })
       });
 
@@ -277,6 +280,55 @@ export function useAnnouncements() {
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
         setAnnouncements(originalData);
+    }
+  }, [user, isAdmin, announcements, toast]);
+
+  const togglePinAnnouncement = useCallback(async (announcementId: string) => {
+    if (!user || !isAdmin) {
+      toast({ title: "Yetki Gerekli", description: "Duyuru sabitlemek için yönetici olmalısınız.", variant: "destructive" });
+      return;
+    }
+
+    const currentAnnouncement = announcements.find(a => a.id === announcementId);
+    if (!currentAnnouncement) return;
+
+    // Check pin limit ONLY if we are about to pin a new one
+    if (!currentAnnouncement.isPinned) {
+        const pinnedCount = announcements.filter(a => a.isPinned).length;
+        if (pinnedCount >= 5) {
+            toast({ title: "Limit Dolu", description: "Maksimum 5 duyuru sabitleyebilirsiniz. Yeni bir tane sabitlemek için mevcut sabitlenmiş bir duyuruyu kaldırın.", variant: "destructive", duration: 7000 });
+            return;
+        }
+    }
+
+    const originalData = [...announcements];
+    const optimisticData = announcements.map(ann => {
+        if (ann.id === announcementId) {
+            return { ...ann, isPinned: !ann.isPinned };
+        }
+        return ann;
+    });
+    setAnnouncements(optimisticData);
+
+    try {
+        const response = await fetch('/api/announcements', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: "TOGGLE_PIN_ANNOUNCEMENT", announcementId })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'İşlem sunucuya kaydedilemedi.' }));
+            throw new Error(errorData.message);
+        }
+
+        const updatedAnnouncement = await response.json();
+        updateAnnouncementInState(updatedAnnouncement);
+        toast({ title: "İşlem Başarılı", description: `Duyuru ${updatedAnnouncement.isPinned ? 'sabitlendi' : 'sabitlemesi kaldırıldı'}.` });
+        broadcastAnnouncementUpdate();
+    } catch (error: any) {
+        toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
+        setAnnouncements(originalData); // Revert on failure
     }
   }, [user, isAdmin, announcements, toast]);
 
@@ -458,6 +510,7 @@ export function useAnnouncements() {
     isLoading,
     unreadCount,
     toggleAnnouncementLike,
+    togglePinAnnouncement,
     addCommentToAnnouncement,
     addReplyToComment,
     deleteComment,

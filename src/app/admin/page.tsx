@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, Activity, Pencil, MessageSquare } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, Activity, Pencil, MessageSquare, Pin } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -42,7 +42,7 @@ export default function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { galleryImages, addGalleryImage, deleteGalleryImage, isLoading: galleryLoading } = useGallery();
-  const { announcements, isLoading: announcementsLoading } = useAnnouncements();
+  const { announcements, isLoading: announcementsLoading, togglePinAnnouncement } = useAnnouncements();
   const { users, isLoading: usersLoading } = useUsers();
 
 
@@ -100,6 +100,8 @@ export default function AdminPage() {
     setIsUserMessageDialogOpen(true);
   };
 
+  const pinnedAnnouncements = announcements.filter(ann => ann.isPinned);
+  const regularAnnouncements = announcements.filter(ann => !ann.isPinned);
 
   if (!user) {
     return (
@@ -301,7 +303,7 @@ export default function AdminPage() {
             </Button>
           </CardTitle>
            <CardDescription>
-            Yeni duyurular ekleyin veya mevcut duyuruları yönetin.
+            Yeni duyurular ekleyin veya mevcut duyuruları yönetin. Sabitlenmiş duyurular ana sayfada en üstte gösterilir.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -311,21 +313,44 @@ export default function AdminPage() {
             announcementToEdit={announcementToEdit}
           />
 
-          <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4 mt-6 flex items-center">
-            <ListChecks className="mr-2 h-5 w-5" /> Mevcut Duyurular
-          </h3>
           {announcementsLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Duyurular yükleniyor...</div>}
+          
+          {pinnedAnnouncements.length > 0 && !announcementsLoading && (
+            <>
+              <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4 mt-6 flex items-center">
+                <Pin className="mr-2 h-5 w-5 text-amber-500" /> Sabitlenmiş Duyurular
+              </h3>
+              <div className="space-y-4">
+                {pinnedAnnouncements.map((ann) => (
+                  <AnnouncementCard 
+                    key={ann.id} 
+                    announcement={ann} 
+                    allowDelete={true} 
+                    onEditClick={() => handleOpenAnnouncementDialog(ann)}
+                    onPinClick={() => togglePinAnnouncement(ann.id)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          <h3 className="text-lg font-semibold text-primary border-b pb-2 mb-4 mt-6 flex items-center">
+            <ListChecks className="mr-2 h-5 w-5" /> {pinnedAnnouncements.length > 0 ? 'Diğer Duyurular' : 'Mevcut Duyurular'}
+          </h3>
+          
           {!announcementsLoading && announcements.length === 0 && (
             <p className="text-muted-foreground">Henüz yayınlanmış bir duyuru bulunmamaktadır.</p>
           )}
-          {!announcementsLoading && announcements.length > 0 && (
+
+          {!announcementsLoading && regularAnnouncements.length > 0 && (
             <div className="space-y-4">
-              {announcements.map((ann) => (
+              {regularAnnouncements.map((ann) => (
                 <AnnouncementCard 
                   key={ann.id} 
                   announcement={ann} 
                   allowDelete={true} 
                   onEditClick={() => handleOpenAnnouncementDialog(ann)}
+                  onPinClick={() => togglePinAnnouncement(ann.id)}
                 />
               ))}
             </div>
@@ -494,5 +519,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-    

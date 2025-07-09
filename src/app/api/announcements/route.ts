@@ -60,6 +60,10 @@ interface DeleteReplyApiPayload {
   replyId: string;
   deleterAuthorId: string;
 }
+interface TogglePinApiPayload {
+    action: "TOGGLE_PIN_ANNOUNCEMENT";
+    announcementId: string;
+}
 
 type AnnouncementApiPayload =
   | ToggleAnnouncementLikeApiPayload
@@ -67,6 +71,7 @@ type AnnouncementApiPayload =
   | AddReplyApiPayload
   | DeleteCommentApiPayload
   | DeleteReplyApiPayload
+  | TogglePinApiPayload
   | Announcement;
 
 const readAnnouncementsFromFile = (): Announcement[] => {
@@ -195,6 +200,19 @@ export async function POST(request: NextRequest) {
         announcementToUpdate.likes.push({ userId: actionPayload.userId });
       }
       announcementModified = true;
+    } else if (actionPayload.action === "TOGGLE_PIN_ANNOUNCEMENT") {
+        const announcementToPin = announcementToUpdate;
+        
+        // Check pin limit ONLY when trying to pin (isPinned is currently false or undefined)
+        if (!announcementToPin.isPinned) {
+            const pinnedCount = announcements.filter(a => a.isPinned).length;
+            if (pinnedCount >= 5) {
+                return NextResponse.json({ message: "Maksimum 5 duyuru sabitlenebilir. Lütfen önce mevcut sabitlenmiş bir duyuruyu kaldırın." }, { status: 400 });
+            }
+        }
+
+        announcementToUpdate.isPinned = !announcementToUpdate.isPinned;
+        announcementModified = true;
     } else if (actionPayload.action === "ADD_COMMENT_TO_ANNOUNCEMENT") {
       const newComment: Comment = {
         ...actionPayload.comment,
@@ -320,6 +338,7 @@ export async function POST(request: NextRequest) {
         ...c,
         replies: (c.replies || []).map(r => ({...r})),
     })).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    newAnnouncement.isPinned = newAnnouncement.isPinned || false;
 
     const existingIndex = announcements.findIndex(ann => ann.id === newAnnouncement.id);
     if (existingIndex !== -1) {
@@ -332,6 +351,7 @@ export async function POST(request: NextRequest) {
         authorId: originalAnnouncement.authorId,
         likes: originalAnnouncement.likes,
         comments: originalAnnouncement.comments,
+        isPinned: originalAnnouncement.isPinned, // Preserve pinned status on general edit
       };
     } else {
       announcements.unshift(newAnnouncement);

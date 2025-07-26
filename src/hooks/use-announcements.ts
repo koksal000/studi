@@ -63,6 +63,8 @@ export function useAnnouncements() {
   const { toast } = useToast();
 
   const fetchAnnouncements = useCallback(async () => {
+    // Keep isLoading true on initial call until data is fetched.
+    // For subsequent calls, don't set isLoading to true to avoid UI flicker.
     if (announcements.length === 0) {
         setIsLoading(true);
     }
@@ -112,7 +114,7 @@ export function useAnnouncements() {
         isPinned: false,
     };
     
-    setAnnouncements(currentData => [newAnnouncement, ...currentData]);
+    setAnnouncements(currentData => [newAnnouncement, ...currentData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
     try {
       const response = await fetch('/api/announcements', {
@@ -136,7 +138,7 @@ export function useAnnouncements() {
       }
       
       const finalAnnouncement: Announcement = await response.json();
-      setAnnouncements(currentData => currentData.map(ann => ann.id === tempId ? finalAnnouncement : ann));
+      setAnnouncements(currentData => currentData.map(ann => ann.id === tempId ? finalAnnouncement : ann).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       
       toast({ title: "Duyuru Eklendi", description: "Duyurunuz başarıyla yayınlandı." });
       broadcastAnnouncementUpdate();
@@ -237,7 +239,7 @@ export function useAnnouncements() {
     setAnnouncements(currentAnnouncements => 
         currentAnnouncements.map(ann => 
             ann.id === updatedAnnouncement.id ? updatedAnnouncement : ann
-        )
+        ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     );
   };
 
@@ -248,21 +250,22 @@ export function useAnnouncements() {
     }
     const userId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
     
-    const originalData = [...announcements];
-    const optimisticData = announcements.map(ann => {
-      if (ann.id === announcementId) {
-        const newLikes = ann.likes ? [...ann.likes] : [];
-        const likeIndex = newLikes.findIndex(l => l.userId === userId);
-        if (likeIndex > -1) {
-          newLikes.splice(likeIndex, 1);
-        } else {
-          newLikes.push({ userId });
-        }
-        return { ...ann, likes: newLikes };
-      }
-      return ann;
-    });
-    setAnnouncements(optimisticData);
+    // Optimistic update
+    setAnnouncements(currentAnnouncements =>
+        currentAnnouncements.map(ann => {
+            if (ann.id === announcementId) {
+                const newLikes = ann.likes ? [...ann.likes] : [];
+                const likeIndex = newLikes.findIndex(l => l.userId === userId);
+                if (likeIndex > -1) {
+                    newLikes.splice(likeIndex, 1);
+                } else {
+                    newLikes.push({ userId });
+                }
+                return { ...ann, likes: newLikes };
+            }
+            return ann;
+        })
+    );
     
     try {
         const response = await fetch('/api/announcements', { 
@@ -275,13 +278,15 @@ export function useAnnouncements() {
             throw new Error(errorData.message);
         }
         const updatedAnnouncement = await response.json();
+        // Server reconciliation
         updateAnnouncementInState(updatedAnnouncement);
         broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData);
+        // Revert on error
+        fetchAnnouncements();
     }
-  }, [user, isAdmin, announcements, toast]);
+  }, [user, isAdmin, toast, fetchAnnouncements]);
 
   const togglePinAnnouncement = useCallback(async (announcementId: string) => {
     if (!user || !isAdmin) {
@@ -292,7 +297,6 @@ export function useAnnouncements() {
     const currentAnnouncement = announcements.find(a => a.id === announcementId);
     if (!currentAnnouncement) return;
 
-    // Check pin limit ONLY if we are about to pin a new one
     if (!currentAnnouncement.isPinned) {
         const pinnedCount = announcements.filter(a => a.isPinned).length;
         if (pinnedCount >= 5) {
@@ -301,14 +305,15 @@ export function useAnnouncements() {
         }
     }
 
-    const originalData = [...announcements];
-    const optimisticData = announcements.map(ann => {
-        if (ann.id === announcementId) {
-            return { ...ann, isPinned: !ann.isPinned };
-        }
-        return ann;
-    });
-    setAnnouncements(optimisticData);
+    // Optimistic update
+    setAnnouncements(current =>
+        current.map(ann => {
+            if (ann.id === announcementId) {
+                return { ...ann, isPinned: !ann.isPinned };
+            }
+            return ann;
+        })
+    );
 
     try {
         const response = await fetch('/api/announcements', {
@@ -328,9 +333,9 @@ export function useAnnouncements() {
         broadcastAnnouncementUpdate();
     } catch (error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData); // Revert on failure
+        fetchAnnouncements(); // Revert
     }
-  }, [user, isAdmin, announcements, toast]);
+  }, [user, isAdmin, announcements, toast, fetchAnnouncements]);
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
@@ -339,15 +344,16 @@ export function useAnnouncements() {
     const tempCommentId = `cmt_temp_${Date.now()}`;
     const tempComment: Comment = { id: tempCommentId, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
     
-    const originalData = [...announcements];
-    const optimisticData = originalData.map(ann => {
-      if (ann.id === announcementId) {
-        const newComments = (ann.comments ? [tempComment, ...ann.comments] : [tempComment]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        return { ...ann, comments: newComments };
-      }
-      return ann;
-    });
-    setAnnouncements(optimisticData);
+    // Optimistic update
+    setAnnouncements(current =>
+        current.map(ann => {
+            if (ann.id === announcementId) {
+                const newComments = (ann.comments ? [tempComment, ...ann.comments] : [tempComment]);
+                return { ...ann, comments: newComments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())};
+            }
+            return ann;
+        })
+    );
 
     try {
         const response = await fetch('/api/announcements', { 
@@ -365,33 +371,34 @@ export function useAnnouncements() {
         broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData);
+        fetchAnnouncements(); // Revert
     }
-  }, [user, isAdmin, announcements, toast]);
+  }, [user, isAdmin, toast, fetchAnnouncements]);
   
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string, replyingToAuthorId?: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
     const authorName = isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`;
     const authorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
 
-    const originalData = [...announcements];
     const tempReplyId = `rpl_temp_${Date.now()}`;
     const tempReply: Reply = { id: tempReplyId, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName, replyingToAuthorId };
     
-    const optimisticData = originalData.map(ann => {
-      if (ann.id === announcementId) {
-        const newComments = (ann.comments || []).map(c => {
-          if (c.id === commentId) {
-            const newReplies = (c.replies ? [tempReply, ...c.replies] : [tempReply]).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            return {...c, replies: newReplies};
-          }
-          return c;
-        });
-        return {...ann, comments: newComments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())};
-      }
-      return ann;
-    });
-    setAnnouncements(optimisticData);
+    // Optimistic update
+    setAnnouncements(current =>
+        current.map(ann => {
+            if (ann.id === announcementId) {
+                const newComments = (ann.comments || []).map(c => {
+                    if (c.id === commentId) {
+                        const newReplies = (c.replies ? [tempReply, ...c.replies] : [tempReply]);
+                        return {...c, replies: newReplies.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())};
+                    }
+                    return c;
+                });
+                return {...ann, comments: newComments.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())};
+            }
+            return ann;
+        })
+    );
 
     try {
       const replyResponse = await fetch('/api/announcements', { 
@@ -405,26 +412,27 @@ export function useAnnouncements() {
       updateAnnouncementInState(updatedAnnouncement);
       toast({ title: "Yanıt Eklendi" });
       broadcastAnnouncementUpdate();
-      broadcastNotificationUpdate(); // Trigger notification refetch for current user
+      broadcastNotificationUpdate();
 
     } catch (error: any) {
         toast({ title: 'Yanıt Eklenemedi', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData);
+        fetchAnnouncements(); // Revert
     }
-  }, [user, isAdmin, announcements, toast]);
+  }, [user, isAdmin, toast, fetchAnnouncements]);
 
   const deleteComment = useCallback(async (announcementId: string, commentId: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
 
-    const originalData = [...announcements];
-    const optimisticData = originalData.map(ann => {
-        if (ann.id === announcementId) {
-            return {...ann, comments: (ann.comments || []).filter(c => c.id !== commentId)};
-        }
-        return ann;
-    });
-    setAnnouncements(optimisticData);
+    // Optimistic Update
+    setAnnouncements(current =>
+        current.map(ann => {
+            if (ann.id === announcementId) {
+                return {...ann, comments: (ann.comments || []).filter(c => c.id !== commentId)};
+            }
+            return ann;
+        })
+    );
 
     try {
         const response = await fetch('/api/announcements', { 
@@ -442,28 +450,29 @@ export function useAnnouncements() {
         broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData);
+        fetchAnnouncements(); // Revert
     }
-  }, [user, isAdmin, announcements, toast]);
+  }, [user, isAdmin, toast, fetchAnnouncements]);
 
   const deleteReply = useCallback(async (announcementId: string, commentId: string, replyId: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
     const deleterAuthorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
 
-    const originalData = [...announcements];
-    const optimisticData = originalData.map(ann => {
-        if (ann.id === announcementId) {
-            const newComments = (ann.comments || []).map(c => {
-                if (c.id === commentId) {
-                    return {...c, replies: (c.replies || []).filter(r => r.id !== replyId)};
-                }
-                return c;
-            });
-            return {...ann, comments: newComments};
-        }
-        return ann;
-    });
-    setAnnouncements(optimisticData);
+    // Optimistic update
+    setAnnouncements(current =>
+        current.map(ann => {
+            if (ann.id === announcementId) {
+                const newComments = (ann.comments || []).map(c => {
+                    if (c.id === commentId) {
+                        return {...c, replies: (c.replies || []).filter(r => r.id !== replyId)};
+                    }
+                    return c;
+                });
+                return {...ann, comments: newComments};
+            }
+            return ann;
+        })
+    );
 
     try {
       const response = await fetch('/api/announcements', { 
@@ -479,12 +488,12 @@ export function useAnnouncements() {
       updateAnnouncementInState(updatedAnnouncement);
       toast({ title: "Yanıt Silindi" });
       broadcastAnnouncementUpdate();
-      broadcastNotificationUpdate(); // Also trigger notification refetch here
+      broadcastNotificationUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
-        setAnnouncements(originalData);
+        fetchAnnouncements(); // Revert
     }
-  }, [user, isAdmin, announcements, toast]);
+  }, [user, isAdmin, toast, fetchAnnouncements]);
 
   useEffect(() => {
     const channel = new BroadcastChannel('announcement_updates');

@@ -43,12 +43,14 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
       return;
     }
     try {
+      // Always use lowercase for the userId to ensure consistency
+      const userId = user.email.toLowerCase();
       await fetch('/api/fcm/register-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, userId: user.email }),
+        body: JSON.stringify({ token, userId }),
       });
-      console.log(`[FCM Context] Token successfully sent to server for user: ${user.email}`);
+      console.log(`[FCM Context] Token successfully sent to server for user: ${userId}`);
     } catch (apiError) {
       console.error('[FCM Context] Failed to send FCM token to server:', apiError);
     }

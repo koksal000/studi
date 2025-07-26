@@ -6,8 +6,6 @@ import fs from 'fs';
 import path from 'path';
 
 // --- Service Account Initialization ---
-// The service account JSON is loaded from an environment variable.
-// This is more secure than hardcoding it or reading from a file path.
 try {
   if (!admin.apps.length) {
     const serviceAccountString = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -25,8 +23,7 @@ try {
   console.error('[FCM-Service] Firebase Admin SDK initialization failed:', error.message);
 }
 
-
-// --- Token Reading Logic (remains the same) ---
+// --- Token Reading Logic ---
 interface FCMTokenRecord {
   token: string;
   userId?: string;
@@ -51,7 +48,7 @@ const readTokensFromFile = (): FCMTokenRecord[] => {
 };
 
 
-// --- Notification Sending Logic (rewritten with firebase-admin) ---
+// --- Notification Sending Logic ---
 async function sendPushNotification({
   tokens,
   title,
@@ -68,7 +65,6 @@ async function sendPushNotification({
     return;
   }
   
-  // Check if the Admin SDK was initialized.
   if (!admin.apps.length) {
     console.warn(`[FCM-Service] SIMULATING SEND (Admin SDK not initialized): Title: "${title}", Body: "${body}", Link: "${link}" to ${tokens.length} token(s).`);
     return;
@@ -82,10 +78,10 @@ async function sendPushNotification({
     },
     webpush: {
       fcmOptions: {
-        link: link, // Link to open when the notification is clicked
+        link: link,
       },
       notification: {
-        icon: '/favicon.ico', // You can customize this
+        icon: '/favicon.ico',
       },
     },
   };
@@ -108,7 +104,7 @@ async function sendPushNotification({
   }
 }
 
-// --- Exported Functions (remain the same interface) ---
+// --- Exported Functions ---
 
 export async function sendNotificationToAll(payload: { title: string; body: string; link: string; }) {
   const allTokens = readTokensFromFile().map(t => t.token);
@@ -116,14 +112,17 @@ export async function sendNotificationToAll(payload: { title: string; body: stri
 }
 
 export async function sendNotificationToUser(userId: string, payload: { title:string; body: string; link: string; }) {
-  console.log(`[FCM-Service] sendNotificationToUser called for userId: ${userId}`);
+  console.log(`[FCM-Service] Initiating notification send to user: ${userId}`);
   const allTokenRecords = readTokensFromFile();
-  const userTokens = allTokenRecords.filter(t => t.userId === userId).map(t => t.token);
+  // Ensure userId is consistently lowercased for matching
+  const userTokens = allTokenRecords
+    .filter(t => t.userId && t.userId.toLowerCase() === userId.toLowerCase())
+    .map(t => t.token);
   
   if (userTokens.length > 0) {
-      console.log(`[FCM-Service] Found ${userTokens.length} token(s) for userId: ${userId}. Sending notification...`);
+      console.log(`[FCM-Service] Found ${userTokens.length} token(s) for user ${userId}. Sending notification...`);
       await sendPushNotification({ ...payload, tokens: userTokens });
   } else {
-      console.log(`[FCM-Service] No tokens found for user ${userId}, skipping push notification.`);
+      console.warn(`[FCM-Service] No tokens found for user ${userId}. Notification not sent.`);
   }
 }

@@ -48,27 +48,36 @@ const writeTokensToFile = (tokens: FCMTokenRecord[]): boolean => {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { token, userId } = body; // userId can be added later
+    let { token, userId } = body; 
 
     if (!token || typeof token !== 'string') {
       return NextResponse.json({ message: 'Invalid FCM token provided.' }, { status: 400 });
+    }
+    
+    // Always store and compare userId in a consistent format (lowercase)
+    if (userId && typeof userId === 'string') {
+      userId = userId.toLowerCase();
     }
 
     const fcmTokens = readTokensFromFile();
 
     const existingTokenIndex = fcmTokens.findIndex(t => t.token === token);
     if (existingTokenIndex === -1) {
+      // New token, add it
       fcmTokens.push({
         token,
-        userId, // Store if provided
+        userId, // Store lowercase userId if provided
         createdAt: new Date().toISOString(),
       });
-      console.log(`[API/FCMTokens] New FCM token registered: ${token.substring(0, 20)}...`);
+      console.log(`[API/FCMTokens] New FCM token registered for user '${userId}': ${token.substring(0, 20)}...`);
     } else {
-      // Optionally update createdAt or userId if token already exists
+      // Token already exists, update its info
       fcmTokens[existingTokenIndex].createdAt = new Date().toISOString();
-      if (userId) fcmTokens[existingTokenIndex].userId = userId;
-      console.log(`[API/FCMTokens] FCM token already registered, updated timestamp: ${token.substring(0, 20)}...`);
+      // Ensure userId is updated if it wasn't there before or has changed
+      if (userId) {
+          fcmTokens[existingTokenIndex].userId = userId;
+      }
+      console.log(`[API/FCMTokens] FCM token for user '${userId}' updated: ${token.substring(0, 20)}...`);
     }
 
     if (writeTokensToFile(fcmTokens)) {
@@ -88,5 +97,3 @@ export async function GET() {
     const fcmTokens = readTokensFromFile();
     return NextResponse.json({ tokens: fcmTokens, count: fcmTokens.length });
 }
-
-    

@@ -9,7 +9,7 @@ import { useAnnouncements } from '@/hooks/use-announcements';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { GOOGLE_MAPS_EMBED_URL, GOOGLE_MAPS_SHARE_URL, POPULATION_DATA, VILLAGE_NAME } from '@/lib/constants';
-import { ExternalLink, Pin } from 'lucide-react';
+import { ExternalLink, Pin, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
@@ -24,14 +24,21 @@ const populationHistory = [
 
 export default function HomePage() {
   const { user, showEntryForm } = useUser();
-  const { announcements } = useAnnouncements();
+  const { announcements, isLoading: announcementsLoading } = useAnnouncements();
 
-  const pinnedAnnouncements = announcements.filter(ann => ann.isPinned).slice(0, 5);
-  const recentAnnouncements = announcements.slice(0, 3);
-
+  const pinnedAnnouncements = announcements.filter(ann => ann.isPinned);
+  const recentAnnouncements = announcements.filter(ann => !ann.isPinned).slice(0, 3);
+  
   if (showEntryForm || !user) {
     return <EntryForm />;
   }
+  
+  const renderLoadingSkeleton = () => (
+      <div className="flex items-center text-muted-foreground p-4">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Duyurular yükleniyor...
+      </div>
+  );
 
   return (
     <div className="space-y-8 content-page">
@@ -54,33 +61,37 @@ export default function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           
-          {pinnedAnnouncements.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center text-amber-500">
-                  <Pin className="mr-2 h-5 w-5" />
-                  Sabitlenmiş Duyurular
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {pinnedAnnouncements.map(ann => (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-amber-500">
+                <Pin className="mr-2 h-5 w-5" />
+                Sabitlenmiş Duyurular
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {announcementsLoading && pinnedAnnouncements.length === 0 ? renderLoadingSkeleton() : 
+               pinnedAnnouncements.length > 0 ? (
+                pinnedAnnouncements.map(ann => (
                   <AnnouncementCard key={ann.id} announcement={ann} isCompact={true} />
-                ))}
-              </CardContent>
-            </Card>
-          )}
+                ))
+              ) : (
+                <p className="text-muted-foreground p-4">Sabitlenmiş duyuru bulunmamaktadır.</p>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
               <CardTitle>Son Duyurular</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentAnnouncements.length > 0 ? (
+               {announcementsLoading && recentAnnouncements.length === 0 ? renderLoadingSkeleton() : 
+                recentAnnouncements.length > 0 ? (
                 recentAnnouncements.map(ann => (
                   <AnnouncementCard key={ann.id} announcement={ann} isCompact={true} />
                 ))
               ) : (
-                <p className="text-muted-foreground">Henüz duyuru bulunmamaktadır.</p>
+                <p className="text-muted-foreground p-4">Henüz duyuru bulunmamaktadır.</p>
               )}
               {announcements.length > 3 && (
                 <div className="text-center mt-4">

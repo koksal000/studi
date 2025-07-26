@@ -38,8 +38,9 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
   const { user } = useUser();
 
   const sendTokenToServer = useCallback(async (token: string) => {
+    // This function will now be called by requestPermission, which ensures user is available.
     if (!user || !user.email) {
-      console.log('[FCM Context] User not logged in. Token will be sent when user logs in.');
+      console.warn('[FCM Context] sendTokenToServer called without a user. Aborting.');
       return;
     }
     try {
@@ -57,6 +58,12 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
   }, [user]);
 
   const requestPermission = useCallback(async () => {
+    // A user must be logged in to associate a token.
+    if (!user) {
+        console.warn('[FCM Context] Permission requested, but no user is logged in. Cannot associate token.');
+        return;
+    }
+    
     console.log('[FCM Context] Requesting notification permission...');
     const currentToken = await requestNotificationPermissionAndToken();
     const newPermissionStatus = Notification.permission as FcmPermissionStatus;
@@ -64,12 +71,12 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
 
     if (newPermissionStatus === 'granted' && currentToken) {
       setFcmToken(currentToken);
+      // Now that we have the token and we know the user is logged in, send to server.
       await sendTokenToServer(currentToken);
     } else {
       setFcmToken(null);
     }
-    return;
-  }, [sendTokenToServer]);
+  }, [user, sendTokenToServer]);
 
   // Effect to initialize state and check for existing permissions/tokens on mount.
   useEffect(() => {
@@ -85,9 +92,11 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
     // Check initial browser permission
     const initialPermission = Notification.permission as FcmPermissionStatus;
     setPermissionStatus(initialPermission);
-
-    // If permission is already granted and user wants notifications, get and send the token.
-    if (initialPermission === 'granted' && storedUserPref !== 'disabled') {
+    
+    // On load, if permission is already granted and the user wants notifications, get and send the token.
+    // We need to ensure the user context is also loaded before this check.
+    if (user && initialPermission === 'granted' && storedUserPref !== 'disabled') {
+      console.log('[FCM Context] Initial load: Permission granted, user loaded. Requesting token.');
       requestPermission();
     }
     
@@ -105,15 +114,7 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
     return () => {
       unsubscribeOnMessage();
     };
-  }, [requestPermission, toast]);
-
-  // This effect ensures that if a user logs in, we re-run the token registration.
-  useEffect(() => {
-    if (user && fcmToken) {
-        console.log("[FCM Context] User changed/loaded, re-sending token to server.");
-        sendTokenToServer(fcmToken);
-    }
-  }, [user, fcmToken, sendTokenToServer]);
+  }, [requestPermission, toast, user]); // Add user to dependency array
   
   const setHasModalBeenShown = (shown: boolean) => {
     localStorage.setItem(FCM_MODAL_SHOWN_KEY, String(shown));
@@ -127,13 +128,17 @@ export const FirebaseMessagingProvider = ({ children }: { children: ReactNode })
 
       if (enabled) {
           console.log('[FCM Context] User enabled notifications. Checking permission...');
+          if (!user) {
+              toast({title: "Giriş Yapılmamış", description: "Lütfen önce giriş yapın, sonra bildirimleri etkinleştirin.", variant: "destructive"});
+              return;
+          }
           await requestPermission();
       } else {
           console.log('[FCM Context] User disabled notifications.');
           setFcmToken(null);
           // Optional: Add logic here to unregister token from server if desired.
       }
-  }, [requestPermission]);
+  }, [requestPermission, user, toast]);
   
   return (
     <FirebaseMessagingContext.Provider value={{

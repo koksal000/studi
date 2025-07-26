@@ -57,6 +57,10 @@ export async function POST(request: NextRequest) {
     // Always store and compare userId in a consistent format (lowercase)
     if (userId && typeof userId === 'string') {
       userId = userId.toLowerCase();
+    } else {
+      // If no userId is provided, we can't associate the token. 
+      // This is a valid scenario for anonymous users, but less useful for direct messaging.
+      userId = undefined;
     }
 
     const fcmTokens = readTokensFromFile();
@@ -69,15 +73,17 @@ export async function POST(request: NextRequest) {
         userId, // Store lowercase userId if provided
         createdAt: new Date().toISOString(),
       });
-      console.log(`[API/FCMTokens] New FCM token registered for user '${userId}': ${token.substring(0, 20)}...`);
+      console.log(`[API/FCMTokens] New FCM token registered for user '${userId || 'anonymous'}': ${token.substring(0, 20)}...`);
     } else {
-      // Token already exists, update its info
-      fcmTokens[existingTokenIndex].createdAt = new Date().toISOString();
-      // Ensure userId is updated if it wasn't there before or has changed
+      // Token already exists, update its info, especially the userId
+      const existingRecord = fcmTokens[existingTokenIndex];
+      existingRecord.createdAt = new Date().toISOString();
+      // Update userId if it's newly provided or has changed.
+      // Do not unset userId if it's already there and the new request doesn't have one.
       if (userId) {
-          fcmTokens[existingTokenIndex].userId = userId;
+          existingRecord.userId = userId;
       }
-      console.log(`[API/FCMTokens] FCM token for user '${userId}' updated: ${token.substring(0, 20)}...`);
+      console.log(`[API/FCMTokens] FCM token for user '${existingRecord.userId || 'anonymous'}' updated: ${token.substring(0, 20)}...`);
     }
 
     if (writeTokensToFile(fcmTokens)) {

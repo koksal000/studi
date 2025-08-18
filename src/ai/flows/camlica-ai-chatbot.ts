@@ -11,7 +11,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { gemini15Flash } from 'genkit/models';
 
 const CamlicaAIChatbotInputSchema = z.object({
   question: z.string().describe('The question about Çamlıca Köyü.')
@@ -31,7 +30,7 @@ const prompt = ai.definePrompt({
   name: 'camlicaAIChatbotPrompt',
   input: {schema: CamlicaAIChatbotInputSchema},
   output: {schema: CamlicaAIChatbotOutputSchema},
-  model: gemini15Flash,
+  model: 'googleai/gemini-1.5-flash-latest',
   prompt: `As an AI assistant for Çamlıca village in Domaniç, Turkey, please answer the following question about the village:\n\nQuestion: {{{question}}}\n\nHere are some detailed facts about the village to help you:\n\nGENERAL INFORMATION:\n- Çamlıca is a village in Domaniç, Kütahya Province, Turkey
 - Population: 425 people (199 male, 226 female) as of 2024
 - Village headman (muhtar): Numan YAŞAR

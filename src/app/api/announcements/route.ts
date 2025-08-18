@@ -286,6 +286,7 @@ export async function POST(request: NextRequest) {
       announcementToUpdate.comments.splice(commentIndex, 1);
       announcementModified = true;
 
+      // Delete notifications for all replies within the deleted comment
       if (replyIdsToDelete.length > 0) {
           const allNotifications = readNotificationsFromFile();
           const filteredNotifications = allNotifications.filter(n => !replyIdsToDelete.includes(n.replyId!));
@@ -313,6 +314,7 @@ export async function POST(request: NextRequest) {
       commentToUpdate.replies.splice(replyIndex, 1);
       announcementModified = true;
 
+      // Delete notification for the specific deleted reply
       const allNotificationsForDelete = readNotificationsFromFile();
       const filteredNotifications = allNotificationsForDelete.filter(n => n.replyId !== actionPayload.replyId);
       if (allNotificationsForDelete.length > filteredNotifications.length) {
@@ -398,6 +400,7 @@ export async function DELETE(request: NextRequest) {
   const announcementToDelete = announcements.find(ann => ann.id === id);
 
   if (announcementToDelete) {
+    // Also delete all notifications associated with this announcement
     const allNotifications = readNotificationsFromFile();
     const filteredNotifications = allNotifications.filter(n => n.announcementId !== id);
     if (allNotifications.length > filteredNotifications.length) {

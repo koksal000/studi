@@ -34,9 +34,10 @@ export default function HomePage() {
   }
   
   const renderLoadingSkeleton = () => (
-      <div className="flex items-center text-muted-foreground p-4">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Duyurular yükleniyor...
+      <div className="flex flex-col items-center text-center text-muted-foreground p-4">
+        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+        <p className="mt-2">Duyurular yükleniyor...</p>
+        <p className="text-xs mt-1">Bu işlem internet hızınıza bağlı olarak birkaç saniye sürebilir.</p>
       </div>
   );
 
@@ -74,9 +75,9 @@ export default function HomePage() {
                 pinnedAnnouncements.map(ann => (
                   <AnnouncementCard key={ann.id} announcement={ann} isCompact={true} />
                 ))
-              ) : (
-                <p className="text-muted-foreground p-4">Sabitlenmiş duyuru bulunmamaktadır.</p>
-              )}
+              ) : !announcementsLoading && pinnedAnnouncements.length === 0 ? (
+                <p className="text-muted-foreground p-4 text-center">Sabitlenmiş duyuru bulunmamaktadır.</p>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -90,10 +91,10 @@ export default function HomePage() {
                 recentAnnouncements.map(ann => (
                   <AnnouncementCard key={ann.id} announcement={ann} isCompact={true} />
                 ))
-              ) : (
-                <p className="text-muted-foreground p-4">Henüz duyuru bulunmamaktadır.</p>
-              )}
-              {announcements.length > 3 && (
+              ) : !announcementsLoading && announcements.length === 0 ? (
+                <p className="text-muted-foreground p-4 text-center">Henüz duyuru bulunmamaktadır.</p>
+              ) : null}
+              {announcements.length > 3 && !announcementsLoading && (
                 <div className="text-center mt-4">
                   <Button asChild variant="link">
                     <Link href="/announcements">Tüm Duyuruları Gör</Link>

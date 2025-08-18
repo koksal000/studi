@@ -367,7 +367,7 @@ export function useAnnouncements() {
         }
         const updatedAnnouncement = await response.json();
         updateAnnouncementInState(updatedAnnouncement);
-        toast({ title: "Yorum Eklendi" });
+        toast({ title: "Yorum Eklendi", description: "Yorumunuzun görünmesi birkaç saniye sürebilir." });
         broadcastAnnouncementUpdate();
     } catch(error: any) {
         toast({ title: 'İşlem Başarısız', description: error.message, variant: 'destructive' });
@@ -410,7 +410,7 @@ export function useAnnouncements() {
       
       const updatedAnnouncement = await replyResponse.json();
       updateAnnouncementInState(updatedAnnouncement);
-      toast({ title: "Yanıt Eklendi" });
+      toast({ title: "Yanıt Eklendi", description: "Yanıtınızın görünmesi birkaç saniye sürebilir." });
       broadcastAnnouncementUpdate();
       broadcastNotificationUpdate();
 

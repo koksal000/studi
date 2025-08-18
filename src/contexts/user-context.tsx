@@ -23,6 +23,7 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 const USER_DATA_KEY = 'camlicaKoyuUser_v2';
+const ADMIN_SESSION_KEY = 'camlicaKoyuAdminSession';
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<User | null>(null);
@@ -47,9 +48,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setShowEntryForm(true);
       }
+      // Check for admin session
+      const adminSession = sessionStorage.getItem(ADMIN_SESSION_KEY);
+      if(adminSession === 'true') {
+        setIsAdmin(true);
+      }
+
     } catch (error) {
-      console.error("Failed to load user data from localStorage", error);
-      localStorage.removeItem(USER_DATA_KEY); 
+      console.error("Failed to load user data from storage", error);
+      localStorage.removeItem(USER_DATA_KEY);
+      sessionStorage.removeItem(ADMIN_SESSION_KEY);
       setShowEntryForm(true); 
     } finally {
       setIsUserLoading(false);
@@ -67,15 +75,18 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setUserState(null);
     setIsAdmin(false);
     localStorage.removeItem(USER_DATA_KEY);
+    sessionStorage.removeItem(ADMIN_SESSION_KEY); // Clear admin session on logout
     setShowEntryForm(true);
   }, []);
 
   const checkAdminPassword = useCallback((password: string) => {
     if (password === ADMIN_PASSWORD) {
       setIsAdmin(true);
+      sessionStorage.setItem(ADMIN_SESSION_KEY, 'true'); // Set session storage for admin
       return true;
     }
-    setIsAdmin(false);
+    // No need to set isAdmin to false here, as it might be false already.
+    // The main purpose is to grant admin status, not revoke it on failed attempt.
     return false;
   }, []);
   

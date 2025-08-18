@@ -5,7 +5,7 @@ import type { Announcement } from '@/hooks/use-announcements';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, UserCircle, CalendarDays, Image as ImageIconLucide, Video as VideoIconLucide, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2, Pencil, Pin, PinOff } from 'lucide-react';
+import { Trash2, UserCircle, CalendarDays, Image as ImageIconLucide, Video as VideoIconLucide, Link2, Play, Pause, Volume2, VolumeX, ThumbsUp, MessageCircle, Send, Loader2, Pencil, Pin, PinOff, Expand, Minimize } from 'lucide-react';
 import { useUser } from '@/contexts/user-context';
 import { useAnnouncements } from '@/hooks/use-announcements';
 import { useToast } from '@/hooks/use-toast';
@@ -22,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog';
-import { useState, useRef, type FormEvent } from 'react';
+import { useState, useRef, type FormEvent, useEffect } from 'react';
 import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog';
 import { CommentItem } from './comment-item';
 
@@ -44,11 +44,21 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isDeletingAnnouncement, setIsDeletingAnnouncement] = useState(false);
+  
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : user.email) : null;
   const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
@@ -59,9 +69,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     setIsDeletingAnnouncement(true);
     try {
       await removeAnnouncementHook(annProp.id);
-      // Toast is handled in the hook
     } catch (error: any) {
-      // Error toast is handled in the hook
     } finally {
       setIsDeletingAnnouncement(false);
       setIsAdminPasswordDialogOpenForAnnDelete(false);
@@ -74,6 +82,16 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
 
   const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); } else { videoRef.current.pause(); setIsPlaying(false); }}};
   const toggleMute = () => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
+  const toggleFullscreen = () => {
+    if (!videoContainerRef.current) return;
+    if (!document.fullscreenElement) {
+      videoContainerRef.current.requestFullscreen().catch(err => {
+        alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
 
   const handleLikeToggle = async () => {
     if (!user) { toast({ title: "Giriş Gerekli", description: "Beğeni yapmak için giriş yapın.", variant: "destructive" }); return; }
@@ -112,15 +130,18 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     const isVimeo = annProp.mediaType === 'video/url' && annProp.media.includes("vimeo.com/");
 
     if (annProp.mediaType?.startsWith('image/')) {
-      return (<div className="my-4 rounded-md overflow-hidden aspect-video relative bg-muted"><Image src={annProp.media} alt={annProp.title} layout="fill" objectFit="contain" data-ai-hint="announcement media" /></div>);
+      return (<div className="my-4 rounded-md overflow-hidden relative bg-muted w-full max-h-[70vh] flex justify-center"><Image src={annProp.media} alt={annProp.title} width={800} height={800} style={{width: 'auto', height: 'auto', maxHeight: '70vh'}} objectFit="contain" data-ai-hint="announcement media" /></div>);
     }
     if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
       return (
-        <div className="my-4 rounded-md overflow-hidden relative bg-black group w-full">
-          <video ref={videoRef} src={annProp.media} className="w-full max-h-[400px] aspect-video" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onClick={togglePlayPause} />
-          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/50 p-2 rounded">
-            <Button onClick={togglePlayPause} variant="ghost" size="icon" className="text-white hover:bg-white/20">{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}</Button>
+        <div ref={videoContainerRef} className="my-4 rounded-md overflow-hidden relative bg-black group w-full">
+          <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onClick={togglePlayPause} />
+          <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+             <Button onClick={togglePlayPause} variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16">{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
+          </div>
+          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-black/50 to-transparent p-2">
             <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20">{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
+            <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20">{isFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
           </div>
         </div>
       );

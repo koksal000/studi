@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, ExternalLink, Upload, Trash2, Loader2, ListChecks, MailQuestion, Users, Activity, Pencil, MessageSquare, Pin } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, Upload, Trash2, Loader2, ListChecks, MailQuestion, Activity, Pin } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -30,9 +30,6 @@ import {
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
 import { UserRequestsDialog } from '@/components/specific/user-requests-dialog';
-import { useUsers, type UserProfile } from '@/hooks/use-users';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { SendUserMessageDialog } from '@/components/specific/send-user-message-dialog';
 
 const MAX_RAW_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit for original file
 const MAX_IMAGE_DATA_URI_LENGTH = Math.floor(5 * 1024 * 1024 * 1.37 * 1.05); // Approx 7.2MB for 5MB raw image (base64 string + safety)
@@ -43,7 +40,6 @@ export default function AdminPage() {
   const { toast } = useToast();
   const { galleryImages, addGalleryImage, deleteGalleryImage, isLoading: galleryLoading } = useGallery();
   const { announcements, isLoading: announcementsLoading, togglePinAnnouncement } = useAnnouncements();
-  const { users, isLoading: usersLoading } = useUsers();
 
 
   const [isAnnouncementDialogOpen, setIsAnnouncementDialogOpen] = useState(false);
@@ -59,10 +55,6 @@ export default function AdminPage() {
   const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
   const [totalEntryCount, setTotalEntryCount] = useState<number | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-
-  const [isUserMessageDialogOpen, setIsUserMessageDialogOpen] = useState(false);
-  const [userToMessage, setUserToMessage] = useState<UserProfile | null>(null);
-
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,11 +85,6 @@ export default function AdminPage() {
   const handleOpenAnnouncementDialog = (announcement: Announcement | null) => {
     setAnnouncementToEdit(announcement);
     setIsAnnouncementDialogOpen(true);
-  };
-  
-  const handleOpenUserMessageDialog = (user: UserProfile) => {
-    setUserToMessage(user);
-    setIsUserMessageDialogOpen(true);
   };
 
   const pinnedAnnouncements = announcements.filter(ann => ann.isPinned);
@@ -245,13 +232,6 @@ export default function AdminPage() {
     setIsUploading(false);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('tr-TR', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-  };
-
-
   return (
     <div className="space-y-8 content-page">
       <Card className="shadow-lg">
@@ -353,47 +333,6 @@ export default function AdminPage() {
                   onPinClick={() => togglePinAnnouncement(ann.id)}
                 />
               ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center"><Users className="mr-2 h-6 w-6 text-primary" /> Kullanıcı Yönetimi</CardTitle>
-          <CardDescription>Kayıtlı kullanıcıları görüntüleyin ve onlara doğrudan mesaj gönderin. Liste, en son aktif olan kullanıcıya göre sıralanmıştır.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {usersLoading && <div className="flex items-center text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Kullanıcılar yükleniyor...</div>}
-          {!usersLoading && users.length === 0 && <p className="text-muted-foreground">Kayıtlı kullanıcı bulunmamaktadır.</p>}
-          {!usersLoading && users.length > 0 && (
-            <div className="relative max-h-[400px] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ad Soyad</TableHead>
-                    <TableHead>E-posta</TableHead>
-                    <TableHead>Katılma Tarihi</TableHead>
-                    <TableHead>Son Aktivite</TableHead>
-                    <TableHead>İşlem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.name} {u.surname}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>{formatDate(u.joinedAt)}</TableCell>
-                      <TableCell>{formatDate(u.lastUpdatedAt)}</TableCell>
-                      <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => handleOpenUserMessageDialog(u)}>
-                          <MessageSquare className="mr-2 h-4 w-4"/> Mesaj Gönder
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
             </div>
           )}
         </CardContent>
@@ -511,13 +450,8 @@ export default function AdminPage() {
         isOpen={isUserRequestsDialogOpen}
         onOpenChange={setIsUserRequestsDialogOpen}
       />
-      {userToMessage && (
-        <SendUserMessageDialog
-          isOpen={isUserMessageDialogOpen}
-          onOpenChange={setIsUserMessageDialogOpen}
-          userToMessage={userToMessage}
-        />
-      )}
     </div>
   );
 }
+
+    

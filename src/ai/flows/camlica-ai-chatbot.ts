@@ -11,6 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { gemini15Flash } from 'genkit/models';
 
 const CamlicaAIChatbotInputSchema = z.object({
   question: z.string().describe('The question about Çamlıca Köyü.')
@@ -30,6 +31,7 @@ const prompt = ai.definePrompt({
   name: 'camlicaAIChatbotPrompt',
   input: {schema: CamlicaAIChatbotInputSchema},
   output: {schema: CamlicaAIChatbotOutputSchema},
+  model: gemini15Flash,
   prompt: `As an AI assistant for Çamlıca village in Domaniç, Turkey, please answer the following question about the village:\n\nQuestion: {{{question}}}\n\nHere are some detailed facts about the village to help you:\n\nGENERAL INFORMATION:\n- Çamlıca is a village in Domaniç, Kütahya Province, Turkey
 - Population: 425 people (199 male, 226 female) as of 2024
 - Village headman (muhtar): Numan YAŞAR
@@ -92,10 +94,19 @@ const camlicaAIChatbotFlow = ai.defineFlow(
     outputSchema: CamlicaAIChatbotOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    if (!output || !output.answer) {
-        throw new Error("AI chatbot did not return a valid output.");
+    try {
+        const {output} = await prompt(input);
+        if (!output || !output.answer) {
+            throw new Error("AI chatbot did not return a valid output.");
+        }
+        return {answer: output.answer};
+    } catch (error: any) {
+        // Log the full error on the server for debugging, but don't send raw error to client.
+        console.error("[camlicaAIChatbotFlow] Error during AI generation:", error);
+        
+        // Re-throw a generic, client-safe error message.
+        // This prevents Next.js from throwing a server error due to complex/internal error objects.
+        throw new Error("Yapay zeka yanıtı oluşturulurken bir sunucu hatası oluştu. Lütfen tekrar deneyin veya farklı bir soru sorun.");
     }
-    return {answer: output.answer};
   }
 );

@@ -7,11 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Moon, Sun, Laptop, Bell } from 'lucide-react';
+import { Moon, Sun, Laptop } from 'lucide-react';
 import { VILLAGE_NAME } from '@/lib/constants';
-import { useFirebaseMessaging } from '@/contexts/firebase-messaging-context';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -22,21 +20,7 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
   const { currentTheme, setAppTheme } = useSettings(); 
   const { user, logout } = useUser();
   const { toast } = useToast();
-  const { userPreference, updateNotificationPreference, permissionStatus } = useFirebaseMessaging();
 
-  const handleNotificationSwitchChange = (enabled: boolean) => {
-    if (enabled && permissionStatus === 'denied') {
-      toast({
-        title: "Bildirim İzni Engellendi",
-        description: "Bildirimlere izin vermek için lütfen tarayıcınızın site ayarlarını kontrol edin.",
-        variant: "destructive",
-        duration: 7000,
-      });
-      return; 
-    }
-    updateNotificationPreference(enabled);
-  };
-  
   const handleSaveSettings = () => {
     toast({
       title: "Ayarlar Kaydedildi",
@@ -79,24 +63,6 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
                         Sistem
                     </Label>
                     </RadioGroup>
-                </div>
-
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Bildirim Ayarları</Label>
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="flex items-center space-x-2">
-                      <Bell className="h-5 w-5 text-primary" /> 
-                      <Label htmlFor="site-notifications" className="flex flex-col">
-                        <span>Site Bildirimleri</span>
-                        <span className="text-xs text-muted-foreground">Yeni duyurular için tarayıcı bildirimi alın.</span>
-                      </Label>
-                    </div>
-                    <Switch
-                      id="site-notifications"
-                      checked={userPreference === 'enabled'}
-                      onCheckedChange={handleNotificationSwitchChange}
-                    />
-                  </div>
                 </div>
                 
                 {user && (

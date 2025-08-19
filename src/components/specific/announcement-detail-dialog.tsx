@@ -84,7 +84,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     if (!videoContainerRef.current) return;
     if (!document.fullscreenElement) {
       videoContainerRef.current.requestFullscreen().catch(err => {
-        alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+        alert(`Error attempting to enable full-screen mode: ${'er'}'r.message} (${'er'}'r.name})`);
       });
     } else {
       document.exitFullscreen();
@@ -118,18 +118,18 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     const isVimeo = annProp.mediaType === 'video/url' && annProp.media.includes("vimeo.com/");
 
     if (annProp.mediaType?.startsWith('image/')) {
-      return <div className="my-4 rounded-md overflow-hidden relative bg-muted w-full max-h-[70vh] flex justify-center"><Image src={annProp.media} alt={annProp.title} width={800} height={800} style={{width: 'auto', height: 'auto', maxHeight: '70vh'}} objectFit="contain" data-ai-hint="announcement media detail"/></div>;
+      return <div className="my-4 rounded-md overflow-hidden relative bg-muted w-full aspect-auto flex justify-center"><Image src={annProp.media} alt={annProp.title} width={800} height={800} style={{width: 'auto', height: 'auto', maxHeight: '70vh'}} objectFit="contain" data-ai-hint="announcement media detail"/></div>;
     }
     if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
       return (
         <div ref={videoContainerRef} className="my-4 rounded-md overflow-hidden relative bg-black group w-full">
-          <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted); }} onClick={togglePlayPause} />
-           <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-             <Button onClick={togglePlayPause} variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16">{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
+          <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted); }} />
+           <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300" onClick={togglePlayPause}>
+             <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
           </div>
           <div className="absolute bottom-2 left-2 right-2 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-black/50 to-transparent p-2">
-            <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20">{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
-            <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20">{isFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
+            <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20"><span className="sr-only">Sesi Aç/Kapat</span>{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
+            <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20"><span className="sr-only">Tam Ekran</span>{isFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
           </div>
         </div>
       );
@@ -207,3 +207,5 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     </Dialog>
   );
 }
+
+    

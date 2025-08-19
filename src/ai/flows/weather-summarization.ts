@@ -236,5 +236,3 @@ const summarizeWeatherFlow = ai.defineFlow(
     return formattedOutput;
   }
 );
-
-    

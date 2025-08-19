@@ -27,6 +27,8 @@ interface AddAnnouncementDialogProps {
 }
 
 type MediaType = 'image' | 'video' | 'url' | null;
+const MAX_FILE_SIZE_MB = 70;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 export function AddAnnouncementDialog({ isOpen, onOpenChange, announcementToEdit = null }: AddAnnouncementDialogProps) {
   const { addAnnouncement, editAnnouncement } = useAnnouncements();
@@ -128,6 +130,19 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange, announcementToEdit
       setLocalFile(null);
       setLocalPreview(null);
       return;
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        toast({
+            title: "Dosya Boyutu Çok Büyük",
+            description: `Lütfen ${MAX_FILE_SIZE_MB}MB'den küçük bir dosya seçin.`,
+            variant: "destructive",
+            duration: 7000,
+        });
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        setLocalFile(null);
+        setLocalPreview(null);
+        return;
     }
     
     setLocalFile(file);
@@ -278,7 +293,7 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange, announcementToEdit
 
               {(selectedLocalMediaType === 'image' || selectedLocalMediaType === 'video') && (
                   <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="mediaFile" className="text-right">Dosya Seç</Label>
+                      <Label htmlFor="mediaFile" className="text-right">Dosya Seçin (Max {MAX_FILE_SIZE_MB}MB)</Label>
                       <Input id="mediaFile" type="file" ref={fileInputRef} onChange={handleFileChange} className="col-span-3 file:mr-2 file:text-xs" accept={selectedLocalMediaType === 'image' ? "image/png, image/jpeg, image/gif, image/webp" : "video/mp4,video/webm,video/ogg"} disabled={isProcessing} />
                   </div>
               )}
@@ -309,3 +324,5 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange, announcementToEdit
     </Dialog>
   );
 }
+
+    

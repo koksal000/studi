@@ -25,10 +25,6 @@ const dataDir = process.env.DATA_PATH || process.cwd();
 const ANNOUNCEMENTS_FILE_PATH = path.join(dataDir, '_announcements.json');
 const NOTIFICATIONS_FILE_PATH = path.join(dataDir, '_notifications.json');
 
-const MAX_IMAGE_RAW_SIZE_MB_API = 5;
-const MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API = 7;
-const MAX_IMAGE_PAYLOAD_SIZE_API = Math.floor(MAX_IMAGE_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
-const MAX_VIDEO_PAYLOAD_SIZE_API = Math.floor(MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API * 1024 * 1024 * 1.37 * 1.05);
 
 interface ToggleAnnouncementLikeApiPayload {
   action: "TOGGLE_ANNOUNCEMENT_LIKE";
@@ -333,14 +329,7 @@ export async function POST(request: NextRequest) {
     if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
       return NextResponse.json({ message: 'Geçersiz duyuru yükü. Gerekli alanlar eksik.' }, { status: 400 });
     }
-    if (newAnnouncement.media && newAnnouncement.media.startsWith("data:")) {
-      if (newAnnouncement.mediaType?.startsWith("image/") && newAnnouncement.media.length > MAX_IMAGE_PAYLOAD_SIZE_API) {
-        return NextResponse.json({ message: `Resim içeriği çok büyük. Maksimum boyut yaklaşık ${MAX_IMAGE_RAW_SIZE_MB_API}MB ham dosya olmalıdır.` }, { status: 413 });
-      }
-      if (newAnnouncement.mediaType?.startsWith("video/") && newAnnouncement.media.length > MAX_VIDEO_PAYLOAD_SIZE_API) {
-        return NextResponse.json({ message: `Video içeriği çok büyük. Maksimum boyut yaklaşık ${MAX_VIDEO_CONVERSION_RAW_SIZE_MB_API}MB ham dosya olmalıdır.` }, { status: 413 });
-      }
-    }
+    
     newAnnouncement.likes = newAnnouncement.likes || [];
     newAnnouncement.comments = (newAnnouncement.comments || []).map(c => ({
         ...c,

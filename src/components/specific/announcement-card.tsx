@@ -25,6 +25,7 @@ import { AdminPasswordDialog } from '@/components/specific/admin-password-dialog
 import { useState, useRef, type FormEvent, useEffect } from 'react';
 import { AnnouncementDetailDialog } from '@/components/specific/announcement-detail-dialog';
 import { CommentItem } from './comment-item';
+import { Slider } from '@/components/ui/slider';
 
 interface AnnouncementCardProps {
   announcement: Announcement;
@@ -44,12 +45,15 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
+  
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true); // Default to muted
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const [isDeletingAnnouncement, setIsDeletingAnnouncement] = useState(false);
   
   useEffect(() => {
@@ -86,11 +90,36 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     if (!videoContainerRef.current) return;
     if (!document.fullscreenElement) {
       videoContainerRef.current.requestFullscreen().catch(err => {
-        alert(`Error attempting to enable full-screen mode: ${'er'}'r.message} (${'er'}'r.name})`);
+        alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
       });
     } else {
       document.exitFullscreen();
     }
+  };
+  
+  const handleTimeUpdate = () => {
+    if(videoRef.current) {
+        setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = value[0];
+      setCurrentTime(value[0]);
+    }
+  };
+  
+  const formatTime = (timeInSeconds: number) => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
   const handleLikeToggle = async () => {
@@ -134,15 +163,26 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     }
     if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
       return (
-        <div ref={videoContainerRef} className="my-4 rounded-md overflow-hidden relative bg-black group w-full">
-          <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} />
+        <div ref={videoContainerRef} className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center">
+          <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} muted={isMuted}/>
           <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300" onClick={togglePlayPause}>
              <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
           </div>
-          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-black/50 to-transparent p-2">
-            <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20"><span className="sr-only">Sesi Aç/Kapat</span>{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
-            <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20"><span className="sr-only">Tam Ekran</span>{isFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
-          </div>
+           <div className="absolute bottom-2 left-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-black/60 to-transparent p-2">
+                <Slider
+                    value={[currentTime]}
+                    max={duration || 0}
+                    onValueChange={handleSeek}
+                    className="w-full h-2 cursor-pointer"
+                />
+                <div className="flex items-center justify-between text-white text-xs">
+                    <div className="flex items-center gap-2">
+                         <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Sesi Aç/Kapat</span>{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
+                         <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    </div>
+                     <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Tam Ekran</span>{isFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
+                </div>
+            </div>
         </div>
       );
     }
@@ -271,5 +311,3 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     </>
   );
 }
-
-    

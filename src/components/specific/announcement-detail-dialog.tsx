@@ -28,13 +28,15 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true); // Default to muted
+  const [isMuted, setIsMuted] = useState(true);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -51,6 +53,27 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, [isOpen]);
+
+  const handleShowControls = () => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+    }
+    controlsTimeoutRef.current = setTimeout(() => {
+        if (videoRef.current && !videoRef.current.paused) {
+            setShowControls(false);
+        }
+    }, 3000);
+  };
+  
+  useEffect(() => {
+      return () => {
+          if(controlsTimeoutRef.current) {
+              clearTimeout(controlsTimeoutRef.current)
+          }
+      }
+  }, [])
+
 
   const handleDialogClose = (openState: boolean) => {
     if (!openState && videoRef.current) {
@@ -81,7 +104,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     return (<span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {annProp.author}</span>);
   };
 
-  const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); } else { videoRef.current.pause(); setIsPlaying(false); }}};
+  const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); handleShowControls();} else { videoRef.current.pause(); setIsPlaying(false); }}};
   const toggleMute = () => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
   const toggleFullscreen = () => {
     if (!videoContainerRef.current) return;
@@ -150,12 +173,12 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     }
     if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
        return (
-        <div ref={videoContainerRef} className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center">
+        <div ref={videoContainerRef} onMouseMove={handleShowControls} onMouseLeave={() => { if(isPlaying) setShowControls(false) }} onClick={() => setShowControls(p => !p)} className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center cursor-pointer">
           <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} muted={isMuted}/>
-          <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300" onClick={togglePlayPause}>
+          <div onClick={(e) => { e.stopPropagation(); togglePlayPause(); }} className={`absolute inset-0 bg-transparent flex items-center justify-center transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
              <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
           </div>
-           <div className="absolute bottom-2 left-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-black/60 to-transparent p-2">
+           <div onClick={(e) => e.stopPropagation()} className={`absolute bottom-0 left-0 right-0 flex flex-col gap-1.5 transition-opacity duration-300 bg-gradient-to-t from-black/60 to-transparent p-2 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                 <Slider
                     value={[currentTime]}
                     max={duration || 0}

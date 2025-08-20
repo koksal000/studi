@@ -90,7 +90,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
       e.stopPropagation();
       if (videoRef.current) { 
           if (videoRef.current.paused || videoRef.current.ended) { 
-              videoRef.current.play(); 
+              videoRef.current.play().catch(error => console.error("Play interruption error:", error));
             } else { 
                 videoRef.current.pause(); 
             }

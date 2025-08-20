@@ -57,13 +57,13 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
   const handleShowControls = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
+      clearTimeout(controlsTimeoutRef.current);
     }
-    controlsTimeoutRef.current = setTimeout(() => {
-        if (videoRef.current && !videoRef.current.paused) {
-            setShowControls(false);
-        }
-    }, 3000);
+    if (isPlaying) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+    }
   };
   
   useEffect(() => {
@@ -104,7 +104,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     return (<span className="flex items-center"><UserCircle className="h-3.5 w-3.5 mr-1" /> {annProp.author}</span>);
   };
 
-  const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); setIsPlaying(true); handleShowControls();} else { videoRef.current.pause(); setIsPlaying(false); }}};
+  const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); } else { videoRef.current.pause(); }}};
   const toggleMute = () => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
   const toggleFullscreen = () => {
     if (!videoContainerRef.current) return;
@@ -173,8 +173,8 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     }
     if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
        return (
-        <div ref={videoContainerRef} onMouseMove={handleShowControls} onMouseLeave={() => { if(isPlaying) setShowControls(false) }} onClick={() => setShowControls(p => !p)} className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center cursor-pointer">
-          <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} muted={isMuted}/>
+        <div ref={videoContainerRef} onMouseMove={handleShowControls} onMouseLeave={() => { if(isPlaying) setShowControls(false) }} onClick={togglePlayPause} className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center cursor-pointer">
+          <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => {setIsPlaying(true); handleShowControls();}} onPause={() => {setIsPlaying(false); handleShowControls();}} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} muted={isMuted}/>
           <div onClick={(e) => { e.stopPropagation(); togglePlayPause(); }} className={`absolute inset-0 bg-transparent flex items-center justify-center transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
              <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
           </div>
@@ -269,3 +269,5 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     </Dialog>
   );
 }
+
+    

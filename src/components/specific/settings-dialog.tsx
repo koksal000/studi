@@ -86,9 +86,11 @@ export function SettingsDialog({ isOpen, onOpenChange }: SettingsDialogProps) {
             </div>
         </div>
         <DialogFooter className="p-4 sm:p-6 border-t flex-shrink-0">
-          <Button onClick={handleSaveSettings}>Kapat</Button>
+          <Button onClick={() => onOpenChange(false)}>Kapat</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+    

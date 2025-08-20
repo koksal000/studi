@@ -89,6 +89,25 @@ body {
     @apply bg-background text-foreground;
     transition: background-color 0.3s ease, color 0.3s ease;
   }
+  /* Style for fullscreen images */
+  div:fullscreen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: black;
+  }
+  div:-webkit-full-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: black;
+  }
+  div:-moz-full-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: black;
+  }
 }
 
 .timeline {

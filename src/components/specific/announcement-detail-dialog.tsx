@@ -164,33 +164,38 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     }
     if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
        return (
-        <div ref={videoContainerRef} className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center">
+        <div 
+          ref={videoContainerRef}
+          onClick={() => setIsUiVisible(v => !v)} 
+          className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center cursor-pointer"
+        >
           <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} muted={isMuted}/>
           
-          <div onClick={(e) => { e.stopPropagation(); setIsUiVisible(v => !v); }} className="absolute inset-0 bg-transparent z-10" />
+          <div 
+            onClick={(e) => { e.stopPropagation(); togglePlayPause(); }} 
+            className={`absolute inset-0 bg-transparent flex items-center justify-center transition-opacity duration-300 ${isUiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          >
+              <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
+          </div>
 
-          {isUiVisible && (
-            <>
-              <div onClick={(e) => { e.stopPropagation(); togglePlayPause(); }} className={`absolute inset-0 bg-transparent flex items-center justify-center transition-opacity duration-300`}>
-                  <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
-              </div>
-              <div onClick={(e) => e.stopPropagation()} className={`absolute bottom-0 left-0 right-0 flex flex-col gap-1.5 transition-opacity duration-300 bg-gradient-to-t from-black/60 to-transparent p-2 z-20`}>
-                  <Slider
-                      value={[currentTime]}
-                      max={duration || 0}
-                      onValueChange={handleSeek}
-                      className="w-full h-2 cursor-pointer"
-                  />
-                  <div className="flex items-center justify-between text-white text-xs">
-                      <div className="flex items-center gap-2">
-                            <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Sesi Aç/Kapat</span>{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
-                            <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
-                      </div>
-                      <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Tam Ekran</span>{isMediaFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className={`absolute bottom-0 left-0 right-0 flex flex-col gap-1.5 transition-opacity duration-300 bg-gradient-to-t from-black/60 to-transparent p-2 z-20 ${isUiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          >
+              <Slider
+                  value={[currentTime]}
+                  max={duration || 0}
+                  onValueChange={handleSeek}
+                  className="w-full h-2 cursor-pointer"
+              />
+              <div className="flex items-center justify-between text-white text-xs">
+                  <div className="flex items-center gap-2">
+                        <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Sesi Aç/Kapat</span>{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
+                        <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
                   </div>
+                  <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Tam Ekran</span>{isMediaFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
               </div>
-            </>
-          )}
+          </div>
         </div>
       );
     }

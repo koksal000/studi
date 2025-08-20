@@ -27,6 +27,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
   
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [duration, setDuration] = useState(0);
@@ -34,7 +35,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMediaFullscreen, setIsMediaFullscreen] = useState(false);
   const [isUiVisible, setIsUiVisible] = useState(true);
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
       }
     }
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      setIsMediaFullscreen(!!document.fullscreenElement);
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -85,9 +86,10 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
   const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); } else { videoRef.current.pause(); }}};
   const toggleMute = () => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
   const toggleFullscreen = () => {
-    if (!videoContainerRef.current) return;
+    const container = videoContainerRef.current || imageContainerRef.current;
+    if (!container) return;
     if (!document.fullscreenElement) {
-      videoContainerRef.current.requestFullscreen().catch(err => {
+      container.requestFullscreen().catch(err => {
         alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
       });
     } else {
@@ -145,26 +147,34 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
     const isDirectVideoFile = annProp.mediaType === 'video/mp4' || annProp.mediaType === 'video/webm' || annProp.mediaType === 'video/ogg' || (annProp.mediaType === 'video/url' && /\.(mp4|webm|ogg)(\?|$)/i.test(annProp.media));
     const isYouTube = annProp.mediaType === 'video/url' && (annProp.media.includes("youtube.com/watch?v=") || annProp.media.includes("youtu.be/"));
     const isVimeo = annProp.mediaType === 'video/url' && annProp.media.includes("vimeo.com/");
+    const isImage = annProp.mediaType?.startsWith('image/');
 
-    if (annProp.mediaType?.startsWith('image/')) {
-      return <div className="my-4 rounded-md overflow-hidden relative bg-muted w-full aspect-auto flex justify-center"><Image src={annProp.media} alt={annProp.title} width={800} height={800} style={{width: 'auto', height: 'auto', maxHeight: '70vh'}} objectFit="contain" data-ai-hint="announcement media detail"/></div>;
+    if (isImage) {
+      return (
+        <div ref={imageContainerRef} className="my-4 rounded-md overflow-hidden relative bg-muted w-full aspect-auto flex justify-center group">
+          <Image src={annProp.media} alt={annProp.title} width={800} height={800} style={{width: 'auto', height: 'auto', maxHeight: '70vh'}} objectFit="contain" data-ai-hint="announcement media detail"/>
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70">
+              <span className="sr-only">Tam Ekran</span>
+              {isMediaFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}
+            </Button>
+          </div>
+        </div>
+      );
     }
     if (isDirectVideoFile || (annProp.mediaType?.startsWith('video/') && annProp.media.startsWith('data:video/'))) {
        return (
         <div ref={videoContainerRef} className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center">
           <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} muted={isMuted}/>
           
-          <Button onClick={(e) => { e.stopPropagation(); setIsUiVisible(v => !v); }} variant="ghost" size="icon" className="absolute top-2 right-2 text-white bg-black/50 hover:bg-black/70 z-20">
-            <span className="sr-only">Arayüzü Gizle/Göster</span>
-            {isUiVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-          </Button>
+          <div onClick={(e) => { e.stopPropagation(); setIsUiVisible(v => !v); }} className="absolute inset-0 bg-transparent z-10" />
 
           {isUiVisible && (
             <>
               <div onClick={(e) => { e.stopPropagation(); togglePlayPause(); }} className={`absolute inset-0 bg-transparent flex items-center justify-center transition-opacity duration-300`}>
                   <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>
               </div>
-              <div onClick={(e) => e.stopPropagation()} className={`absolute bottom-0 left-0 right-0 flex flex-col gap-1.5 transition-opacity duration-300 bg-gradient-to-t from-black/60 to-transparent p-2`}>
+              <div onClick={(e) => e.stopPropagation()} className={`absolute bottom-0 left-0 right-0 flex flex-col gap-1.5 transition-opacity duration-300 bg-gradient-to-t from-black/60 to-transparent p-2 z-20`}>
                   <Slider
                       value={[currentTime]}
                       max={duration || 0}
@@ -176,7 +186,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
                             <Button onClick={toggleMute} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Sesi Aç/Kapat</span>{isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</Button>
                             <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
                       </div>
-                      <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Tam Ekran</span>{isFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
+                      <Button onClick={toggleFullscreen} variant="ghost" size="icon" className="text-white hover:bg-white/20 h-7 w-7"><span className="sr-only">Tam Ekran</span>{isMediaFullscreen ? <Minimize className="h-5 w-5" /> : <Expand className="h-5 w-5" />}</Button>
                   </div>
               </div>
             </>

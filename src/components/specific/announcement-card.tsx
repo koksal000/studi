@@ -86,9 +86,19 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  const togglePlayPause = () => { if (videoRef.current) { if (videoRef.current.paused || videoRef.current.ended) { videoRef.current.play(); } else { videoRef.current.pause(); }}};
-  const toggleMute = () => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
-  const toggleFullscreen = () => {
+  const togglePlayPause = (e: React.MouseEvent) => { 
+      e.stopPropagation();
+      if (videoRef.current) { 
+          if (videoRef.current.paused || videoRef.current.ended) { 
+              videoRef.current.play(); 
+            } else { 
+                videoRef.current.pause(); 
+            }
+        }
+    };
+  const toggleMute = (e: React.MouseEvent) => { e.stopPropagation(); if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setIsMuted(videoRef.current.muted); }};
+  const toggleFullscreen = (e: React.MouseEvent) => {
+    e.stopPropagation();
     const container = videoContainerRef.current || imageContainerRef.current;
     if (!container) return;
     if (!document.fullscreenElement) {
@@ -179,13 +189,22 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
       return (
         <div 
           ref={videoContainerRef} 
-          onClick={() => setIsUiVisible(v => !v)}
           className="my-4 rounded-md overflow-hidden relative bg-black group w-full flex items-center justify-center cursor-pointer"
         >
           <video ref={videoRef} src={annProp.media} className="w-full h-auto max-h-[70vh] block" preload="metadata" playsInline onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)} onVolumeChange={() => { if(videoRef.current) setIsMuted(videoRef.current.muted);}} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} muted={isMuted}/>
           
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => { e.stopPropagation(); setIsUiVisible(v => !v); }}
+            className={`absolute top-2 right-2 z-30 text-white bg-black/50 hover:bg-black/70`}
+          >
+            {isUiVisible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            <span className="sr-only">Arayüzü Gizle/Göster</span>
+          </Button>
+
           <div
-            onClick={(e) => { e.stopPropagation(); togglePlayPause(); }}
+            onClick={togglePlayPause}
             className={`absolute inset-0 bg-transparent flex items-center justify-center transition-opacity duration-300 ${isUiVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           >
             <Button variant="ghost" size="icon" className="text-white bg-black/50 hover:bg-black/70 w-16 h-16"><span className="sr-only">Oynat/Durdur</span>{isPlaying ? <Pause className="h-8 w-8" /> : <Play className="h-8 w-8" />}</Button>

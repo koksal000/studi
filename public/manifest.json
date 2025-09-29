@@ -5,12 +5,12 @@
   "display": "standalone",
   "icons": [
     {
-      "src": "https://files.catbox.moe/ot80hl.png",
+      "src": "https://files.catbox.moe/fkicol.jpg",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://files.catbox.moe/fkicol.jpg",
+      "src": "https://files.catbox.moe/ot80hl.png",
       "sizes": "512x512",
       "type": "image/png"
     }

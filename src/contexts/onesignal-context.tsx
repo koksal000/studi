@@ -23,6 +23,7 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const loginOneSignal = useCallback((externalId: string) => {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(function(OneSignal) {
       console.log('[OneSignal] Logging in with external ID:', externalId.toLowerCase());
       OneSignal.login(externalId.toLowerCase());
@@ -30,6 +31,7 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const logoutOneSignal = useCallback(() => {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(function(OneSignal) {
       console.log('[OneSignal] Logging out.');
       OneSignal.logout();

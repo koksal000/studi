@@ -17,30 +17,10 @@ export function EntryForm() {
   const { login, showEntryForm } = useUser();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (name.trim() && surname.trim() && email.trim()) {
       login(name.trim(), surname.trim(), email.trim());
-      
-      try {
-        const profileResponse = await fetch('/api/user-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim(), surname: surname.trim(), email: email.trim() }),
-        });
-        if (!profileResponse.ok) {
-          const errorData = await profileResponse.json().catch(() => ({ message: 'Kullanıcı profili sunucuya kaydedilemedi.' }));
-          console.warn("[EntryForm] Failed to save user profile to server:", errorData.message);
-        } else {
-          console.log("[EntryForm] User profile saved to server.");
-        }
-
-        await fetch('/api/stats/entry-count', { method: 'POST' });
-        console.log("[EntryForm] Entry count increment request sent.");
-
-      } catch (error) {
-        console.error("[EntryForm] Error during post-login actions:", error);
-      }
     } else {
       toast({
         title: "Eksik Bilgi",

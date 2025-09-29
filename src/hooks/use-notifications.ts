@@ -17,7 +17,7 @@ export function useNotifications() {
 
   const getUserId = useCallback(() => {
     if (!user || !user.email) return null;
-    return isAdmin ? "ADMIN_ACCOUNT" : user.email;
+    return isAdmin ? "ADMIN_ACCOUNT" : user.email.toLowerCase();
   }, [user, isAdmin]);
 
   const fetchNotifications = useCallback(async () => {
@@ -29,7 +29,10 @@ export function useNotifications() {
       return;
     }
 
-    setIsLoading(true);
+    if (notifications.length === 0) {
+      setIsLoading(true);
+    }
+    
     try {
       const response = await fetch(`/api/notifications?userId=${encodeURIComponent(userId)}`);
       if (!response.ok) {
@@ -45,15 +48,18 @@ export function useNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, [getUserId, toast]);
+  }, [getUserId, toast, notifications.length]);
 
   useEffect(() => {
     if (user) {
         fetchNotifications();
     } else {
         setIsLoading(false);
+        setNotifications([]);
+        setUnreadCount(0);
     }
-  }, [user, fetchNotifications]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
   
   useEffect(() => {
     const channel = new BroadcastChannel('notification_updates');

@@ -1,11 +1,11 @@
-
 // src/app/api/announcements/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import type { Announcement, Comment, Reply } from '@/hooks/use-announcements';
 import fs from 'fs';
 import path from 'path';
-import { sendNotificationToAll, sendNotificationToUser } from '@/lib/fcm-service';
+import { sendNotificationToAll, sendNotificationToUser } from '@/lib/onesignal-service';
+
 
 // Re-define AppNotification type here to avoid circular dependencies from route files
 interface AppNotification {

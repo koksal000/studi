@@ -110,6 +110,12 @@ body {
   }
 }
 
+/* OneSignal Modal Z-Index Fix */
+.onesignal-slidedown-container {
+  z-index: 1000 !important;
+}
+
+
 .timeline {
   position: relative;
   margin: 0;

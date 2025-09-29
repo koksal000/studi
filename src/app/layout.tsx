@@ -9,8 +9,9 @@ import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { SettingsProvider } from '@/contexts/settings-context';
 import { AnnouncementStatusProvider } from '@/contexts/announcement-status-context';
-import { FirebaseMessagingProvider } from '@/contexts/firebase-messaging-context';
 import { NotificationManager } from '@/components/specific/notification-manager';
+import { OneSignalProvider } from '@/contexts/onesignal-context';
+import Script from 'next/script';
 
 
 export const metadata: Metadata = {
@@ -31,11 +32,12 @@ export default function RootLayout({
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6542591429414591"
           crossOrigin="anonymous"
         ></script>
+        <Script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" strategy="afterInteractive" />
       </head>
       <body className={`antialiased flex flex-col min-h-screen`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <UserProvider>
-            <FirebaseMessagingProvider>
+            <OneSignalProvider>
               <SettingsProvider>
                 <AnnouncementStatusProvider>
                   <Navbar />
@@ -44,10 +46,9 @@ export default function RootLayout({
                   </main>
                   <Footer />
                   <Toaster />
-                  <NotificationManager />
                 </AnnouncementStatusProvider>
               </SettingsProvider>
-            </FirebaseMessagingProvider>
+            </OneSignalProvider>
           </UserProvider>
         </ThemeProvider>
       </body>

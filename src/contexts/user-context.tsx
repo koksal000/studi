@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { ADMIN_PASSWORD } from '@/lib/constants';
+import { useOneSignal } from './onesignal-context';
 
 interface User {
   name: string;
@@ -30,6 +31,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isUserLoading, setIsUserLoading] = useState(true);
   const [showEntryForm, setShowEntryForm] = useState(false);
+  const { loginOneSignal, logoutOneSignal } = useOneSignal();
 
 
   useEffect(() => {
@@ -69,15 +71,36 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);
-  }, []);
+    loginOneSignal(email);
+
+    // Post-login async tasks
+    (async () => {
+      try {
+        const profileResponse = await fetch('/api/user-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, surname, email }),
+        });
+        if (!profileResponse.ok) {
+          console.warn("[EntryForm] Failed to save user profile to server.");
+        } else {
+          console.log("[EntryForm] User profile saved to server.");
+        }
+        await fetch('/api/stats/entry-count', { method: 'POST' });
+      } catch (error) {
+        console.error("[UserContext] Error during post-login actions:", error);
+      }
+    })();
+  }, [loginOneSignal]);
 
   const logout = useCallback(() => {
     setUserState(null);
     setIsAdmin(false);
     localStorage.removeItem(USER_DATA_KEY);
-    sessionStorage.removeItem(ADMIN_SESSION_KEY); // Clear admin session on logout
+    sessionStorage.removeItem(ADMIN_SESSION_KEY); 
     setShowEntryForm(true);
-  }, []);
+    logoutOneSignal();
+  }, [logoutOneSignal]);
 
   const checkAdminPassword = useCallback((password: string) => {
     if (password === ADMIN_PASSWORD) {
@@ -85,8 +108,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       sessionStorage.setItem(ADMIN_SESSION_KEY, 'true'); // Set session storage for admin
       return true;
     }
-    // No need to set isAdmin to false here, as it might be false already.
-    // The main purpose is to grant admin status, not revoke it on failed attempt.
     return false;
   }, []);
   

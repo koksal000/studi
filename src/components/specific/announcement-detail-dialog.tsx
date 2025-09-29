@@ -21,7 +21,7 @@ interface AnnouncementDetailDialogProps {
 }
 
 export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: annProp }: AnnouncementDetailDialogProps) {
-  const { user, isAdmin } = useUser();
+  const { user } = useUser();
   const { toggleAnnouncementLike, addCommentToAnnouncement } = useAnnouncements();
   const { toast } = useToast();
   
@@ -64,8 +64,8 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
 
   if (!annProp) return null;
 
-  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : user.email) : null;
-  const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
+  const hasLiked = user && annProp.likes && annProp.likes.some(like => like.userId === user.anonymousId);
+
 
   const formattedDate = new Date(annProp.date).toLocaleDateString('tr-TR', {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'

@@ -83,8 +83,8 @@ export function ReplyItem({ reply: replyProp, announcementId, commentId, announc
     }
   };
 
-  const currentUserAuthorId = user ? (isAdmin ? "ADMIN_ACCOUNT" : user.email) : null;
-  const canDeleteThisReply = isAdmin || currentUserAuthorId === replyProp.authorId;
+  const canDeleteThisReply = user && (isAdmin || user.anonymousId === replyProp.authorId);
+
 
   if (!replyProp) return null;
 

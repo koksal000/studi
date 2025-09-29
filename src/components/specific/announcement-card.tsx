@@ -66,8 +66,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  const currentUserIdentifier = user ? (isAdmin ? "ADMIN_ACCOUNT" : user.email) : null;
-  const hasLiked = annProp.likes && annProp.likes.some(like => like.userId === currentUserIdentifier);
+  const hasLiked = user && annProp.likes && annProp.likes.some(like => like.userId === user.anonymousId);
 
   const canAttemptDeleteOrEdit = !!user && isAdmin && allowDelete;
 

@@ -16,9 +16,9 @@ export function useNotifications() {
   const { toast } = useToast();
 
   const getUserId = useCallback(() => {
-    if (!user || !user.email) return null;
-    return isAdmin ? "ADMIN_ACCOUNT" : user.email.toLowerCase();
-  }, [user, isAdmin]);
+    if (!user) return null;
+    return user.anonymousId;
+  }, [user]);
 
   const fetchNotifications = useCallback(async () => {
     const userId = getUserId();

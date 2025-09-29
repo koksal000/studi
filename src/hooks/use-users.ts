@@ -4,9 +4,16 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
-import type { UserProfile as UserProfileType } from '@/app/api/user-profile/route';
 
-export type UserProfile = UserProfileType;
+export interface UserProfile {
+  id: string; // This will be the anonymousId
+  name: string;
+  surname: string;
+  email?: string | null;
+  anonymousId: string;
+  joinedAt: string;
+  lastUpdatedAt: string;
+}
 
 export function useUsers() {
   const [users, setUsers] = useState<UserProfile[]>([]);

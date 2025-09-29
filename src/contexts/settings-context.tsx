@@ -4,9 +4,16 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useTheme } from 'next-themes';
 
+export interface DirectMessage {
+  title: string;
+  body: string;
+}
+
 interface SettingsContextType {
   currentTheme: string | undefined;
   setAppTheme: (theme: string) => void;
+  directMessage: DirectMessage | null;
+  setDirectMessage: (message: DirectMessage | null) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -14,10 +21,9 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const { theme, setTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
+  const [directMessage, setDirectMessage] = useState<DirectMessage | null>(null);
 
   useEffect(() => {
-    // This effect now only handles things that might cause a delay in loading settings,
-    // like checking the theme. Notification logic has been moved.
     setIsLoading(false); 
   }, []); 
 
@@ -28,7 +34,9 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const contextValue = useMemo(() => ({
     currentTheme: theme, 
     setAppTheme,
-  }), [theme, setAppTheme]);
+    directMessage,
+    setDirectMessage,
+  }), [theme, setAppTheme, directMessage]);
 
   if (isLoading && typeof window !== 'undefined') { 
      return (

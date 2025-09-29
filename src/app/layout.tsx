@@ -13,6 +13,7 @@ import { AnnouncementStatusProvider } from '@/contexts/announcement-status-conte
 import { NotificationManager } from '@/components/specific/notification-manager';
 import { OneSignalProvider } from '@/contexts/onesignal-context';
 import Script from 'next/script';
+import { DirectMessageModal } from '@/components/specific/direct-message-modal';
 
 
 export const metadata: Metadata = {
@@ -55,6 +56,8 @@ export default function RootLayout({
             <UserProvider>
               <SettingsProvider>
                 <AnnouncementStatusProvider>
+                  <NotificationManager />
+                  <DirectMessageModal />
                   <Navbar />
                   <main className="flex-grow container mx-auto px-4 py-8">
                     {children}

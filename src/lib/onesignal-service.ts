@@ -1,3 +1,4 @@
+
 'use server';
 
 const ONE_SIGNAL_APP_ID = "af7c8099-b2c1-4376-be91-afb88be83161";
@@ -10,7 +11,8 @@ if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
 interface NotificationPayload {
     title: string;
     body: string;
-    link: string;
+    link?: string; // Optional link
+    data?: Record<string, any>; // Optional custom data
 }
 
 async function sendNotification(notification: any) {
@@ -27,7 +29,6 @@ async function sendNotification(notification: any) {
     const body = JSON.stringify({
         app_id: ONE_SIGNAL_APP_ID,
         ...notification,
-        web_url: notification.web_url, 
     });
 
     try {
@@ -56,6 +57,7 @@ export async function sendNotificationToAll(payload: NotificationPayload) {
         headings: { en: payload.title },
         contents: { en: payload.body },
         web_url: payload.link,
+        data: payload.data,
     });
 }
 
@@ -67,5 +69,6 @@ export async function sendNotificationToUser(userId: string, payload: Notificati
         headings: { en: payload.title },
         contents: { en: payload.body },
         web_url: payload.link,
+        data: payload.data
     });
 }

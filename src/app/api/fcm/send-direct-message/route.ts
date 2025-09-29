@@ -1,3 +1,4 @@
+
 // src/app/api/fcm/send-direct-message/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -23,14 +24,14 @@ export async function POST(request: NextRequest) {
   if (type === 'iyi') title = "Yöneticiden Bilgilendirme";
   
   try {
-    // This now correctly uses the OneSignal service to send a notification
-    // to the user identified by their external ID (anonymousId).
     await sendNotificationToUser(userId, {
         title: title,
         body: message,
-        link: '/', // The user's request was to open a modal on the home page.
-                   // We direct them to the home page; client-side logic will handle the modal.
-                   // Note: Implementing the modal part requires client-side changes not requested here.
+        data: {
+          type: 'direct_message',
+          title: title,
+          body: message
+        }
     });
     
     return NextResponse.json({ message: 'Bildirim başarıyla gönderim için sıraya alındı.' }, { status: 202 });

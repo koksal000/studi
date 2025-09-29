@@ -2,7 +2,7 @@
 // src/components/specific/send-user-message-dialog.tsx
 "use client";
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -26,10 +26,15 @@ export function SendUserMessageDialog({ isOpen, onOpenChange, userToMessage }: S
   const [messageType, setMessageType] = useState<MessageType>('normal');
   const [isSending, setIsSending] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setMessage('');
+      setMessageType('normal');
+    }
+  }, [isOpen]);
+
   const handleClose = () => {
     if (isSending) return;
-    setMessage('');
-    setMessageType('normal');
     onOpenChange(false);
   };
 
@@ -50,7 +55,7 @@ export function SendUserMessageDialog({ isOpen, onOpenChange, userToMessage }: S
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: userToMessage.id, // Changed from email to ID for consistency
+          userId: userToMessage.id,
           message: message.trim(),
           type: messageType,
         }),

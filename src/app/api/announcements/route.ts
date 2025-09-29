@@ -239,33 +239,40 @@ export async function POST(request: NextRequest) {
       const { replyingToAuthorId } = actionPayload.reply;
       const { authorId: replierId, authorName: replierName, text: replyText } = newReply;
       
-      console.log(`[API/Announcements] Reply detected. Replier: ${replierId}, Recipient: ${replyingToAuthorId}`);
-      if (replyingToAuthorId && announcementToUpdate.title && replyingToAuthorId !== replierId) {
-          console.log(`[API/Announcements] Conditions met. Creating notifications for ${replyingToAuthorId}.`);
-          
-          const allNotifications = readNotificationsFromFile();
-          const newInAppNotification: AppNotification = {
-              id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-              type: 'reply', 
-              recipientUserId: replyingToAuthorId, 
-              senderUserName: replierName, 
-              announcementId: actionPayload.announcementId, 
-              announcementTitle: announcementToUpdate.title, 
-              commentId: actionPayload.commentId,
-              replyId: newReply.id,
-              date: new Date().toISOString(),
-              read: false,
-          };
-          allNotifications.unshift(newInAppNotification);
-          writeNotificationsToFile(allNotifications);
+      if (announcementToUpdate.title && replyingToAuthorId && replyingToAuthorId !== replierId) {
+          if (replyingToAuthorId === 'ADMIN_ACCOUNT') {
+              // Notify all subscribed users if the reply is to an admin comment
+              console.log(`[API/Announcements] Reply to admin detected. Notifying all users.`);
+              await sendNotificationToAll({
+                  title: `Yönetici yorumuna yanıt geldi`,
+                  body: `${replierName}: "${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}"`,
+                  link: '/announcements',
+              });
+          } else {
+              // Notify the specific user
+              console.log(`[API/Announcements] Reply detected. Creating notification for ${replyingToAuthorId}.`);
+              const allNotifications = readNotificationsFromFile();
+              const newInAppNotification: AppNotification = {
+                  id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                  type: 'reply',
+                  recipientUserId: replyingToAuthorId,
+                  senderUserName: replierName,
+                  announcementId: actionPayload.announcementId,
+                  announcementTitle: announcementToUpdate.title,
+                  commentId: actionPayload.commentId,
+                  replyId: newReply.id,
+                  date: new Date().toISOString(),
+                  read: false,
+              };
+              allNotifications.unshift(newInAppNotification);
+              writeNotificationsToFile(allNotifications);
 
-          await sendNotificationToUser(replyingToAuthorId, {
-            title: `${replierName} yorumunuza yanıt verdi`,
-            body: `${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
-            link: '/announcements',
-          });
-      } else {
-        console.log(`[API/Announcements] Notification conditions not met. Skipping notification. replyingToAuthorId: ${replyingToAuthorId}, title: ${!!announcementToUpdate.title}, is self-reply: ${replyingToAuthorId === replierId}`);
+              await sendNotificationToUser(replyingToAuthorId, {
+                  title: `${replierName} yorumunuza yanıt verdi`,
+                  body: `${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
+                  link: '/announcements',
+              });
+          }
       }
 
     } else if (actionPayload.action === "DELETE_COMMENT") {

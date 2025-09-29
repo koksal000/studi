@@ -41,8 +41,11 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     window.OneSignalDeferred = window.OneSignalDeferred || [];
-    window.OneSignalDeferred.push(function(OneSignal) {
+    window.OneSignalDeferred.push(async function(OneSignal) {
       console.log('[OneSignal] Logging in with external ID:', externalId);
+      // Wait for the SDK to be fully ready by checking subscription status before logging in.
+      // This prevents the "Cannot read properties of undefined (reading 'tt')" error.
+      await OneSignal.User.isSubscribed(); 
       OneSignal.login(externalId).then(() => {
           if (email) {
               console.log('[OneSignal] Setting email for user:', email);

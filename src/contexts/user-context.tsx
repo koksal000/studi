@@ -97,12 +97,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, [loginOneSignal]);
 
   const logout = useCallback(() => {
+    logoutOneSignal();
     setUserState(null);
     setIsAdmin(false);
     localStorage.removeItem(USER_DATA_KEY);
     sessionStorage.removeItem(ADMIN_SESSION_KEY); 
     setShowEntryForm(true);
-    logoutOneSignal();
   }, [logoutOneSignal]);
 
   const checkAdminPassword = useCallback((password: string) => {

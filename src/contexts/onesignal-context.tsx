@@ -13,26 +13,26 @@ const OneSignalContext = createContext<OneSignalContextType | undefined>(undefin
 export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
+    // This ensures that the OneSignal SDK script is loaded and initialized.
+    // The script is included in the layout.tsx file.
+    // We are attaching our init logic to the deferred array.
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OneSignal) {
-      try {
-        await OneSignal.init({
-          appId: "af7c8099-b2c1-4376-be91-afb88be83161",
-        });
-      } catch (error) {
-        console.error("OneSignal Init Error:", error);
-        // This error is expected if the current domain is not configured in the OneSignal dashboard.
-        // We catch it to prevent the app from crashing during development.
-        // To enable OneSignal, add this development URL to your app's list of allowed domains on the OneSignal dashboard.
-      }
+      // The init logic is now in layout.tsx to ensure it runs as early as possible.
+      // This context will handle interactions with the already-initialized SDK.
+      console.log('[OneSignal Context] OneSignal SDK is ready.');
     });
   }, []);
 
   const loginOneSignal = useCallback((externalId: string) => {
+    if (!externalId) {
+      console.warn('[OneSignal] Attempted to login with a null or empty externalId. Aborting.');
+      return;
+    }
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(function(OneSignal) {
       console.log('[OneSignal] Logging in with external ID:', externalId.toLowerCase());
-      OneSignal.login(externalId.toLowerCase());
+      OneSignal.login(externalId.toLowerCase()).catch((e: any) => console.error("OneSignal login error:", e));
     });
   }, []);
 
@@ -40,7 +40,7 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(function(OneSignal) {
       console.log('[OneSignal] Logging out.');
-      OneSignal.logout();
+      OneSignal.logout().catch((e: any) => console.error("OneSignal logout error:", e));
     });
   }, []);
 

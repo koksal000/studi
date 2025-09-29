@@ -1,5 +1,6 @@
-
 'use server';
+import { config } from 'dotenv';
+config(); // Load .env file
 
 const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
 const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
@@ -16,7 +17,7 @@ interface NotificationPayload {
 
 async function sendNotification(notification: any) {
     if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
-        console.log(`[OneSignal Service] SIMULATING SEND:`, notification.headings.en, '->', notification.contents.en);
+        console.log(`[OneSignal Service] SIMULATING SEND:`, notification.headings.en, '->', notification.contents.en, 'to', notification.include_external_user_ids || 'all');
         return;
     }
 

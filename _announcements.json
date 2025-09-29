@@ -18,6 +18,24 @@
         "date": "2025-09-29T13:39:53.934Z",
         "replies": [
           {
+            "authorName": "Deneme Deneme",
+            "authorId": "deneme@eposta.com",
+            "text": "Deneme",
+            "replyingToAuthorName": "Yönetim Hesabı",
+            "replyingToAuthorId": "ADMIN_ACCOUNT",
+            "id": "rpl_1759153743767_6gvcdml",
+            "date": "2025-09-29T13:49:03.767Z"
+          },
+          {
+            "authorName": "Yönetim Hesabı",
+            "authorId": "ADMIN_ACCOUNT",
+            "text": "Deneme",
+            "replyingToAuthorName": "Yönetim Hesabı",
+            "replyingToAuthorId": "ADMIN_ACCOUNT",
+            "id": "rpl_1759153598039_gvf1t3s",
+            "date": "2025-09-29T13:46:38.039Z"
+          },
+          {
             "authorName": "Yönetim Hesabı",
             "authorId": "ADMIN_ACCOUNT",
             "text": "Deneme",

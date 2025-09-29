@@ -30,25 +30,24 @@ export default function RootLayout({
     <html lang="tr" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
         <link rel="manifest" href="/manifest.json" />
+        <script async src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"></script>
+        <Script id="onesignal-init" strategy="afterInteractive">
+          {`
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(function(OneSignal) {
+              OneSignal.init({
+                appId: "af7c8099-b2c1-4376-be91-afb88be83161",
+                safari_web_id: "web.onesignal.auto.1c5f323c-9114-4c99-92b2-654b99a6b165",
+                allowLocalhostAsSecureOrigin: true,
+              });
+            });
+          `}
+        </Script>
         <script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6542591429414591"
           crossOrigin="anonymous"
         ></script>
-        <Script id="onesignal-sdk" strategy="afterInteractive">
-          {`
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(async function(OneSignal) {
-              try {
-                await OneSignal.init({
-                  appId: "af7c8099-b2c1-4376-be91-afb88be83161",
-                });
-              } catch (error) {
-                console.error("OneSignal Init Error:", error);
-              }
-            });
-          `}
-        </Script>
       </head>
       <body className={`antialiased flex flex-col min-h-screen`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

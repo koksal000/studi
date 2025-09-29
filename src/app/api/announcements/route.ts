@@ -62,6 +62,7 @@ interface TogglePinApiPayload {
     announcementId: string;
 }
 
+// Add isRestore flag to the main Announcement type for the payload
 type AnnouncementApiPayload =
   | ToggleAnnouncementLikeApiPayload
   | AddCommentApiPayload
@@ -69,7 +70,7 @@ type AnnouncementApiPayload =
   | DeleteCommentApiPayload
   | DeleteReplyApiPayload
   | TogglePinApiPayload
-  | Announcement;
+  | (Announcement & { isRestore?: boolean });
 
 const readAnnouncementsFromFile = (): Announcement[] => {
   try {
@@ -326,7 +327,9 @@ export async function POST(request: NextRequest) {
     }
 
   } else {
-    const newAnnouncement = payload as Announcement;
+    const { isRestore, ...newAnnouncementData } = payload as Announcement & { isRestore?: boolean };
+    const newAnnouncement = newAnnouncementData as Announcement;
+
     if (!newAnnouncement.id || !newAnnouncement.title?.trim() || !newAnnouncement.content?.trim() || !newAnnouncement.author || !newAnnouncement.date) {
       return NextResponse.json({ message: 'Geçersiz duyuru yükü. Gerekli alanlar eksik.' }, { status: 400 });
     }
@@ -340,19 +343,23 @@ export async function POST(request: NextRequest) {
 
     const existingIndex = announcements.findIndex(ann => ann.id === newAnnouncement.id);
     if (existingIndex !== -1) {
+      // This is an EDIT operation or a RESTORE of an existing item
       const originalAnnouncement = announcements[existingIndex];
       announcements[existingIndex] = {
         ...newAnnouncement,
-        date: originalAnnouncement.date,
-        author: originalAnnouncement.author,
-        authorId: originalAnnouncement.authorId,
-        likes: originalAnnouncement.likes,
-        comments: originalAnnouncement.comments,
-        isPinned: originalAnnouncement.isPinned,
+        date: isRestore ? newAnnouncement.date : originalAnnouncement.date,
+        author: isRestore ? newAnnouncement.author : originalAnnouncement.author,
+        authorId: isRestore ? newAnnouncement.authorId : originalAnnouncement.authorId,
+        likes: isRestore ? newAnnouncement.likes : originalAnnouncement.likes,
+        comments: isRestore ? newAnnouncement.comments : originalAnnouncement.comments,
+        isPinned: isRestore ? newAnnouncement.isPinned : originalAnnouncement.isPinned,
       };
     } else {
+      // This is a NEW announcement or a RESTORE of a new item
       announcements.unshift(newAnnouncement);
-      isNewAnnouncement = true;
+      if (!isRestore) { // Only mark as new if it's not a restore
+          isNewAnnouncement = true;
+      }
     }
     announcementModified = true;
     modifiedAnnouncement = newAnnouncement;

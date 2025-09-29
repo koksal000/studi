@@ -1,4 +1,3 @@
-
 // src/lib/idb-backup.ts
 'use client';
 
@@ -65,7 +64,8 @@ export async function restoreDataFromIDB(): Promise<{ announcements: number, gal
             const response = await fetch('/api/announcements', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(announcement),
+                // Add a flag to indicate this is a restore operation
+                body: JSON.stringify({ ...announcement, isRestore: true }),
             });
             if (!response.ok) {
                 console.warn(`[IDB Restore] Failed to restore announcement: ${announcement.id}`);

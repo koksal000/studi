@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "title": "Deneme",
+    "content": "Deneme",
+    "media": null,
+    "mediaType": null,
+    "id": "ann_1759152429940_y1h5dly",
+    "date": "2025-09-29T13:27:09.940Z",
+    "author": "Yönetim Hesabı",
+    "authorId": "ADMIN_ACCOUNT",
+    "likes": [],
+    "comments": [],
+    "isPinned": false
+  }
+]

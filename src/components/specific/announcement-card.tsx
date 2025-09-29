@@ -307,6 +307,7 @@ export function AnnouncementCard({ announcement: annProp, isCompact = false, all
                         key={comment.id}
                         comment={comment}
                         announcementId={annProp.id}
+                        announcementAuthorId={annProp.authorId}
                     />
                   ))}
                 </div>

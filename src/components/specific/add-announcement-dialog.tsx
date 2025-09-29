@@ -324,5 +324,4 @@ export function AddAnnouncementDialog({ isOpen, onOpenChange, announcementToEdit
     </Dialog>
   );
 }
-
     

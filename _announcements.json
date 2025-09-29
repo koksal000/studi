@@ -9,7 +9,26 @@
     "author": "Yönetim Hesabı",
     "authorId": "ADMIN_ACCOUNT",
     "likes": [],
-    "comments": [],
+    "comments": [
+      {
+        "authorName": "Yönetim Hesabı",
+        "authorId": "ADMIN_ACCOUNT",
+        "text": "Deneme",
+        "id": "cmt_1759153193934_bsxjy55",
+        "date": "2025-09-29T13:39:53.934Z",
+        "replies": [
+          {
+            "authorName": "Yönetim Hesabı",
+            "authorId": "ADMIN_ACCOUNT",
+            "text": "Deneme",
+            "replyingToAuthorName": "Yönetim Hesabı",
+            "replyingToAuthorId": "ADMIN_ACCOUNT",
+            "id": "rpl_1759153211566_ztkxdel",
+            "date": "2025-09-29T13:40:11.567Z"
+          }
+        ]
+      }
+    ],
     "isPinned": false
   }
 ]

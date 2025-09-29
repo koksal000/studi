@@ -72,15 +72,19 @@ export function useAnnouncements() {
       }
       const data: Announcement[] = await response.json();
 
-      // Sunucudan veri geldiyse (boş olsa bile) bunu "doğrunun kaynağı" olarak kabul et.
       if (data) {
         setAnnouncements(data);
-        await cacheAnnouncementsToDB(data); // Önbelleği de boş veriyle güncelle
+        if (data.length > 0) {
+            await cacheAnnouncementsToDB(data);
+        } else {
+            // If server returns empty, it's the source of truth, so clear cache.
+            await cacheAnnouncementsToDB([]);
+        }
       } else {
-        // Bu durum genellikle API'nin tamamen bozuk olduğu anlamına gelir.
         throw new Error('Sunucudan geçersiz veri alındı. Çevrimdışı veriler deneniyor.');
       }
     } catch (error: any) {
+        // This toast is for network/server errors. An empty array from server is not an error.
         toast({ title: 'Sunucu Hatası', description: error.message, variant: 'destructive', duration: 5000 });
         console.warn("[useAnnouncements] API fetch failed, falling back to IndexedDB.");
         const dbData = await getAnnouncementsFromDB();
@@ -120,8 +124,8 @@ export function useAnnouncements() {
         ...payload,
         id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
-        author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
-        authorId: isAdmin ? "ADMIN_ACCOUNT" : user.email,
+        author: "Yönetim Hesabı",
+        authorId: "ADMIN_ACCOUNT",
         likes: [],
         comments: [],
         isPinned: false,
@@ -350,8 +354,14 @@ export function useAnnouncements() {
 
   const addCommentToAnnouncement = useCallback(async (announcementId: string, text: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
-    const authorName = isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`;
-    const authorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
+    
+    const announcement = announcements.find(a => a.id === announcementId);
+    if (!announcement) { throw new Error("Duyuru bulunamadı."); }
+
+    const isCommentingOnOwnAnnouncementAsAdmin = isAdmin && announcement.authorId === "ADMIN_ACCOUNT";
+    const authorName = isCommentingOnOwnAnnouncementAsAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`;
+    const authorId = isCommentingOnOwnAnnouncementAsAdmin ? "ADMIN_ACCOUNT" : user.email;
+
     const tempCommentId = `cmt_temp_${Date.now()}`;
     const tempComment: Comment = { id: tempCommentId, authorName, authorId, text, date: new Date().toISOString(), replies: [] };
     
@@ -387,8 +397,13 @@ export function useAnnouncements() {
   
   const addReplyToComment = useCallback(async (announcementId: string, commentId: string, text: string, replyingToAuthorName?: string, replyingToAuthorId?: string) => {
     if (!user || !user.email) { throw new Error("Giriş yapmalısınız."); }
-    const authorName = isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`;
-    const authorId = isAdmin ? "ADMIN_ACCOUNT" : user.email;
+
+    const announcement = announcements.find(a => a.id === announcementId);
+    if (!announcement) { throw new Error("Duyuru bulunamadı."); }
+
+    const isCommentingOnOwnAnnouncementAsAdmin = isAdmin && announcement.authorId === "ADMIN_ACCOUNT";
+    const authorName = isCommentingOnOwnAnnouncementAsAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`;
+    const authorId = isCommentingOnOwnAnnouncementAsAdmin ? "ADMIN_ACCOUNT" : user.email;
 
     const tempReplyId = `rpl_temp_${Date.now()}`;
     const tempReply: Reply = { id: tempReplyId, authorName, authorId, text, date: new Date().toISOString(), replyingToAuthorName, replyingToAuthorId };

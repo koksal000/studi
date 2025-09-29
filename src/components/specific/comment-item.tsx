@@ -26,9 +26,10 @@ import {
 interface CommentItemProps {
   comment: Comment;
   announcementId: string;
+  announcementAuthorId: string;
 }
 
-export function CommentItem({ comment: commentProp, announcementId }: CommentItemProps) {
+export function CommentItem({ comment: commentProp, announcementId, announcementAuthorId }: CommentItemProps) {
   const { user, isAdmin } = useUser();
   const { addReplyToComment, deleteComment } = useAnnouncements();
   const { toast } = useToast();
@@ -180,6 +181,7 @@ export function CommentItem({ comment: commentProp, announcementId }: CommentIte
                 reply={reply}
                 announcementId={announcementId}
                 commentId={commentProp.id}
+                announcementAuthorId={announcementAuthorId}
             />
           ))}
         </div>

@@ -281,6 +281,7 @@ export function AnnouncementDetailDialog({ isOpen, onOpenChange, announcement: a
                     key={comment.id}
                     comment={comment}
                     announcementId={annProp.id}
+                    announcementAuthorId={annProp.authorId}
                   />
                 ))}
               </div>

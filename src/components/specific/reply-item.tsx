@@ -26,9 +26,10 @@ interface ReplyItemProps {
   reply: Reply;
   announcementId: string;
   commentId: string;
+  announcementAuthorId: string;
 }
 
-export function ReplyItem({ reply: replyProp, announcementId, commentId }: ReplyItemProps) {
+export function ReplyItem({ reply: replyProp, announcementId, commentId, announcementAuthorId }: ReplyItemProps) {
   const { user, isAdmin } = useUser();
   const { addReplyToComment, deleteReply } = useAnnouncements();
   const { toast } = useToast();

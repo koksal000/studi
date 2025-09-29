@@ -55,7 +55,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  let newMessage: ContactMessage;
+  let newMessage: Omit<ContactMessage, 'id' | 'date'>;
   try {
     newMessage = await request.json();
   } catch (error) {
@@ -63,23 +63,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid JSON payload." }, { status: 400 });
   }
 
-  if (!newMessage.id || !newMessage.name || !newMessage.email || !newMessage.subject || !newMessage.message || !newMessage.date) {
+  if (!newMessage.name || !newMessage.email || !newMessage.subject || !newMessage.message) {
     return NextResponse.json({ message: 'Invalid contact message payload. Missing required fields.' }, { status: 400 });
   }
   
   const messages = readMessagesFromFile();
+  const finalNewMessage: ContactMessage = {
+      ...newMessage,
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      date: new Date().toISOString()
+  };
 
-  if (!messages.some(msg => msg.id === newMessage.id)) {
-      messages.unshift(newMessage);
-  }
+  messages.unshift(finalNewMessage);
     
   if (writeMessagesToFile(messages)) {
-    console.log(`[API/Contact] Message ${newMessage.id} received and saved. Total: ${messages.length}`);
-    return NextResponse.json(newMessage, { status: 201 });
+    console.log(`[API/Contact] Message ${finalNewMessage.id} received and saved. Total: ${messages.length}`);
+    return NextResponse.json(finalNewMessage, { status: 201 });
   } else {
-    console.error(`[API/Contact] Failed to save message ${newMessage.id} to file.`);
+    console.error(`[API/Contact] Failed to save message ${finalNewMessage.id} to file.`);
     return NextResponse.json({ message: "Sunucu hatası: İletişim mesajı kalıcı olarak kaydedilemedi." }, { status: 500 });
   }
 }
-
-    

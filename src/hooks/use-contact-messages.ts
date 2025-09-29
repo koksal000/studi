@@ -49,11 +49,7 @@ export function useContactMessages() {
       const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...newMessageData, 
-          id: `msg_${Date.now()}`,
-          date: new Date().toISOString()
-        }),
+        body: JSON.stringify(newMessageData),
       });
 
       if (!response.ok) {

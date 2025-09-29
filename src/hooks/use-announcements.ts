@@ -103,9 +103,9 @@ export function useAnnouncements() {
     }
 
     const tempId = `ann_temp_${Date.now()}`;
-    const newAnnouncement: Announcement = {
+    const newAnnouncementData = {
         ...payload,
-        id: tempId,
+        id: `ann_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         date: new Date().toISOString(),
         author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
         authorId: isAdmin ? "ADMIN_ACCOUNT" : user.email,
@@ -114,22 +114,16 @@ export function useAnnouncements() {
         isPinned: false,
     };
     
-    setAnnouncements(currentData => [newAnnouncement, ...currentData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    setAnnouncements(currentData => [
+        {...newAnnouncementData, id: tempId}, 
+        ...currentData
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
     try {
       const response = await fetch('/api/announcements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...payload,
-          id: `ann_${Date.now()}`,
-          date: new Date().toISOString(),
-          author: isAdmin ? "Yönetim Hesabı" : `${user.name} ${user.surname}`,
-          authorId: isAdmin ? "ADMIN_ACCOUNT" : user.email,
-          likes: [],
-          comments: [],
-          isPinned: false,
-        })
+        body: JSON.stringify(newAnnouncementData)
       });
 
       if (!response.ok) {

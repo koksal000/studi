@@ -1,3 +1,4 @@
+
 // src/app/api/notifications/route.ts
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';

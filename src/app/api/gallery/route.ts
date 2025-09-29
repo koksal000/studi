@@ -26,7 +26,7 @@ const gallerySortFnInMemory = (a: GalleryImage, b: GalleryImage): number => {
   if (!aIsSeed && bIsSeed) return 1;
 
   const extractNumericPart = (id: string) => {
-    const match = id.match(/\d+$/); 
+    const match = id.match(/\d+/); 
     return match ? parseInt(match[0]) : null;
   };
 
@@ -91,23 +91,23 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  let newImage: GalleryImage;
+  let newImagePayload: Omit<GalleryImage, 'id'>;
   try {
-    newImage = await request.json();
+    newImagePayload = await request.json();
   } catch (error) {
     console.error("[API/Gallery] POST Error: Invalid JSON payload.", error);
     return NextResponse.json({ message: "Geçersiz JSON yükü." }, { status: 400 });
   }
     
-  if (!newImage.id || !newImage.src || !newImage.caption?.trim() || !newImage.alt?.trim() || !newImage.hint?.trim()) {
+  if (!newImagePayload.src || !newImagePayload.caption?.trim() || !newImagePayload.alt?.trim() || !newImagePayload.hint?.trim()) {
     return NextResponse.json({ message: 'Geçersiz resim yükü. Gerekli alanlar eksik.' }, { status: 400 });
   }
 
-  if (!newImage.src.startsWith('data:image/')) {
+  if (!newImagePayload.src.startsWith('data:image/')) {
       return NextResponse.json({ message: 'Geçersiz resim veri formatı. "data:image/" ile başlamalıdır.' }, { status: 400 });
   }
 
-  if (newImage.src.length > MAX_BASE64_SIZE_API) { 
+  if (newImagePayload.src.length > MAX_BASE64_SIZE_API) { 
       const limitMB = (MAX_BASE64_SIZE_API / (1024*1024)).toFixed(1);
       const rawEquivalentMB = (MAX_BASE64_SIZE_API / (1.37 * 1.05 * 1024 * 1024)).toFixed(1);
       return NextResponse.json({ message: `Resim verisi çok büyük. Maksimum işlenmiş veri boyutu ~${limitMB}MB olmalıdır (yaklaşık ~${rawEquivalentMB}MB ham dosya).` }, { status: 413 });
@@ -115,13 +115,12 @@ export async function POST(request: NextRequest) {
 
   const images = readGalleryFromFile();
   
-  const existingImageIndex = images.findIndex(img => img.id === newImage.id);
-
-  if (existingImageIndex !== -1) {
-    images[existingImageIndex] = newImage; 
-  } else {
-    images.unshift(newImage); // Add to the beginning
-  }
+  const newImage: GalleryImage = {
+      ...newImagePayload,
+      id: `gal_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+  };
+  
+  images.unshift(newImage); // Add to the beginning
   
   if (writeGalleryToFile(images)) {
     console.log(`[API/Gallery] Image ${newImage.id} processed and saved. Total images: ${images.length}`);
@@ -156,5 +155,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek resim bulunamadı' }, { status: 404 });
   }
 }
-
-    

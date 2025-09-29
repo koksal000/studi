@@ -58,20 +58,20 @@ export function useGallery() {
     }
 
     const tempId = `gal_temp_${Date.now()}`;
-    const newImage: GalleryImage = {
+    const optimisticImage: GalleryImage = {
       id: tempId,
       src: payload.imageDataUri,
       alt: payload.alt?.trim() || payload.caption,
       caption: payload.caption,
       hint: payload.hint?.trim() || 'uploaded image',
     };
-    setGalleryImages(prev => [newImage, ...prev]);
+    setGalleryImages(prev => [optimisticImage, ...prev]);
 
     try {
       const response = await fetch('/api/gallery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...newImage, id: `gal_${Date.now()}` }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {

@@ -2,7 +2,6 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, ReactNode, useCallback } from 'react';
-import { useUser } from '@/contexts/user-context';
 
 interface OneSignalContextType {
   loginOneSignal: (externalId: string) => void;
@@ -12,25 +11,16 @@ interface OneSignalContextType {
 const OneSignalContext = createContext<OneSignalContextType | undefined>(undefined);
 
 export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useUser();
 
   useEffect(() => {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "af7c8099-b2c1-4376-be91-afb88be83161",
-        allowLocalhostAsSecureOrigin: true, // For development
+        allowLocalhostAsSecureOrigin: true,
       });
     });
-
-    if (user?.email) {
-      console.log('[OneSignal] User found, logging into OneSignal with ID:', user.email.toLowerCase());
-      window.OneSignalDeferred.push(function(OneSignal) {
-         OneSignal.login(user.email.toLowerCase());
-      });
-    }
-
-  }, [user]);
+  }, []);
 
   const loginOneSignal = useCallback((externalId: string) => {
     window.OneSignalDeferred.push(function(OneSignal) {

@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
@@ -36,8 +37,8 @@ export default function RootLayout({
       </head>
       <body className={`antialiased flex flex-col min-h-screen`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <UserProvider>
-            <OneSignalProvider>
+          <OneSignalProvider>
+            <UserProvider>
               <SettingsProvider>
                 <AnnouncementStatusProvider>
                   <Navbar />
@@ -48,8 +49,8 @@ export default function RootLayout({
                   <Toaster />
                 </AnnouncementStatusProvider>
               </SettingsProvider>
-            </OneSignalProvider>
-          </UserProvider>
+            </UserProvider>
+          </OneSignalProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -42,6 +42,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         const storedUser = JSON.parse(storedUserString) as User;
         if (storedUser.name && storedUser.surname && storedUser.email) {
           setUserState(storedUser);
+          // Also log into OneSignal on initial load if user exists
+          loginOneSignal(storedUser.email);
           setShowEntryForm(false);
         } else {
           localStorage.removeItem(USER_DATA_KEY);
@@ -64,13 +66,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setIsUserLoading(false);
     }
-  }, []);
+  }, [loginOneSignal]);
 
   const login = useCallback((name: string, surname: string, email: string) => {
     const newUser: User = { name, surname, email };
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);
+    // Explicitly call OneSignal login after user is set
     loginOneSignal(email);
 
     // Post-login async tasks

@@ -1,13 +1,10 @@
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
-import { config } from 'dotenv';
 
-config(); // Load environment variables from .env file
+// process.env.GOOGLE_API_KEY will be automatically available in the hosting environment
 
 export const ai = genkit({
   plugins: [
-    googleAI({
-      apiKey: process.env.GOOGLE_API_KEY,
-    }),
+    googleAI(),
   ],
 });

@@ -1,9 +1,7 @@
 'use server';
-import { config } from 'dotenv';
-config(); // Load .env file
 
-const ONE_SIGNAL_APP_ID = process.env.ONE_SIGNAL_APP_ID;
-const ONE_SIGNAL_REST_API_KEY = process.env.ONE_SIGNAL_REST_API_KEY;
+const ONE_SIGNAL_APP_ID = "af7c8099-b2c1-4376-be91-afb88be83161";
+const ONE_SIGNAL_REST_API_KEY = "os_v2_app_v56ibgnsyfbxnpurv64ix2brmfly2gbjmtnufmnbwmpmhdu777cltwrkxkgzqfvbsy3kjuw2uqydfmkbhtemucc2ka5dl34tfal6hlq";
 
 if (!ONE_SIGNAL_APP_ID || !ONE_SIGNAL_REST_API_KEY) {
     console.warn("[OneSignal Service] OneSignal environment variables (ONE_SIGNAL_APP_ID, ONE_SIGNAL_REST_API_KEY) are not set. Push notifications will be simulated.");

@@ -240,38 +240,32 @@ export async function POST(request: NextRequest) {
       const { authorId: replierId, authorName: replierName, text: replyText } = newReply;
       
       if (announcementToUpdate.title && replyingToAuthorId && replyingToAuthorId !== replierId) {
-          if (replyingToAuthorId === 'ADMIN_ACCOUNT') {
-              // Notify all subscribed users if the reply is to an admin comment
-              console.log(`[API/Announcements] Reply to admin detected. Notifying all users.`);
-              await sendNotificationToAll({
-                  title: `Yönetici yorumuna yanıt geldi`,
-                  body: `${replierName}: "${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}"`,
-                  link: '/announcements',
-              });
-          } else {
-              // Notify the specific user
-              console.log(`[API/Announcements] Reply detected. Creating notification for ${replyingToAuthorId}.`);
-              const allNotifications = readNotificationsFromFile();
-              const newInAppNotification: AppNotification = {
-                  id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                  type: 'reply',
-                  recipientUserId: replyingToAuthorId,
-                  senderUserName: replierName,
-                  announcementId: actionPayload.announcementId,
-                  announcementTitle: announcementToUpdate.title,
-                  commentId: actionPayload.commentId,
-                  replyId: newReply.id,
-                  date: new Date().toISOString(),
-                  read: false,
-              };
-              allNotifications.unshift(newInAppNotification);
-              writeNotificationsToFile(allNotifications);
-
+          console.log(`[API/Announcements] Reply detected. Creating notification for ${replyingToAuthorId}.`);
+          const allNotifications = readNotificationsFromFile();
+          const newInAppNotification: AppNotification = {
+              id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              type: 'reply',
+              recipientUserId: replyingToAuthorId,
+              senderUserName: replierName,
+              announcementId: actionPayload.announcementId,
+              announcementTitle: announcementToUpdate.title,
+              commentId: actionPayload.commentId,
+              replyId: newReply.id,
+              date: new Date().toISOString(),
+              read: false,
+          };
+          allNotifications.unshift(newInAppNotification);
+          writeNotificationsToFile(allNotifications);
+          
+          // Only send a push notification if the recipient is NOT the admin account
+          if (replyingToAuthorId !== 'ADMIN_ACCOUNT') {
               await sendNotificationToUser(replyingToAuthorId, {
                   title: `${replierName} yorumunuza yanıt verdi`,
                   body: `${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
                   link: '/announcements',
               });
+          } else {
+             console.log(`[API/Announcements] Reply is to an admin comment. In-app notification created, but no push notification sent.`);
           }
       }
 
@@ -424,3 +418,5 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Silinecek duyuru bulunamadı' }, { status: 404 });
   }
 }
+
+    

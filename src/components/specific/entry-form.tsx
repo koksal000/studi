@@ -39,7 +39,7 @@ export function EntryForm() {
         <video
           autoPlay
           loop
-          muted={false} 
+          muted={true} 
           playsInline 
           className="absolute top-0 left-0 w-full h-full object-cover" 
           src="https://files.catbox.moe/na9jph.mp4" 

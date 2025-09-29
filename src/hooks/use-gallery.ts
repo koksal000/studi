@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from './use-toast';
 import { broadcastGalleryUpdate } from '@/lib/broadcast-channel';
+import { getGalleryFromDB, cacheGalleryToDB } from '@/lib/idb';
 
 export interface GalleryImage {
   id: string;
@@ -28,23 +29,33 @@ export function useGallery() {
   const { toast } = useToast();
 
   const fetchGallery = useCallback(async () => {
-    if (galleryImages.length === 0) {
-        setIsLoading(true);
-    }
+    setIsLoading(true);
     try {
       const response = await fetch('/api/gallery');
       if (!response.ok) {
         throw new Error('Galeri resimleri sunucudan alınamadı.');
       }
       const data: GalleryImage[] = await response.json();
-      setGalleryImages(data);
+
+      if (data && data.length > 0) {
+        setGalleryImages(data);
+        await cacheGalleryToDB(data);
+      } else {
+        throw new Error('Sunucudan galeri verisi alınamadı. Çevrimdışı veriler deneniyor.');
+      }
     } catch (error: any) {
-      toast({ title: 'Galeri Yüklenemedi', description: error.message, variant: 'destructive' });
-      setGalleryImages([]);
+      console.warn("[useGallery] API fetch failed, falling back to IndexedDB.", error.message);
+      const dbData = await getGalleryFromDB();
+      if (dbData && dbData.length > 0) {
+        setGalleryImages(dbData);
+        toast({ title: 'Çevrimdışı Mod', description: 'Galeri verileri gösterilemiyor. En son kaydedilenler gösteriliyor.', variant: 'default', duration: 5000 });
+      } else {
+        toast({ title: 'Galeri Yüklenemedi', description: error.message, variant: 'destructive' });
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [toast, galleryImages.length]);
+  }, [toast]);
 
   useEffect(() => {
     fetchGallery();
@@ -65,7 +76,8 @@ export function useGallery() {
       caption: payload.caption,
       hint: payload.hint?.trim() || 'uploaded image',
     };
-    setGalleryImages(prev => [optimisticImage, ...prev]);
+    const newGalleryState = [optimisticImage, ...galleryImages];
+    setGalleryImages(newGalleryState);
 
     try {
       const response = await fetch('/api/gallery', {
@@ -80,7 +92,9 @@ export function useGallery() {
       }
       
       const finalImage: GalleryImage = await response.json();
-      setGalleryImages(currentData => currentData.map(img => img.id === tempId ? finalImage : img));
+      const finalGalleryState = newGalleryState.map(img => img.id === tempId ? finalImage : img);
+      setGalleryImages(finalGalleryState);
+      await cacheGalleryToDB(finalGalleryState);
 
       toast({ title: "Yükleme Başarılı", description: "Resim galeriye eklendi." });
       broadcastGalleryUpdate();
@@ -90,7 +104,7 @@ export function useGallery() {
       setGalleryImages(currentData => currentData.filter(img => img.id !== tempId));
       throw error;
     }
-  }, [user, toast]);
+  }, [user, toast, galleryImages]);
 
   const deleteGalleryImage = useCallback(async (id: string) => {
     if (!user) {
@@ -99,7 +113,8 @@ export function useGallery() {
     }
     
     const originalImages = [...galleryImages];
-    setGalleryImages(prev => prev.filter(img => img.id !== id));
+    const optimisticImages = originalImages.filter(img => img.id !== id);
+    setGalleryImages(optimisticImages);
     
     try {
       const response = await fetch(`/api/gallery?id=${id}`, {
@@ -111,6 +126,7 @@ export function useGallery() {
         throw new Error(errorData.message);
       }
       
+      await cacheGalleryToDB(optimisticImages);
       toast({ title: "Resim Silindi", description: "Resim galeriden başarıyla kaldırıldı." });
       broadcastGalleryUpdate();
 

@@ -4,6 +4,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
 import { broadcastContactUpdate } from '@/lib/broadcast-channel';
+import { getContactMessagesFromDB, cacheContactMessagesToDB } from '@/lib/idb';
+
 
 export interface ContactMessage {
   id: string;
@@ -20,31 +22,42 @@ export function useContactMessages() {
   const { toast } = useToast();
 
   const fetchMessages = useCallback(async () => {
-    if (messages.length === 0) {
-        setIsLoading(true);
-    }
+    setIsLoading(true);
     try {
       const response = await fetch('/api/contact');
       if (!response.ok) {
         throw new Error("Mesajlar sunucudan alınamadı.");
       }
       const data: ContactMessage[] = await response.json();
-      setMessages(data);
+
+      if (data && data.length > 0) {
+          setMessages(data);
+          await cacheContactMessagesToDB(data);
+      } else if (data && data.length === 0) {
+          setMessages([]); // Set to empty if API returns empty
+      } else {
+          throw new Error('Sunucudan mesaj verisi alınamadı. Çevrimdışı veriler deneniyor.');
+      }
     } catch (error: any) {
-      toast({ title: 'Mesajlar Yüklenemedi', description: error.message, variant: 'destructive' });
-      setMessages([]);
+      console.warn("[useContactMessages] API fetch failed, falling back to IndexedDB.", error.message);
+      const dbData = await getContactMessagesFromDB();
+      if (dbData && dbData.length > 0) {
+        setMessages(dbData);
+        toast({ title: 'Çevrimdışı Mod', description: 'Mesajlar gösterilemiyor. En son kaydedilenler gösteriliyor.', variant: 'default', duration: 5000 });
+      } else {
+        toast({ title: 'Mesajlar Yüklenemedi', description: error.message, variant: 'destructive' });
+        setMessages([]);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [toast, messages.length]);
+  }, [toast]);
 
   useEffect(() => {
-    // Initial fetch handled by refetch call in dialog
+    // Initial fetch is handled by refetch call in the dialog
   }, []);
 
   const addContactMessage = useCallback(async (newMessageData: Omit<ContactMessage, 'id' | 'date'>) => {
-    // No optimistic update for contact form as the user navigates away/clears form.
-    // The main benefit is for the admin panel to update.
     try {
       const response = await fetch('/api/contact', {
         method: 'POST',
@@ -56,6 +69,12 @@ export function useContactMessages() {
         const errorData = await response.json().catch(() => ({ message: "Mesaj gönderilirken sunucu hatası oluştu." }));
         throw new Error(errorData.message);
       }
+      const savedMessage = await response.json();
+      
+      const newMessages = [...messages, savedMessage].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setMessages(newMessages);
+      await cacheContactMessagesToDB(newMessages);
+      
       toast({
         title: "Mesajınız Gönderildi!",
         description: "En kısa sürede sizinle iletişime geçeceğiz.",
@@ -65,7 +84,7 @@ export function useContactMessages() {
       toast({ title: "Mesaj Gönderilemedi", description: error.message, variant: "destructive" });
       throw error; // Re-throw to be caught by the form handler
     }
-  }, [toast]);
+  }, [toast, messages]);
   
   // Listen for broadcasted updates
   useEffect(() => {

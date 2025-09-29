@@ -6,6 +6,7 @@ import React, { createContext, useContext, useEffect, ReactNode, useCallback } f
 interface OneSignalContextType {
   loginOneSignal: (externalId: string, email?: string | null) => void;
   logoutOneSignal: () => void;
+  promptForNotifications: () => Promise<void>;
 }
 
 const OneSignalContext = createContext<OneSignalContextType | undefined>(undefined);
@@ -16,6 +17,21 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OneSignal) {
       console.log('[OneSignal Context] OneSignal SDK is ready.');
+    });
+  }, []);
+
+  const promptForNotifications = useCallback(async () => {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    await new Promise<void>(resolve => {
+        window.OneSignalDeferred.push(async function(OneSignal) {
+            console.log('[OneSignal] Prompting for notifications.');
+            try {
+                await OneSignal.Notifications.requestPermission();
+            } catch(e) {
+                console.error("OneSignal notification permission request error:", e);
+            }
+            resolve();
+        });
     });
   }, []);
 
@@ -47,7 +63,7 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <OneSignalContext.Provider value={{ loginOneSignal, logoutOneSignal }}>
+    <OneSignalContext.Provider value={{ loginOneSignal, logoutOneSignal, promptForNotifications }}>
       {children}
     </OneSignalContext.Provider>
   );

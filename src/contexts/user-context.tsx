@@ -34,7 +34,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isUserLoading, setIsUserLoading] = useState(true);
   const [showEntryForm, setShowEntryForm] = useState(false);
-  const { loginOneSignal, logoutOneSignal } = useOneSignal();
+  const { loginOneSignal, logoutOneSignal, promptForNotifications } = useOneSignal();
 
   useEffect(() => {
     setIsUserLoading(true);
@@ -83,9 +83,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const login = useCallback((name: string, surname: string, email?: string | null) => {
+  const login = useCallback(async (name: string, surname: string, email?: string | null) => {
     const anonymousId = uuidv4();
     const newUser: User = { name, surname, anonymousId, email: email || null };
+
+    // Ask for notification permission immediately
+    await promptForNotifications();
 
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
@@ -93,11 +96,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     
     loginOneSignal(anonymousId, email);
 
-    (async () => {
-        await updateUserProfileOnServer(newUser);
-        await fetch('/api/stats/entry-count', { method: 'POST' });
-    })();
-  }, [loginOneSignal]);
+    await updateUserProfileOnServer(newUser);
+    await fetch('/api/stats/entry-count', { method: 'POST' });
+    
+  }, [loginOneSignal, promptForNotifications]);
 
   const updateUserProfile = useCallback(async (updates: Partial<Pick<User, 'name' | 'surname' | 'email'>>) => {
     if (!user) return;

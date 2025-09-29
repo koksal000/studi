@@ -1,0 +1,1 @@
+{"version":3,"file":"OneSignalSDKWorker.js","sources":["../../src/service-worker/ServiceWorker.ts"],"sourcesContent":["importScripts(\"https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js\");\r\n"],"mappings":"AAAA,sDAA2D"}

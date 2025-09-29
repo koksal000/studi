@@ -65,7 +65,6 @@ export function useAnnouncements() {
 
   const fetchAnnouncements = useCallback(async () => {
     setIsLoading(true);
-    let fromCache = false;
     try {
       const response = await fetch('/api/announcements');
       if (!response.ok) {
@@ -73,12 +72,13 @@ export function useAnnouncements() {
       }
       const data: Announcement[] = await response.json();
 
-      if (data && data.length > 0) {
+      // Sunucudan veri geldiyse (boş olsa bile) bunu "doğrunun kaynağı" olarak kabul et.
+      if (data) {
         setAnnouncements(data);
-        await cacheAnnouncementsToDB(data);
+        await cacheAnnouncementsToDB(data); // Önbelleği de boş veriyle güncelle
       } else {
-        // API returned empty, possibly due to a reset. Try loading from DB.
-        throw new Error('Sunucudan veri alınamadı. Çevrimdışı veriler deneniyor.');
+        // Bu durum genellikle API'nin tamamen bozuk olduğu anlamına gelir.
+        throw new Error('Sunucudan geçersiz veri alındı. Çevrimdışı veriler deneniyor.');
       }
     } catch (error: any) {
         toast({ title: 'Sunucu Hatası', description: error.message, variant: 'destructive', duration: 5000 });
@@ -86,7 +86,6 @@ export function useAnnouncements() {
         const dbData = await getAnnouncementsFromDB();
         if (dbData && dbData.length > 0) {
             setAnnouncements(dbData);
-            fromCache = true;
             toast({ title: 'Çevrimdışı Mod', description: 'İnternet bağlantısı yok veya sunucu yanıt vermiyor. En son kaydedilen veriler gösteriliyor.', duration: 5000 });
         }
     } finally {

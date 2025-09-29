@@ -92,7 +92,7 @@ export default function HomePage() {
                   <AnnouncementCard key={ann.id} announcement={ann} isCompact={true} />
                 ))
               ) : !announcementsLoading && announcements.length === 0 ? (
-                null
+                 <p className="text-muted-foreground p-4 text-center">Henüz yayınlanmış bir duyuru bulunmamaktadır.</p>
               ) : null}
               {announcements.length > 3 && !announcementsLoading && (
                 <div className="text-center mt-4">

@@ -17,7 +17,6 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
     window.OneSignalDeferred.push(async function(OneSignal) {
       await OneSignal.init({
         appId: "af7c8099-b2c1-4376-be91-afb88be83161",
-        allowLocalhostAsSecureOrigin: true,
       });
     });
   }, []);

@@ -50,7 +50,7 @@ export function SendUserMessageDialog({ isOpen, onOpenChange, userToMessage }: S
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: userToMessage.email,
+          userId: userToMessage.id, // Changed from email to ID for consistency
           message: message.trim(),
           type: messageType,
         }),
@@ -134,5 +134,3 @@ export function SendUserMessageDialog({ isOpen, onOpenChange, userToMessage }: S
     </Dialog>
   );
 }
-
-    

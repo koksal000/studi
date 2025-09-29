@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { AddAnnouncementDialog } from '@/components/specific/add-announcement-dialog';
 import { VILLAGE_NAME } from '@/lib/constants';
 import Image from 'next/image';
-import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, Upload, Trash2, Loader2, ListChecks, MailQuestion, Activity, Pin } from 'lucide-react';
+import { ShieldCheck, UserCircle, Image as ImageIcon, PlusCircle, Upload, Trash2, Loader2, ListChecks, MailQuestion, Activity, Pin, DatabaseBackup, UploadCloud as UploadCloudIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useGallery, type GalleryImage, type NewGalleryImagePayload } from '@/hooks/use-gallery';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +30,7 @@ import {
 import { useAnnouncements, type Announcement } from '@/hooks/use-announcements';
 import { AnnouncementCard } from '@/components/specific/announcement-card';
 import { UserRequestsDialog } from '@/components/specific/user-requests-dialog';
+import { backupDataToIDB, restoreDataFromIDB, getBackupInfo } from '@/lib/idb-backup';
 
 const MAX_RAW_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit for original file
 const MAX_IMAGE_DATA_URI_LENGTH = Math.floor(5 * 1024 * 1024 * 1.37 * 1.05); // Approx 7.2MB for 5MB raw image (base64 string + safety)
@@ -56,7 +57,51 @@ export default function AdminPage() {
   const [totalEntryCount, setTotalEntryCount] = useState<number | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
+  const [isProcessingBackup, setIsProcessingBackup] = useState(false);
+  const [isProcessingRestore, setIsProcessingRestore] = useState(false);
+  const [backupInfo, setBackupInfo] = useState<{ date: Date; announcementCount: number; galleryCount: number } | null>(null);
+
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchBackupInfo = async () => {
+    const info = await getBackupInfo();
+    setBackupInfo(info);
+  };
+
+  useEffect(() => {
+    fetchBackupInfo();
+  }, []);
+
+  const handleBackup = async () => {
+    setIsProcessingBackup(true);
+    try {
+      await backupDataToIDB();
+      toast({ title: 'Yedekleme Başarılı', description: 'Tüm duyurular ve galeri resimleri tarayıcınıza başarıyla yedeklendi.' });
+      await fetchBackupInfo();
+    } catch (error: any) {
+      toast({ title: 'Yedekleme Başarısız', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsProcessingBackup(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setIsProcessingRestore(true);
+    try {
+      const result = await restoreDataFromIDB();
+      toast({
+        title: 'Geri Yükleme Tamamlandı',
+        description: `${result.announcements} duyuru ve ${result.gallery} galeri öğesi başarıyla sunucuya geri yüklendi. Değişiklikleri görmek için sayfayı yenileyin.`,
+        duration: 8000,
+      });
+      // Optionally, trigger a refetch of data in the app
+    } catch (error: any) {
+      toast({ title: 'Geri Yükleme Başarısız', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsProcessingRestore(false);
+    }
+  };
 
   useEffect(() => {
     const fetchEntryStats = async () => {
@@ -276,6 +321,60 @@ export default function AdminPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center"><DatabaseBackup className="mr-2 h-6 w-6 text-primary" /> Veri Yedekleme ve Geri Yükleme</CardTitle>
+           <CardDescription>
+            Sunucu verilerinin (duyurular, galeri vb.) sıfırlanması ihtimaline karşı tarayıcınıza yerel bir yedek alın ve gerektiğinde bu yedekten geri yükleyin.
+            <br/>
+            <span className="text-xs text-muted-foreground">Not: Yedekleme sadece bu tarayıcıda saklanır. Tarayıcı verilerini temizlerseniz yedek kaybolur.</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h3 className="font-semibold">Son Yedekleme Bilgisi:</h3>
+            {backupInfo ? (
+              <p className="text-sm text-muted-foreground">
+                Tarih: {backupInfo.date.toLocaleString('tr-TR')} | Duyurular: {backupInfo.announcementCount} | Galeri: {backupInfo.galleryCount}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Daha önce hiç yedek alınmamış.</p>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Button onClick={handleBackup} disabled={isProcessingBackup || isProcessingRestore} className="w-full sm:w-auto">
+              {isProcessingBackup ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseBackup className="mr-2 h-4 w-4" />}
+              Şimdi Yedekle
+            </Button>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={!backupInfo || isProcessingRestore || isProcessingBackup} className="w-full sm:w-auto">
+                  {isProcessingRestore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloudIcon className="mr-2 h-4 w-4" />}
+                  Yedekten Geri Yükle
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Yedekten Geri Yüklemeyi Onayla</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Bu işlem, sunucudaki mevcut duyuru ve galeri verilerini, tarayıcınızdaki son yedekle değiştirecektir. Bu, özellikle sunucu verileri sıfırlandıysa kullanışlıdır. Emin misiniz?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>İptal</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleRestore} className="bg-destructive hover:bg-destructive/90">
+                    Evet, Geri Yükle
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+          </div>
+        </CardContent>
+      </Card>
+
+
+      <Card>
+        <CardHeader>
           <CardTitle className="flex items-center justify-between">
             Duyuru Yönetimi
             <Button onClick={() => handleOpenAnnouncementDialog(null)} className="shadow-sm">
@@ -453,5 +552,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-    

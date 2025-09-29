@@ -17,12 +17,14 @@ interface Message {
   sender: 'user' | 'ai';
 }
 
-const examplePrompts = [
-    "Köyün nüfusu kaçtır?",
-    "Çamlıca'nın tarihi hakkında bilgi ver.",
-    "Köyün muhtarı kimdir?",
-    "Hasan Çamı nedir?",
-];
+const cannedResponses: Record<string, string> = {
+  "Köyün nüfusu kaçtır?": "Çamlıca Köyü'nün 2024 yılı itibarıyla nüfusu 425 kişidir. Bu nüfusun 199'u erkek, 226'sı kadındır.",
+  "Çamlıca'nın tarihi hakkında bilgi ver.": "Çamlıca Köyü'nün kökleri Osmanlı İmparatorluğu'nun erken dönemlerine dayanır ve Yörükler tarafından kurulmuştur. Köyün eski adı \"Göçebe\" iken, 1955 yılı civarında bir öğretmen tarafından etrafındaki çam ormanlarından esinlenilerek \"Çamlıca\" olarak değiştirilmiştir.",
+  "Köyün muhtarı kimdir?": "Köyümüzün mevcut muhtarı Numan YAŞAR'dır.",
+  "Mızık Çamı nedir?": "Mızık Çamı (eski adıyla Hasan Çamı), köyümüzde bulunan ve yaklaşık 1000 yaşında olduğu tahmin edilen anıtsal bir çam ağacıdır. Köyümüzün önemli bir simgesidir."
+};
+
+const examplePrompts = Object.keys(cannedResponses);
 
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -59,15 +61,26 @@ export default function AIAssistantPage() {
     setInput('');
     setIsLoading(true);
 
+    // Check for canned response
+    if (cannedResponses[value]) {
+        setTimeout(() => {
+            const aiMessage: Message = { id: (Date.now() + 1).toString(), text: cannedResponses[value], sender: 'ai' };
+            setMessages(prev => [...prev, aiMessage]);
+            setIsLoading(false);
+        }, 2000); // 2-second delay
+        return;
+    }
+
+    // If not a canned response, call the AI
     try {
       const aiInput: CamlicaAIChatbotInput = { question: value };
       const aiResponse: CamlicaAIChatbotOutput = await camlicaAIChatbot(aiInput);
       
       const aiMessage: Message = { id: (Date.now() + 1).toString(), text: aiResponse.answer, sender: 'ai' };
       setMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI Assistant Error:", error);
-      const errorMessage: Message = { id: (Date.now() + 1).toString(), text: 'Üzgünüm, bir sorun oluştu. Lütfen daha sonra tekrar deneyin veya farklı bir soru sorun.', sender: 'ai' };
+      const errorMessage: Message = { id: (Date.now() + 1).toString(), text: error.message || 'Üzgünüm, bir sorun oluştu. Lütfen daha sonra tekrar deneyin veya farklı bir soru sorun.', sender: 'ai' };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
@@ -102,7 +115,7 @@ export default function AIAssistantPage() {
                     </Avatar>
                   )}
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-md ${msg.sender === 'user' ? 'bg-primary text-primary-foreground rounded-br-lg' : 'bg-muted rounded-bl-lg'}`}>
-                    <p className="text-sm">{msg.text}</p>
+                    <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                   </div>
                   {msg.sender === 'user' && (
                      <Avatar className="h-9 w-9 flex-shrink-0">

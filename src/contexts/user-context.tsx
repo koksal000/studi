@@ -123,7 +123,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setIsAdmin(false);
     localStorage.removeItem(USER_DATA_KEY);
     sessionStorage.removeItem(ADMIN_SESSION_KEY);
-    setShowEntryForm(true); // This line is corrected to ensure the form is shown after logout.
+    setShowEntryForm(true);
   }, [logoutOneSignal]);
 
   const checkAdminPassword = useCallback((password: string) => {

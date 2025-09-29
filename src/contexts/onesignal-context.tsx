@@ -15,9 +15,16 @@ export const OneSignalProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "af7c8099-b2c1-4376-be91-afb88be83161",
-      });
+      try {
+        await OneSignal.init({
+          appId: "af7c8099-b2c1-4376-be91-afb88be83161",
+        });
+      } catch (error) {
+        console.error("OneSignal Init Error:", error);
+        // This error is expected if the current domain is not configured in the OneSignal dashboard.
+        // We catch it to prevent the app from crashing during development.
+        // To enable OneSignal, add this development URL to your app's list of allowed domains on the OneSignal dashboard.
+      }
     });
   }, []);
 

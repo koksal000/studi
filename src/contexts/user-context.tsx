@@ -84,7 +84,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const login = useCallback(async (name: string, surname: string, email?: string | null) => {
-    const anonymousId = uuidv4();
+    const anonymousId = user?.anonymousId || uuidv4();
     const newUser: User = { name, surname, anonymousId, email: email || null };
     
     setUserState(newUser);
@@ -95,8 +95,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     loginOneSignal(anonymousId, email);
     await updateUserProfileOnServer(newUser);
     await fetch('/api/stats/entry-count', { method: 'POST' });
+    
+    setShowEntryForm(false); // This line fixes the form not disappearing.
 
-  }, [loginOneSignal, promptForNotifications]);
+  }, [loginOneSignal, promptForNotifications, user]);
 
   const updateUserProfile = useCallback(async (updates: Partial<Pick<User, 'name' | 'surname' | 'email'>>) => {
     if (!user) return;

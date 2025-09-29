@@ -345,14 +345,14 @@ export async function POST(request: NextRequest) {
     if (existingIndex !== -1) {
       // This is an EDIT operation or a RESTORE of an existing item
       const originalAnnouncement = announcements[existingIndex];
-      announcements[existingIndex] = {
-        ...newAnnouncement,
-        date: isRestore ? newAnnouncement.date : originalAnnouncement.date,
-        author: isRestore ? newAnnouncement.author : originalAnnouncement.author,
-        authorId: isRestore ? newAnnouncement.authorId : originalAnnouncement.authorId,
-        likes: isRestore ? newAnnouncement.likes : originalAnnouncement.likes,
-        comments: isRestore ? newAnnouncement.comments : originalAnnouncement.comments,
-        isPinned: isRestore ? newAnnouncement.isPinned : originalAnnouncement.isPinned,
+      // On restore, we trust the backed up data entirely, otherwise it's a regular edit
+      announcements[existingIndex] = isRestore ? newAnnouncement : {
+        ...originalAnnouncement, // Keep original likes, comments, author etc.
+        title: newAnnouncement.title,
+        content: newAnnouncement.content,
+        media: newAnnouncement.media,
+        mediaType: newAnnouncement.mediaType,
+        isPinned: newAnnouncement.isPinned,
       };
     } else {
       // This is a NEW announcement or a RESTORE of a new item
@@ -368,7 +368,8 @@ export async function POST(request: NextRequest) {
   if (announcementModified) {
     announcements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (writeAnnouncementsToFile(announcements)) {
-      if (isNewAnnouncement && modifiedAnnouncement) {
+      const { isRestore } = 'isRestore' in payload ? payload : { isRestore: false };
+      if (isNewAnnouncement && !isRestore && modifiedAnnouncement) {
           sendNotificationToAll({
             title: 'Yeni Duyuru: Çamlıca Köyü',
             body: modifiedAnnouncement.title,

@@ -1,3 +1,4 @@
+
 // src/lib/idb-backup.ts
 'use client';
 
@@ -60,22 +61,20 @@ export async function restoreDataFromIDB(): Promise<{ announcements: number, gal
 
         // Restore announcements
         for (const announcement of announcementsToRestore) {
-            // We post them one by one to recreate them on the server
             const response = await fetch('/api/announcements', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Add a flag to indicate this is a restore operation
                 body: JSON.stringify({ ...announcement, isRestore: true }),
             });
             if (!response.ok) {
                 console.warn(`[IDB Restore] Failed to restore announcement: ${announcement.id}`);
             }
-            // Small delay to prevent overwhelming the server
             await new Promise(resolve => setTimeout(resolve, 50)); 
         }
 
-        // Restore gallery images
-        for (const image of galleryToRestore) {
+        // Restore ONLY user-uploaded gallery images to prevent duplication of static images
+        const userUploadedImages = galleryToRestore.filter(image => image.id.startsWith('gal_'));
+        for (const image of userUploadedImages) {
              const payload = {
                 imageDataUri: image.src,
                 caption: image.caption,
@@ -95,7 +94,7 @@ export async function restoreDataFromIDB(): Promise<{ announcements: number, gal
 
         return {
             announcements: announcementsToRestore.length,
-            gallery: galleryToRestore.length,
+            gallery: userUploadedImages.length,
         };
 
     } catch (error: any) {

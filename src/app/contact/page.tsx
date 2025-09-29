@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { CONTACT_INFO, VILLAGE_NAME, GOOGLE_MAPS_EMBED_URL, GOOGLE_MAPS_SHARE_URL } from '@/lib/constants';
 import { Mail, MapPin, User as UserIcon, MessageSquare, Send, Loader2, ExternalLink } from 'lucide-react'; // Renamed User to UserIcon
 import { useToast } from "@/hooks/use-toast";
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
 import { useUser } from '@/contexts/user-context';
 import { EntryForm } from '@/components/specific/entry-form';
 import { useContactMessages } from '@/hooks/use-contact-messages'; 
@@ -17,9 +17,20 @@ import { useContactMessages } from '@/hooks/use-contact-messages';
 export default function ContactPage() {
   const { toast } = useToast();
   const { user, showEntryForm } = useUser();
+  
   const [formData, setFormData] = useState({ subject: '', message: '' });
+  const [contactEmail, setContactEmail] = useState('');
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { addContactMessage } = useContactMessages();
+
+   useEffect(() => {
+    if (user?.email) {
+      setContactEmail(user.email);
+    } else {
+      setContactEmail('');
+    }
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
@@ -27,10 +38,18 @@ export default function ContactPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user || !user.email) { 
+    if (!user) { 
       toast({
         title: "Giriş Gerekli",
-        description: "Mesaj göndermek için lütfen adınızı, soyadınızı ve e-postanızı giriş formunda belirtin.",
+        description: "Mesaj göndermek için lütfen adınızı ve soyadınızı belirtin.",
+        variant: "destructive",
+      });
+      return;
+    }
+     if (!contactEmail.trim() || !/^\S+@\S+\.\S+$/.test(contactEmail.trim())) {
+      toast({
+        title: "Geçersiz E-posta",
+        description: "Lütfen yanıt alabilmek için geçerli bir e-posta adresi girin.",
         variant: "destructive",
       });
       return;
@@ -48,7 +67,7 @@ export default function ContactPage() {
     try {
       const payload = {
         name: `${user.name} ${user.surname}`, 
-        email: user.email, 
+        email: contactEmail, 
         subject: formData.subject,
         message: formData.message,
       };
@@ -60,6 +79,7 @@ export default function ContactPage() {
         description: "En kısa sürede sizinle iletişime geçeceğiz.",
       });
       setFormData({ subject: '', message: '' }); 
+      // Do not clear contactEmail if it was pre-filled
     } catch (error: any) {
       console.error("Form Submission Error:", error);
       // Toast for error is handled within useContactMessages or here if it's not caught there
@@ -91,7 +111,7 @@ export default function ContactPage() {
             <div>
               <h3 className="text-xl font-semibold text-primary mb-2 flex items-center"><UserIcon className="mr-2 h-5 w-5" /> Gönderen</h3>
               <p className="text-foreground/80">{user.name} {user.surname}</p>
-              <p className="text-sm text-muted-foreground">E-posta: {user.email} (Bu bilgiler mesajınıza otomatik eklenecektir)</p>
+               <p className="text-sm text-muted-foreground">{user.email ? `E-posta: ${user.email} (otomatik eklendi)` : 'Yanıt alabilmek için formda e-posta belirtin.'}</p>
             </div>
             <div>
               <h3 className="text-xl font-semibold text-primary mb-2 flex items-center"><MapPin className="mr-2 h-5 w-5" /> Adresimiz</h3>
@@ -135,7 +155,15 @@ export default function ContactPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6 p-6 border rounded-lg shadow-sm bg-card">
             <h3 className="text-xl font-semibold text-primary mb-2 border-b pb-2">Bize Mesaj Gönderin</h3>
-            <p className="text-xs text-muted-foreground mt-1 mb-3">Gönderdiğiniz mesajlar kimseyle paylaşılmayacak olup, yalnızca site yöneticisine iletilerek taleplerinizin işleme alınması amacıyla kullanılacaktır.</p>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">Mesajınıza yanıt alabilmek için geçerli bir e-posta adresi girdiğinizden emin olun. Bu bilgiler yalnızca site yöneticisine iletilir.</p>
+
+            {!user.email && (
+              <div className="space-y-2">
+                <Label htmlFor="contactEmail" className="flex items-center"><Mail className="mr-2 h-4 w-4 text-muted-foreground"/> Yanıt için E-posta Adresiniz</Label>
+                <Input id="contactEmail" type="email" placeholder="yanıt_adresi@example.com" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} required disabled={isSubmitting} />
+              </div>
+            )}
+            
              <div className="space-y-2">
               <Label htmlFor="subject" className="flex items-center"><MessageSquare className="mr-2 h-4 w-4 text-muted-foreground"/> Konu</Label>
               <Input id="subject" type="text" placeholder="Mesajınızın konusu" value={formData.subject} onChange={handleChange} required disabled={isSubmitting} />

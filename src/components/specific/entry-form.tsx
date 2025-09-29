@@ -9,17 +9,19 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
+import { Mail } from 'lucide-react';
 
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
+  const [email, setEmail] = useState('');
   const { login, showEntryForm } = useUser();
   const { toast } = useToast();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (name.trim() && surname.trim()) {
-      login(name.trim(), surname.trim());
+      login(name.trim(), surname.trim(), email.trim() || null);
     } else {
       toast({
         title: "Eksik Bilgi",
@@ -39,7 +41,7 @@ export function EntryForm() {
         <video
           autoPlay
           loop
-          muted={true} 
+          muted={true}
           playsInline 
           className="absolute top-0 left-0 w-full h-full object-cover" 
           src="https://files.catbox.moe/na9jph.mp4" 
@@ -81,11 +83,25 @@ export function EntryForm() {
                     placeholder="Soyadınızı girin"
                   />
                 </div>
+                 <div className="space-y-2">
+                  <Label htmlFor="userEmail" className="text-neutral-200 flex items-center justify-between">
+                    <span>E-posta Adresiniz</span>
+                    <span className="text-xs font-normal text-neutral-400">(İsteğe Bağlı)</span>
+                  </Label> 
+                  <Input
+                    id="userEmail"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
+                    placeholder="E-posta adresinizi girin"
+                  />
+                </div>
                 <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">
                   Giriş Yap
                 </Button>
                   <p className="text-xs text-neutral-300/80 pt-1 text-center">
-                    E-posta girmenize gerek yoktur. Siteye giriş yaparak kullanım koşullarını kabul etmiş sayılırsınız.
+                    Siteye giriş yaparak kullanım koşullarını kabul etmiş sayılırsınız.
                   </p>
               </form>
             </CardContent>

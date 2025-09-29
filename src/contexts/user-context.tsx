@@ -16,7 +16,7 @@ interface User {
 interface UserContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (name: string, surname: string) => void;
+  login: (name: string, surname: string, email?: string | null) => void;
   logout: () => void;
   updateUserProfile: (updates: Partial<Pick<User, 'name' | 'surname' | 'email'>>) => Promise<void>;
   checkAdminPassword: (password: string) => boolean;
@@ -48,7 +48,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
         }
         setUserState(userData);
-        loginOneSignal(userData.anonymousId);
+        loginOneSignal(userData.anonymousId, userData.email);
         setShowEntryForm(false);
       } else {
         localStorage.removeItem(USER_DATA_KEY);
@@ -83,15 +83,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const login = useCallback((name: string, surname: string) => {
+  const login = useCallback((name: string, surname: string, email?: string | null) => {
     const anonymousId = uuidv4();
-    const newUser: User = { name, surname, anonymousId, email: null };
+    const newUser: User = { name, surname, anonymousId, email: email || null };
 
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     setShowEntryForm(false);
     
-    loginOneSignal(anonymousId);
+    loginOneSignal(anonymousId, email);
 
     (async () => {
         await updateUserProfileOnServer(newUser);
@@ -103,10 +103,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     if (!user) return;
 
     const updatedUser = { ...user, ...updates };
-    // Special case for email deletion
-    if (updates.email === null) {
-      delete updatedUser.email;
-    }
     
     setUserState(updatedUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(updatedUser));

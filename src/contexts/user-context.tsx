@@ -92,13 +92,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
-    setShowEntryForm(false);
     
     loginOneSignal(anonymousId, email);
 
     await updateUserProfileOnServer(newUser);
     await fetch('/api/stats/entry-count', { method: 'POST' });
     
+    setShowEntryForm(false);
   }, [loginOneSignal, promptForNotifications]);
 
   const updateUserProfile = useCallback(async (updates: Partial<Pick<User, 'name' | 'surname' | 'email'>>) => {

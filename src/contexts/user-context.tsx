@@ -16,7 +16,7 @@ interface User {
 interface UserContextType {
   user: User | null;
   isAdmin: boolean;
-  login: (name: string, surname: string, email?: string | null) => void;
+  login: (name: string, surname: string, email?: string | null) => Promise<void>;
   logout: () => void;
   updateUserProfile: (updates: Partial<Pick<User, 'name' | 'surname' | 'email'>>) => Promise<void>;
   checkAdminPassword: (password: string) => boolean;
@@ -86,19 +86,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const login = useCallback(async (name: string, surname: string, email?: string | null) => {
     const anonymousId = uuidv4();
     const newUser: User = { name, surname, anonymousId, email: email || null };
-
-    // Ask for notification permission immediately
-    await promptForNotifications();
-
+    
     setUserState(newUser);
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(newUser));
     
+    // These actions can happen after the user state is updated.
+    await promptForNotifications();
     loginOneSignal(anonymousId, email);
-
     await updateUserProfileOnServer(newUser);
     await fetch('/api/stats/entry-count', { method: 'POST' });
-    
-    setShowEntryForm(false);
+
   }, [loginOneSignal, promptForNotifications]);
 
   const updateUserProfile = useCallback(async (updates: Partial<Pick<User, 'name' | 'surname' | 'email'>>) => {

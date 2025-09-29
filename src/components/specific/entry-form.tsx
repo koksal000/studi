@@ -9,25 +9,41 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DISTRICT_NAME, VILLAGE_NAME } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
-import { Mail } from 'lucide-react';
+import { Mail, Loader2 } from 'lucide-react';
 
 export function EntryForm() {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [email, setEmail] = useState('');
-  const { login, showEntryForm } = useUser();
+  const { login, showEntryForm, setShowEntryForm } = useUser();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim() && surname.trim()) {
-      login(name.trim(), surname.trim(), email.trim() || null);
-    } else {
+    if (!name.trim() || !surname.trim()) {
       toast({
         title: "Eksik Bilgi",
         description: "Lütfen adınızı ve soyadınızı doldurun.",
         variant: "destructive"
       });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await login(name.trim(), surname.trim(), email.trim() || null);
+      // After login logic is complete, hide the form
+      setShowEntryForm(false); 
+    } catch (error) {
+      console.error("Login failed:", error);
+      toast({
+        title: "Giriş Başarısız",
+        description: "Giriş yapılırken bir hata oluştu. Lütfen tekrar deneyin.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -67,6 +83,7 @@ export function EntryForm() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
+                    disabled={isSubmitting}
                     className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
                     placeholder="Adınızı girin"
                   />
@@ -79,6 +96,7 @@ export function EntryForm() {
                     value={surname}
                     onChange={(e) => setSurname(e.target.value)}
                     required
+                    disabled={isSubmitting}
                     className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
                     placeholder="Soyadınızı girin"
                   />
@@ -93,12 +111,13 @@ export function EntryForm() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    disabled={isSubmitting}
                     className="bg-white/10 border-white/30 text-white placeholder:text-neutral-400 focus:ring-primary focus:border-primary" 
                     placeholder="E-posta adresinizi girin"
                   />
                 </div>
-                <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground">
-                  Giriş Yap
+                <Button type="submit" className="w-full text-lg py-3 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Giriş Yap"}
                 </Button>
                   <p className="text-xs text-neutral-300/80 pt-1 text-center">
                     Siteye giriş yaparak kullanım koşullarını kabul etmiş sayılırsınız.

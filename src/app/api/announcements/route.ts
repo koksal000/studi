@@ -257,16 +257,12 @@ export async function POST(request: NextRequest) {
           allNotifications.unshift(newInAppNotification);
           writeNotificationsToFile(allNotifications);
           
-          // Only send a push notification if the recipient is NOT the admin account
-          if (replyingToAuthorId !== 'ADMIN_ACCOUNT') {
-              await sendNotificationToUser(replyingToAuthorId, {
-                  title: `${replierName} yorumunuza yanıt verdi`,
-                  body: `${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
-                  link: '/announcements',
-              });
-          } else {
-             console.log(`[API/Announcements] Reply is to an admin comment. In-app notification created, but no push notification sent.`);
-          }
+          await sendNotificationToUser(replyingToAuthorId, {
+              title: `${replierName} yorumunuza yanıt verdi`,
+              body: `${replyText.substring(0, 100)}${replyText.length > 100 ? '...' : ''}`,
+              link: '/announcements',
+          });
+          
       }
 
     } else if (actionPayload.action === "DELETE_COMMENT") {
